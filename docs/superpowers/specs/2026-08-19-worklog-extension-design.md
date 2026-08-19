@@ -1,7 +1,7 @@
 # Worklog Extension — Design
 
 Ngày: 2026-08-19
-Trạng thái: đã thống nhất, chờ kết quả spike auth trước khi code
+Trạng thái: đã thống nhất. Spike auth đã chạy 2026-08-19: cookie session ghi được worklog.
 
 ## 1. Vấn đề
 
@@ -47,22 +47,27 @@ permission runtime qua `chrome.permissions.request` (khai báo
 
 Hai đường, quyết định bằng probe lúc setup:
 
-**Đường 1 — cookie session.** Fetch với `credentials: 'include'`, dùng session
-Jira đang đăng nhập. Không setup gì. Đọc gần như chắc chắn chạy; ghi là phần cần
-xác minh (XSRF check của Jira Cloud, có thể cần header `X-Atlassian-Token: no-check`).
+**Đường 1 — cookie session (mặc định, đã xác minh).** Fetch với
+`credentials: 'include'`, dùng session Jira đang đăng nhập. Không setup gì.
+Spike ngày 2026-08-19 trên `mesoneerag.atlassian.net` xác nhận **cả đọc và ghi
+worklog đều chạy** bằng cookie session — kết luận `cookie-write-ok`. Đây là
+đường mặc định; người dùng không phải tạo API token.
+
+Request ghi luôn gửi kèm header `X-Atlassian-Token: no-check`. Header này vô hại
+khi XSRF check không bật, nên gửi vô điều kiện thay vì thử-rồi-retry: bớt một
+nhánh code và một round-trip.
 
 **Đường 2 — API token (fallback).** Basic auth với email + API token từ
 `id.atlassian.com`. Lưu trong `chrome.storage.local`, **không** dùng
 `storage.sync` để token không đẩy lên Google account. Không bao giờ log token.
 
-**Probe:** lúc setup, thử `GET /myself` rồi thử ghi 1 phút worklog vào một issue
-nháp và xoá ngay. Kết quả lưu vào `authMode`. Người dùng chỉ thấy "cần token" hay
-không, không cần hiểu XSRF. Nếu request về sau trả 401/403, `authMode` bị vô hiệu
-và banner đẩy người dùng về Options.
+Đường 2 vẫn được implement dù đường 1 đã chạy, vì ba trường hợp thật: session
+Jira hết hạn giữa lúc dùng, người dùng đăng nhập Jira ở profile Chrome khác, và
+instance Jira khác có thể bật XSRF check khắt khe hơn.
 
-Kết quả spike (`spike/auth-probe.js`) quyết định `authMode` mặc định. Cả hai
-đường đều được implement bất kể kết quả, vì token vẫn cần cho trường hợp session
-hết hạn.
+**Probe:** lúc setup, thử `GET /myself`. Nếu 200 thì `authMode = 'cookie'`, không
+hỏi gì thêm. Nếu fail thì hiện form nhập token. Nếu request về sau trả 401/403,
+`authMode` bị vô hiệu và banner đẩy người dùng về Options.
 
 ## 5. Lớp truy cập Jira
 
@@ -273,7 +278,7 @@ không tự đoán, vì đoán sai lệch ngày là lỗi im lặng.
 
 ## 15. Thứ tự triển khai
 
-1. Spike auth (`spike/auth-probe.js`) → chốt `authMode` mặc định.
+1. ~~Spike auth~~ — xong 2026-08-19, `authMode` mặc định là `cookie`.
 2. Scaffold Vite + MV3 manifest + hai bề mặt UI trống.
 3. `core/` với test viết trước.
 4. `jira/` auth + client + endpoints.
