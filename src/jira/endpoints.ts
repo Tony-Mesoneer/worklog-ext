@@ -1,0 +1,234 @@
+// src/jira/endpoints.ts
+import type { JiraClient } from './client'
+import { parseStarted } from '@/core/jiraTime'
+import type { Worklog } from '@/core/coverage'
+import type { SprintIssue } from '@/core/points'
+
+// --- ADF helpers -----------------------------------------------------------
+// Jira Cloud v3 dùng Atlassian Document Format cho comment. Ta chỉ cần một
+// đoạn văn bản phẳng ở cả hai chiều.
+type Adf = { type: string; content?: Adf[]; text?: string }
+
+const toAdf = (text: string): Adf => ({
+  type: 'doc',
+  version: 1,
+  content: [{ type: 'paragraph', content: [{ type: 'text', text }] }],
+} as Adf)
+
+const adfToText = (node: unknown): string => {
+  if (!node || typeof node !== 'object') return ''
+  const n = node as Adf
+  if (typeof n.text === 'string') return n.text
+  if (Array.isArray(n.content)) return n.content.map(adfToText).join('')
+  return ''
+}
+
+// --- identity & fields -----------------------------------------------------
+export async function getMyself(c: JiraClient) {
+  return c.call<{ accountId: string; displayName: string; timeZone: string }>({
+    method: 'GET', path: '/rest/api/3/myself',
+  })
+}
+
+const STORY_POINT_NAMES = ['Story Points', 'Story point estimate']
+
+// Id của field Story Points khác nhau giữa các Jira instance, nên dò thay vì
+// hardcode. Kết quả được cache vào config.storyPointsFieldId.
+export async function findStoryPointsFieldId(c: JiraClient): Promise<string | null> {
+  const fields = await c.call<{ id: string; name: string }[]>({
+    method: 'GET', path: '/rest/api/3/field',
+  })
+  for (const name of STORY_POINT_NAMES) {
+    const hit = fields.find((f) => f.name === name)
+    if (hit) return hit.id
+  }
+  return null
+}
+
+// --- worklog search --------------------------------------------------------
+export async function searchIssuesWithWorklogs(
+  c: JiraClient,
+  args: { projects: string[]; accountIds: string[]; from: string; to: string },
+): Promise<{ key: string; summary: string }[]> {
+  // "worklogAuthor in ()" là lỗi cú pháp JQL — chặn trước khi gọi Jira.
+  if (args.accountIds.length === 0) return []
+
+  const authors = args.accountIds.map((a) => `"${a}"`).join(',')
+  const clauses = [
+    `worklogDate >= "${args.from}"`,
+    `worklogDate <= "${args.to}"`,
+    `worklogAuthor in (${authors})`,
+  ]
+  if (args.projects.length > 0) {
+    clauses.push(`project in (${args.projects.map((p) => `"${p}"`).join(',')})`)
+  }
+  const jql = clauses.join(' AND ')
+
+  const out: { key: string; summary: string }[] = []
+  let nextPageToken: string | undefined
+
+  do {
+    const page = await c.call<{
+      issues: { key: string; fields: { summary: string } }[]
+      nextPageToken?: string
+    }>({
+      method: 'POST',
+      path: '/rest/api/3/search/jql',
+      body: { jql, fields: ['summary'], maxResults: 100, nextPageToken },
+    })
+    for (const i of page.issues) out.push({ key: i.key, summary: i.fields.summary })
+    nextPageToken = page.nextPageToken
+  } while (nextPageToken)
+
+  return out
+}
+
+export async function getIssueWorklogs(
+  c: JiraClient, issueKey: string, issueSummary: string,
+): Promise<Worklog[]> {
+  const res = await c.call<{
+    worklogs: {
+      id: string
+      author?: { accountId?: string }
+      started: string
+      timeSpentSeconds: number
+      comment?: unknown
+    }[]
+  }>({ method: 'GET', path: `/rest/api/3/issue/${issueKey}/worklog` })
+
+  const out: Worklog[] = []
+  for (const w of res.worklogs) {
+    let parsed: { date: string; minutes: number }
+    try {
+      parsed = parseStarted(w.started)
+    } catch {
+      // Một worklog rác không được làm sập cả bảng của team.
+      console.warn(`[jira] bỏ qua worklog ${w.id} của ${issueKey}: started không đọc được`)
+      continue
+    }
+    out.push({
+      id: w.id,
+      issueKey,
+      issueSummary,
+      authorAccountId: w.author?.accountId ?? '',
+      date: parsed.date,
+      startMinutes: parsed.minutes,
+      timeSpentSeconds: w.timeSpentSeconds,
+      comment: adfToText(w.comment),
+    })
+  }
+  return out
+}
+
+export async function addWorklog(
+  c: JiraClient,
+  args: { issueKey: string; startedIso: string; timeSpentSeconds: number; comment: string },
+): Promise<{ id: string }> {
+  const body: Record<string, unknown> = {
+    timeSpentSeconds: args.timeSpentSeconds,
+    started: args.startedIso,
+  }
+  if (args.comment !== '') body['comment'] = toAdf(args.comment)
+
+  return c.call<{ id: string }>({
+    method: 'POST',
+    path: `/rest/api/3/issue/${args.issueKey}/worklog?notifyUsers=false`,
+    body,
+  })
+}
+
+export async function deleteWorklog(
+  c: JiraClient, issueKey: string, worklogId: string,
+): Promise<void> {
+  await c.call<null>({
+    method: 'DELETE',
+    path: `/rest/api/3/issue/${issueKey}/worklog/${worklogId}?notifyUsers=false`,
+  })
+}
+
+// --- pickers ---------------------------------------------------------------
+export async function pickIssues(
+  c: JiraClient, query: string,
+): Promise<{ key: string; summary: string }[]> {
+  const res = await c.call<{
+    sections: { issues: { key: string; summaryText: string }[] }[]
+  }>({
+    method: 'GET',
+    path: `/rest/api/3/issue/picker?query=${encodeURIComponent(query)}`,
+  })
+  const seen = new Set<string>()
+  const out: { key: string; summary: string }[] = []
+  for (const section of res.sections ?? []) {
+    for (const i of section.issues ?? []) {
+      if (seen.has(i.key)) continue
+      seen.add(i.key)
+      out.push({ key: i.key, summary: i.summaryText })
+    }
+  }
+  return out
+}
+
+export async function searchUsers(
+  c: JiraClient, query: string,
+): Promise<{ accountId: string; displayName: string }[]> {
+  const res = await c.call<{ accountId: string; displayName: string }[]>({
+    method: 'GET',
+    path: `/rest/api/3/user/search?query=${encodeURIComponent(query)}&maxResults=50`,
+  })
+  return res.map((u) => ({ accountId: u.accountId, displayName: u.displayName }))
+}
+
+// --- agile -----------------------------------------------------------------
+export async function getBoards(
+  c: JiraClient, projectKey: string,
+): Promise<{ id: number; name: string }[]> {
+  const res = await c.call<{ values: { id: number; name: string }[] }>({
+    method: 'GET',
+    path: `/rest/agile/1.0/board?projectKeyOrId=${encodeURIComponent(projectKey)}`,
+  })
+  return res.values
+}
+
+export async function getActiveSprint(
+  c: JiraClient, boardId: number,
+): Promise<{ id: number; name: string; startDate: string; endDate: string } | null> {
+  const res = await c.call<{
+    values: { id: number; name: string; startDate?: string; endDate?: string }[]
+  }>({ method: 'GET', path: `/rest/agile/1.0/board/${boardId}/sprint?state=active` })
+
+  const s = res.values[0]
+  if (!s) return null
+  return {
+    id: s.id, name: s.name,
+    startDate: s.startDate ?? '', endDate: s.endDate ?? '',
+  }
+}
+
+export async function getSprintIssues(
+  c: JiraClient, sprintId: number, storyPointsFieldId: string | null,
+): Promise<SprintIssue[]> {
+  const fields = ['summary', 'status', 'assignee', 'timespent']
+  if (storyPointsFieldId) fields.push(storyPointsFieldId)
+
+  const res = await c.call<{
+    issues: { key: string; fields: Record<string, unknown> }[]
+  }>({
+    method: 'GET',
+    path: `/rest/agile/1.0/sprint/${sprintId}/issue?fields=${fields.join(',')}&maxResults=100`,
+  })
+
+  return res.issues.map((i) => {
+    const f = i.fields
+    const sp = storyPointsFieldId ? f[storyPointsFieldId] : null
+    const assignee = f['assignee'] as { displayName?: string } | null
+    const status = f['status'] as { name?: string } | null
+    return {
+      key: i.key,
+      summary: String(f['summary'] ?? ''),
+      assigneeName: assignee?.displayName ?? null,
+      status: status?.name ?? '',
+      storyPoints: typeof sp === 'number' ? sp : null,
+      timeSpentSeconds: typeof f['timespent'] === 'number' ? f['timespent'] : 0,
+    }
+  })
+}
