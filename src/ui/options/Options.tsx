@@ -75,7 +75,7 @@ export function Options() {
           Mỗi thay đổi lưu ngay — không có nút Save toàn trang. */}
       <ProjectsSection config={config} save={save} />
       <BoardSection config={config} save={save} />
-      <MembersSection config={config} save={save} />
+      <MembersSection config={config} save={save} setError={setError} />
       <EventsSection config={config} save={save} />
     </div>
   )
@@ -162,14 +162,19 @@ function BoardSection({ config, save }: SectionProps) {
   )
 }
 
-function MembersSection({ config, save }: SectionProps) {
+function MembersSection({ config, save, setError }: SectionProps & {
+  setError: (e: string | null) => void
+}) {
   const [query, setQuery] = useState('')
   const [found, setFound] = useState<{ accountId: string; displayName: string }[]>([])
 
   const search = async () => {
-    setFound(await send<{ accountId: string; displayName: string }[]>({
-      type: 'users/search', query,
-    }))
+    try {
+      setFound(await send<{ accountId: string; displayName: string }[]>({
+        type: 'users/search', query,
+      }))
+      setError(null)
+    } catch (e) { setError((e as Error).message) }
   }
 
   const add = (u: { accountId: string; displayName: string }) => {
@@ -228,7 +233,15 @@ function MembersSection({ config, save }: SectionProps) {
   )
 }
 
+const EMPTY_EVENT_DRAFT: SprintEvent = { name: '', issueKey: '', defaultMinutes: 15, comment: '' }
+
 function EventsSection({ config, save }: SectionProps) {
+  // Draft cho dòng mới — chưa lưu, chỉ tồn tại ở local state. Khác với các
+  // input khác trong section (vốn ghi thẳng qua `save` mỗi lần đổi), dòng này
+  // không có issueKey nên `migrateConfig` sẽ loại bỏ ngay nếu lưu sớm —
+  // xem giải thích trong task-12-report.md.
+  const [draft, setDraft] = useState<SprintEvent>(EMPTY_EVENT_DRAFT)
+
   const update = (index: number, patch: Partial<SprintEvent>) => {
     void save({
       sprintEvents: config.sprintEvents.map((ev, i) => (i === index ? { ...ev, ...patch } : ev)),
@@ -236,8 +249,10 @@ function EventsSection({ config, save }: SectionProps) {
   }
 
   const add = () => {
-    const event: SprintEvent = { name: '', issueKey: '', defaultMinutes: 15, comment: '' }
-    void save({ sprintEvents: [...config.sprintEvents, event] })
+    const issueKey = draft.issueKey.trim()
+    if (issueKey === '') return
+    void save({ sprintEvents: [...config.sprintEvents, { ...draft, issueKey }] })
+    setDraft(EMPTY_EVENT_DRAFT)
   }
 
   const remove = (index: number) => {
@@ -264,10 +279,10 @@ function EventsSection({ config, save }: SectionProps) {
                 <input value={ev.name} style={{ width: '100%' }}
                        onChange={(e) => update(i, { name: e.target.value })} />
               </td>
-              <td>
-                <input value={ev.issueKey} style={{ width: 90 }}
-                       onChange={(e) => update(i, { issueKey: e.target.value })} />
-              </td>
+              {/* Issue key là danh tính của event — không sửa tại chỗ được.
+                  Đổi thì xoá dòng và thêm lại, tránh việc lưu ngay mỗi phím
+                  gõ khiến trạng thái rỗng thoáng qua bị migrateConfig xoá. */}
+              <td>{ev.issueKey}</td>
               <td align="center">
                 <input type="number" min={0} value={ev.defaultMinutes} style={{ width: 64 }}
                        onChange={(e) => update(i, { defaultMinutes: Number(e.target.value) })} />
@@ -281,9 +296,32 @@ function EventsSection({ config, save }: SectionProps) {
               </td>
             </tr>
           ))}
+          <tr>
+            <td>
+              <input value={draft.name} style={{ width: '100%' }}
+                     placeholder="Tên"
+                     onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+            </td>
+            <td>
+              <input value={draft.issueKey} style={{ width: 90 }}
+                     placeholder="Issue key"
+                     onChange={(e) => setDraft({ ...draft, issueKey: e.target.value })} />
+            </td>
+            <td align="center">
+              <input type="number" min={0} value={draft.defaultMinutes} style={{ width: 64 }}
+                     onChange={(e) => setDraft({ ...draft, defaultMinutes: Number(e.target.value) })} />
+            </td>
+            <td>
+              <input value={draft.comment} style={{ width: '100%' }}
+                     placeholder="Comment"
+                     onChange={(e) => setDraft({ ...draft, comment: e.target.value })} />
+            </td>
+            <td align="center">
+              <button onClick={add} disabled={draft.issueKey.trim() === ''}>Thêm</button>
+            </td>
+          </tr>
         </tbody>
       </table>
-      <button onClick={add} style={{ marginTop: 8 }}>Thêm sprint event</button>
     </section>
   )
 }
