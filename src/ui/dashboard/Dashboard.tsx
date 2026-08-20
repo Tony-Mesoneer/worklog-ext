@@ -15,6 +15,7 @@ import { SegmentedControl } from '@/ui/shared/SegmentedControl'
 import { ErrorBanner, toUiError, type UiError } from '@/ui/shared/errors'
 import { rangeLabel } from '@/ui/shared/format'
 import { GearIcon } from '@/ui/shared/icons'
+import { UpdateBanner } from '@/ui/shared/UpdateBanner'
 import { colors, fontSize, space } from '@/ui/shared/theme'
 import { FilterBar, type Preset } from './FilterBar'
 import { CoverageSummary } from './CoverageSummary'
@@ -211,6 +212,8 @@ export function Dashboard() {
           <SettingsButton />
         </div>
       </header>
+
+      <UpdateBanner />
 
       {error && <ErrorBanner error={error} onDismiss={() => setError(null)} />}
 

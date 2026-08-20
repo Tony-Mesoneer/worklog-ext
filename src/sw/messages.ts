@@ -29,6 +29,12 @@ export type Message =
   | { type: 'coverage/load'; scope: Scope; force: boolean }
   | { type: 'points/load' }
   | { type: 'dashboard/open' }
+  // Trạng thái update ĐÃ BIẾT, đọc từ cache, không gọi mạng — UI gọi cái này
+  // lúc mở lên. `update/check` mới là đường ra GitHub; `force` phân biệt lượt
+  // tự động (tôn trọng interval) với lượt người dùng bấm "Kiểm tra ngay".
+  | { type: 'update/status' }
+  | { type: 'update/check'; force: boolean }
+  | { type: 'update/dismiss'; version: string }
 
 export type Reply =
   | { ok: true; data: unknown }

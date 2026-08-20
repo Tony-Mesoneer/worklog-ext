@@ -21,7 +21,8 @@
   "background": { "service_worker": "src/sw/index.ts", "type": "module" },
   "side_panel": { "default_path": "src/ui/sidepanel/index.html" },
   "options_page": "src/ui/options/index.html",
-  "permissions": ["storage", "sidePanel", "tabs"],
+  "permissions": ["storage", "sidePanel", "tabs", "alarms"],
+  "host_permissions": ["https://api.github.com/*"],
   "optional_host_permissions": ["https://*/*"],
   "commands": {
     "open-sidepanel": {

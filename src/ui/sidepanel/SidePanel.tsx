@@ -16,6 +16,7 @@ import {
 import { parseDuration, formatDuration } from '@/core/duration'
 import { todayInZone, addDays } from '@/core/jiraTime'
 import { Banner } from '@/ui/shared/Banner'
+import { UpdateBanner } from '@/ui/shared/UpdateBanner'
 import { Button } from '@/ui/shared/Button'
 import { Card } from '@/ui/shared/Card'
 import { ProgressBar } from '@/ui/shared/ProgressBar'
@@ -347,6 +348,11 @@ export function SidePanel() {
           )}
         </div>
       </Card>
+
+      {/* Trên lỗi và trên toàn bộ form: đây là thứ duy nhất nói cho người dùng
+          biết bản họ đang chạy đã cũ — extension cài bằng Load unpacked thì
+          Chrome không tự update giúp. */}
+      <UpdateBanner />
 
       {error && <ErrorBanner error={error} onDismiss={() => setError(null)} />}
 

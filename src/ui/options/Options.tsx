@@ -11,6 +11,8 @@ import { Button } from '@/ui/shared/Button'
 import { Card } from '@/ui/shared/Card'
 import { toUiError } from '@/ui/shared/errors'
 import { colors, fontSize, radii, space } from '@/ui/shared/theme'
+import { useUpdate } from '@/ui/shared/useUpdate'
+import { isRepoSlug } from '@/core/version'
 
 // Ở Options thì "mở Options" là vô nghĩa, nên 401/403 có text riêng: nó chỉ
 // người dùng xuống đúng khối token bên dưới.
@@ -153,6 +155,7 @@ export function Options() {
       <BoardSection config={config} save={save} />
       <MembersSection config={config} save={save} setError={setError} />
       <EventsSection config={config} save={save} />
+      <UpdateSection config={config} save={save} />
     </div>
   )
 }
@@ -814,6 +817,112 @@ function EventsSection({ config, save }: SectionProps) {
             </tbody>
           </table>
         </div>
+      </div>
+    </Card>
+  )
+}
+
+// Card cuối: cập nhật extension. Nó ở đây chứ không phải một trang riêng vì
+// mỗi lần dùng là một lần "vào cấu hình xem có gì mới", và repo là một field
+// cấu hình như mọi field khác.
+//
+// Vì sao phải làm tay: extension cài bằng "Load unpacked" thì Chrome không có
+// đường tự cập nhật (không update_url, requestUpdateCheck chỉ có nghĩa với bản
+// từ Web Store). Nên tính năng này chỉ làm được đúng một việc — nói cho người
+// dùng biết có bản mới và đưa họ tới file zip.
+function UpdateSection({ config, save }: SectionProps) {
+  const { status, checking, error, check } = useUpdate()
+  const [draft, setDraft] = useState(config.updateRepo)
+  const fieldId = useId()
+
+  const trimmed = draft.trim()
+  const dirty = trimmed !== config.updateRepo
+  const invalid = trimmed !== '' && !isRepoSlug(trimmed)
+
+  const latest = status?.latest ?? null
+  const checkedAt = status && status.lastCheckedAt > 0
+    ? new Date(status.lastCheckedAt).toLocaleString()
+    : null
+
+  return (
+    <Card title="6. Cập nhật">
+      <div style={{ display: 'grid', gap: space.x3 }}>
+        <Hint>
+          Extension cài bằng "Load unpacked" nên Chrome không tự cập nhật. Ở đây
+          chỉ kiểm tra xem repo đã có release mới hơn chưa; tải zip, giải nén thay
+          thư mục đang dùng, rồi bấm Reload ở <code>chrome://extensions</code>.
+        </Hint>
+
+        <div className="wl-field">
+          <label className="wl-field__label" htmlFor={fieldId}>Repo GitHub</label>
+          <div style={{ display: 'flex', gap: space.x2, flexWrap: 'wrap' }}>
+            <input
+              id={fieldId}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && dirty && !invalid) void save({ updateRepo: trimmed }) }}
+              placeholder="owner/worklog-ext"
+              style={{ flex: '1 1 240px', minWidth: 0 }}
+            />
+            <Button
+              variant="primary"
+              onClick={() => void save({ updateRepo: trimmed })}
+              disabled={!dirty || invalid}
+            >
+              Lưu
+            </Button>
+          </div>
+          {invalid && (
+            <p style={{ margin: 0, fontSize: fontSize.md, color: colors.danger }}>
+              Phải là dạng <code>owner/tên</code>, không phải URL.
+            </p>
+          )}
+        </div>
+
+        <div style={{
+          display: 'flex', gap: space.x3, alignItems: 'center', flexWrap: 'wrap',
+        }}>
+          <span style={{ fontSize: fontSize.md }}>
+            Đang dùng <strong>{status?.currentVersion ?? '—'}</strong>
+          </span>
+          <Button
+            variant="secondary" size="sm"
+            onClick={() => void check()}
+            disabled={checking || config.updateRepo === ''}
+          >
+            {checking ? 'Đang kiểm tra…' : 'Kiểm tra ngay'}
+          </Button>
+          {checkedAt && (
+            <span style={{ fontSize: fontSize.xs, color: colors.muted }}>
+              Kiểm tra lần cuối: {checkedAt}
+            </span>
+          )}
+        </div>
+
+        {error && <Banner kind="error">{error}</Banner>}
+
+        {status?.state === 'current' && (
+          <Banner kind="success">Đang ở bản mới nhất ({status.currentVersion}).</Banner>
+        )}
+
+        {/* `dismissed` vẫn hiện Ở ĐÂY: người dùng bấm "Để sau" ở side panel là
+            muốn banner biến khỏi luồng log giờ, không phải muốn quên hẳn. */}
+        {(status?.state === 'available' || status?.state === 'dismissed') && latest && (
+          <Banner
+            kind="info"
+            action={{
+              label: 'Tải bản mới',
+              onClick: () => void chrome.tabs.create({ url: latest.downloadUrl ?? latest.url }),
+            }}
+          >
+            Có bản <strong>{latest.version}</strong>
+            {latest.publishedAt !== '' && ` (${new Date(latest.publishedAt).toLocaleDateString()})`}.
+          </Banner>
+        )}
+
+        {status?.state === 'unknown' && status.lastError !== null && (
+          <Banner kind="warn">Chưa kiểm tra được: {status.lastError}</Banner>
+        )}
       </div>
     </Card>
   )

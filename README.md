@@ -21,6 +21,7 @@ Implementation hoàn thành. Extension chạy local, chưa publish lên Chrome W
 2. **Cấu hình**: Mở trang Options (click icon extension → "Options"), nhập Jira URL rồi bấm "Kết nối", thêm project key, **chọn board chính** (bắt buộc cho preset sprint và tab Story points), thêm members và sprint events. Nếu session Jira không dùng được, nhập email + API token ở mục "API token (dự phòng)".
 3. **Log worklog**: Nhấn `Cmd+Shift+L` để mở side panel, chọn issue, nhập dữ liệu, click "Log" để ghi vào Jira.
 4. **Dashboard**: Xem nút "Dashboard" trong side panel để mở trang theo dõi giờ của team và so sánh story points vs giờ thực.
+5. **Cập nhật**: Ở Options, mục "6. Cập nhật", nhập repo GitHub dạng `owner/tên`. Extension sẽ tự kiểm tra release mới mỗi 6 giờ.
 
 **Lưu ý**: Extension chạy hoàn toàn local trong trình duyệt và kết nối trực tiếp với Jira Cloud. Không có backend, không lưu dữ liệu trên server.
 
@@ -95,3 +96,40 @@ npm run build && npm run pack   # → release/worklog-ext-<version>.zip
 ```
 
 `manifest.json` nằm ở gốc zip (đúng dạng Chrome Web Store yêu cầu). `release/` được gitignore.
+
+## Cập nhật extension
+
+Chrome **không tự cập nhật** extension cài bằng "Load unpacked" — không có
+`update_url`, và `chrome.runtime.requestUpdateCheck()` chỉ có nghĩa với bản cài
+từ Web Store. Nên extension tự đi hỏi GitHub và nói cho bạn biết, còn việc thay
+file vẫn là thao tác tay.
+
+**Cách hoạt động**
+
+- Service worker gọi `GET /repos/<owner>/<repo>/releases/latest` (vô danh, không
+  token — repo public) mỗi 6 giờ, hẹn bằng `chrome.alarms` chứ không phải
+  `setInterval`: service worker MV3 bị kill sau ~30s rảnh, mọi timer trong bộ
+  nhớ đều chết theo.
+- Kết quả nằm trong `chrome.storage.local` key `update`, nên side panel mở lên
+  là thấy ngay, không phải đợi round-trip ra GitHub. `lastCheckedAt` là thứ chặn
+  việc mỗi lần mở panel lại đốt một lượt rate limit (GitHub cho 60 request/giờ/IP).
+- Có bản mới hơn: badge `↑` trên icon extension, cộng banner ở side panel và
+  dashboard kèm link tải zip. "Để sau" chỉ tắt banner cho **đúng version đó** —
+  bản mới hơn nữa sẽ hiện lại. Options luôn hiện, kể cả đã tắt.
+- Chỉ tag **lớn hơn thật** mới tính là update (so theo từng nhóm số, nên
+  `0.10.0 > 0.9.0`). Release bị yank rồi tag lại thấp hơn không đẩy bạn về bản cũ.
+- Lượt check tự động thất bại thì lưu lỗi rồi im lặng, và `lastCheckedAt` không
+  nhích — lần mở panel sau vẫn thử lại thay vì tắt tiếng 6 tiếng.
+
+**Cách cập nhật khi có bản mới**
+
+1. Tải `worklog-ext-<version>.zip` từ banner (hoặc từ trang Releases).
+2. Giải nén, thay nội dung thư mục bạn đang trỏ "Load unpacked" vào.
+3. Mở `chrome://extensions` → bấm Reload trên thẻ Worklog.
+
+Cấu hình (Jira URL, member, sprint event) nằm trong `chrome.storage.local` nên
+không mất khi reload.
+
+Muốn Chrome tự update thật thì phải cài qua Chrome Web Store, hoặc host CRX đã
+ký + `updates.xml` và deploy bằng enterprise policy (`ExtensionInstallForcelist`)
+— trên macOS/Windows, `update_url` không có tác dụng với bản load unpacked.

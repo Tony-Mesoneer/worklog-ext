@@ -1,4 +1,5 @@
 import { loadConfig, saveConfig } from '@/store/config'
+import { checkForUpdate, dismissUpdate, updateStatus } from './update'
 import { readSnapshot, writeSnapshot, pruneSnapshots, snapshotMeta } from '@/store/snapshot'
 import { readCeremonyCache, writeCeremonyCache } from '@/store/ceremony'
 import { createClient, type JiraClient } from '@/jira/client'
@@ -418,6 +419,15 @@ export async function handle(msg: Message): Promise<unknown> {
       await chrome.tabs.create({ url: chrome.runtime.getURL('src/ui/dashboard/index.html') })
       return null
     }
+
+    case 'update/status':
+      return updateStatus()
+
+    case 'update/check':
+      return checkForUpdate(msg.force)
+
+    case 'update/dismiss':
+      return dismissUpdate(msg.version)
 
     default: {
       // Thêm một variant vào Message mà quên handler thì trước đây handle() trả

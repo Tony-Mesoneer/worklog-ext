@@ -50,6 +50,11 @@ export type Config = {
   slotMinutes: number
   durationPresets: number[]
   sprintEvents: SprintEvent[]
+  // Repo GitHub (dạng `owner/tên`) dùng để kiểm tra bản mới. Rỗng = tắt tính
+  // năng. Là CONFIG chứ không phải hằng số biên dịch vì cùng một bản build có
+  // thể được fork/đổi chỗ host, và không có gì trong extension biết nó được
+  // build từ repo nào.
+  updateRepo: string
 }
 
 export const defaultConfig: Config = {
@@ -71,6 +76,7 @@ export const defaultConfig: Config = {
   slotMinutes: 15,
   durationPresets: [15, 30, 60, 240, 360, 480],
   sprintEvents: [],
+  updateRepo: '',
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>
@@ -206,6 +212,7 @@ export function migrateConfig(raw: unknown): Config {
     slotMinutes: num(r['slotMinutes'], d.slotMinutes),
     durationPresets: numArray(r['durationPresets'], d.durationPresets),
     sprintEvents,
+    updateRepo: str(r['updateRepo'], d.updateRepo).trim(),
   }
   if (token) config.token = token
   return config

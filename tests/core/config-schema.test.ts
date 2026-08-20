@@ -229,3 +229,17 @@ describe('migrateConfig', () => {
     expect(c.members[0]!.displayName).toBe('A')
   })
 })
+
+describe('updateRepo', () => {
+  it('thiếu → rỗng (tính năng check update tắt)', () => {
+    expect(migrateConfig({}).updateRepo).toBe('')
+  })
+
+  it('được trim, vì dán từ URL rất dễ lẫn khoảng trắng', () => {
+    expect(migrateConfig({ updateRepo: '  o/r  ' }).updateRepo).toBe('o/r')
+  })
+
+  it('sai kiểu → rỗng', () => {
+    expect(migrateConfig({ updateRepo: 42 }).updateRepo).toBe('')
+  })
+})
