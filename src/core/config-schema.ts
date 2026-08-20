@@ -1,3 +1,5 @@
+import { parseHhMm } from './timeline'
+
 export const CONFIG_VERSION = 1
 
 export type SprintEvent = {
@@ -6,6 +8,11 @@ export type SprintEvent = {
   defaultMinutes: number
   comment: string
 }
+
+// Một khoảng nghỉ trong ngày, "HH:MM". Cố tình là DANH SÁCH chứ không phải một
+// cặp field "lunchStart/lunchEnd": thêm khoảng nghỉ thứ hai (vd 15:00 tea break)
+// phải là thêm một phần tử, không phải viết lại logic cắt worklog.
+export type BreakInterval = { start: string; end: string }
 
 export type ConfigMember = {
   accountId: string
@@ -27,6 +34,8 @@ export type Config = {
   members: ConfigMember[]
   daysOff: Record<string, string[]>
   workdayStart: string
+  workdayEnd: string
+  breaks: BreakInterval[]
   slotMinutes: number
   durationPresets: number[]
   sprintEvents: SprintEvent[]
@@ -43,7 +52,11 @@ export const defaultConfig: Config = {
   storyPointsFieldId: null,
   members: [],
   daysOff: {},
-  workdayStart: '09:00',
+  // Giờ làm việc và giờ nghỉ trưa là feature ẩn: không có UI trong Options,
+  // chỉ có default ở đây. Không worklog nào được đi qua giờ nghỉ.
+  workdayStart: '08:30',
+  workdayEnd: '18:00',
+  breaks: [{ start: '12:00', end: '13:00' }],
   slotMinutes: 15,
   durationPresets: [15, 30, 60, 240, 360, 480],
   sprintEvents: [],
@@ -61,8 +74,21 @@ const num = (v: unknown, fallback: number): number =>
 const strArray = (v: unknown, fallback: string[]): string[] =>
   Array.isArray(v) && v.every((x) => typeof x === 'string') ? (v as string[]) : fallback
 
+// "HH:MM" trong khoảng hợp lệ. Giờ sai kiểu/sai định dạng mà lọt xuống
+// parseHhMm sẽ thành NaN, rồi thành `started` rác trong POST worklog.
+const HH_MM = /^([01]?\d|2[0-3]):([0-5]\d)$/
+const isHhMm = (v: unknown): v is string => typeof v === 'string' && HH_MM.test(v)
+const hhMm = (v: unknown, fallback: string): string => (isHhMm(v) ? v : fallback)
+
 const numArray = (v: unknown, fallback: number[]): number[] =>
   Array.isArray(v) && v.every((x) => typeof x === 'number') ? (v as number[]) : fallback
+
+// Giờ tan làm phải sau giờ bắt đầu, không thì lưới slot rỗng và dropdown
+// "Bắt đầu" trắng trơn.
+const workdayEndOf = (start: string, raw: unknown): string => {
+  const end = hhMm(raw, defaultConfig.workdayEnd)
+  return parseHhMm(end) > parseHhMm(start) ? end : defaultConfig.workdayEnd
+}
 
 // Migration cố tình khoan dung: dữ liệu lạ bị thay bằng default chứ không làm
 // hỏng toàn bộ config. Mất một field còn hơn người dùng mở extension ra trắng.
@@ -97,6 +123,21 @@ export function migrateConfig(raw: unknown): Config {
       comment: str(e['comment'], ''),
     }))
 
+  // `breaks` sai kiểu → default. Nhưng MẢNG RỖNG được giữ nguyên: đó là lựa
+  // chọn hợp lệ "ngày làm việc không có giờ nghỉ", không phải dữ liệu thiếu.
+  const breaksRaw = r['breaks']
+  const breaks: BreakInterval[] = Array.isArray(breaksRaw)
+    ? breaksRaw
+        .filter(isRecord)
+        .filter((b) => isHhMm(b['start']) && isHhMm(b['end']))
+        .map((b) => ({ start: b['start'] as string, end: b['end'] as string }))
+        // end <= start là vô nghĩa; normalizeBreaks cũng bỏ, nhưng bỏ sớm ở đây
+        // để config đọc ra không chứa rác.
+        // So sánh bằng PHÚT, không bằng chuỗi: "9:00" hợp lệ về định dạng
+        // nhưng "9:00" > "12:00" nếu so chuỗi.
+        .filter((b) => parseHhMm(b.end) > parseHhMm(b.start))
+    : d.breaks.map((b) => ({ ...b }))
+
   const daysOffRaw = isRecord(r['daysOff']) ? r['daysOff'] : {}
   const daysOff: Record<string, string[]> = {}
   for (const [k, v] of Object.entries(daysOffRaw)) {
@@ -126,7 +167,9 @@ export function migrateConfig(raw: unknown): Config {
     storyPointsFieldId: typeof spfRaw === 'string' ? spfRaw : null,
     members,
     daysOff,
-    workdayStart: str(r['workdayStart'], d.workdayStart),
+    workdayStart: hhMm(r['workdayStart'], d.workdayStart),
+    workdayEnd: workdayEndOf(hhMm(r['workdayStart'], d.workdayStart), r['workdayEnd']),
+    breaks,
     slotMinutes: num(r['slotMinutes'], d.slotMinutes),
     durationPresets: numArray(r['durationPresets'], d.durationPresets),
     sprintEvents,
