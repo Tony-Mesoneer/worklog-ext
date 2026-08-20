@@ -64,6 +64,21 @@ export const bannerColors = {
   success: { bg: 'rgba(111,207,139,0.14)', fg: colors.success, border: 'rgba(111,207,139,0.35)' },
 } as const
 
+// Màu của StatusBadge, theo `statusCategory` của Jira — ĐÚNG BA giá trị nên ba
+// màu là đủ cho mọi workflow. Đây KHÔNG phải sự trở lại của `statusColors` cũ
+// (cờ ok/under/empty của coverage): đó là một phán xét về người, cái này là một
+// nhãn về issue.
+//
+// Ba màu lấy nguyên từ palette đang có: xám-tím trung tính cho việc chưa bắt
+// đầu, accent cho việc đang chạy, xanh cho việc xong. Nền/viền dùng chính các
+// giá trị rgba đã có trong `bannerColors` — badge phải đọc ra là NHÃN, nên nền
+// mờ + chữ màu, không bao giờ nền đặc.
+export const statusCategoryColors = {
+  new: { bg: 'rgba(155,149,168,0.12)', fg: colors.muted, border: colors.border },
+  indeterminate: { bg: colors.accentSoft, fg: colors.accentRing, border: 'rgba(150,125,214,0.35)' },
+  done: { bg: 'rgba(111,207,139,0.14)', fg: colors.success, border: 'rgba(111,207,139,0.35)' },
+} as const
+
 // Không còn `statusColors`: cờ nhị phân ok/under/empty đã bị thay bằng thanh
 // tỉ lệ (ProgressBar + progressTone). `CoverageRow.status` của core vẫn nguyên,
 // chỉ là UI không tô màu theo nó nữa.
