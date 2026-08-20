@@ -2,18 +2,26 @@ import { Fragment, useEffect, useState } from 'react'
 import { send, type PointsLoadResult } from '@/sw/messages'
 import { buildPointsTable, type PointsRow, type PointsTable as Data } from '@/core/points'
 import type { IssueMeta, IssueMetaMap } from '@/core/issue-hierarchy'
-import { groupIssueRowsByParent } from '@/core/issue-hierarchy'
+import {
+  groupIssueRowsByParent, groupRowsByProject, UNKNOWN_PROJECT,
+} from '@/core/issue-hierarchy'
 import { Card } from '@/ui/shared/Card'
 import { StatusBadge } from '@/ui/shared/StatusBadge'
 import { hoursLabel } from '@/ui/shared/format'
 import { ErrorBanner, toUiError, type UiError } from '@/ui/shared/errors'
-import { colors, fontSize, space } from '@/ui/shared/theme'
+import { colors, fontSize, space, table as tableColors } from '@/ui/shared/theme'
 
 // Thụt lề của sub-task. Ở tab này việc gom nhóm không chỉ để đẹp: story points
 // gần như luôn nằm ở issue CHA còn giờ thì log ở sub-task, nên danh sách phẳng
 // cho ra "cha 5 điểm / 0h" cạnh "con 0 điểm / 14h" và cột h/point vô nghĩa. Xếp
 // con dưới cha là thứ làm cột đó đọc được.
 const CHILD_INDENT = 22
+
+// Nhãn của dòng project. Board của Jira có thể trải nhiều project qua filter
+// của nó, nên tab này cũng cần tầng project — và dùng ĐÚNG một luật với tab
+// Coverage: nhiều project thì gom, một project thì không bọc gì.
+const projectLabel = (projectKey: string): string =>
+  projectKey === UNKNOWN_PROJECT ? 'Không rõ project' : projectKey
 
 // h/point, trung vị, cờ outlier KHÔNG đổi: buildPointsTable vẫn là nơi duy nhất
 // tính chúng, ở đây chỉ đổi thứ tự vẽ và thụt lề.
@@ -52,6 +60,46 @@ function IssueRow({ row, meta, child }: {
   )
 }
 
+/**
+ * Các hàng issue đã gom theo cha. Gom SAU khi buildPointsTable đã sort theo
+ * h/point: thứ tự trong nhóm và thứ tự các nhóm vẫn phản ánh sort đó (xem
+ * groupIssueRowsByParent). Tách ra component vì nó được dùng cả khi có tầng
+ * project và khi không.
+ */
+function ParentGroups({ rows, meta, keyPrefix }: {
+  rows: readonly PointsRow[]
+  meta: IssueMetaMap
+  keyPrefix: string
+}) {
+  return (
+    <>
+      {groupIssueRowsByParent(rows, meta, (r) => r.key).map((group) => (
+        <Fragment key={`${keyPrefix}${group.key}`}>
+          {/* Cha không có row trong sprint (nằm ngoài sprint đang mở): vẫn hiện
+              một dòng tiêu đề, nếu không thì sub-task lại trông như issue độc
+              lập — đúng cái cần sửa. */}
+          {group.isParent && group.own === null && (
+            <tr>
+              <th scope="row" style={{ fontWeight: 600, color: colors.muted }}>
+                {group.key} {group.summary}
+              </th>
+              <td colSpan={5} style={{ textAlign: 'left', color: colors.muted }}>
+                không có trong sprint này
+              </td>
+            </tr>
+          )}
+          {(group.own ? [group.own, ...group.children] : group.children).map((r) => (
+            <IssueRow
+              key={r.key} row={r} meta={meta[r.key]}
+              child={group.isParent && r.key !== group.key}
+            />
+          ))}
+        </Fragment>
+      ))}
+    </>
+  )
+}
+
 export function PointsPanel() {
   const [data, setData] = useState<Data | null>(null)
   const [meta, setMeta] = useState<IssueMetaMap>({})
@@ -77,9 +125,9 @@ export function PointsPanel() {
   }
 
   const med = data.medianHoursPerPoint
-  // Gom theo cha SAU khi buildPointsTable đã sort theo h/point: thứ tự trong
-  // nhóm và thứ tự các nhóm vẫn phản ánh sort đó (xem groupIssueRowsByParent).
-  const groups = groupIssueRowsByParent(data.rows, meta, (r) => r.key)
+  // Sprint của MỘT board có thể chứa nhiều project (board lấy issue qua filter).
+  // null = chỉ một project → không bọc gì, bảng y như trước.
+  const byProject = groupRowsByProject(data.rows, meta, (r) => r.key)
 
   return (
     <>
@@ -112,29 +160,24 @@ export function PointsPanel() {
               </tr>
             </thead>
             <tbody>
-              {groups.map((group) => (
-                <Fragment key={group.key}>
-                  {/* Cha không có row trong sprint (nằm ngoài sprint đang mở):
-                      vẫn hiện một dòng tiêu đề, nếu không thì sub-task lại
-                      trông như issue độc lập — đúng cái cần sửa. */}
-                  {group.isParent && group.own === null && (
+              {byProject === null
+                ? <ParentGroups rows={data.rows} meta={meta} keyPrefix="" />
+                : byProject.map((pg) => (
+                  <Fragment key={`p-${pg.projectKey}`}>
                     <tr>
-                      <th scope="row" style={{ fontWeight: 600, color: colors.muted }}>
-                        {group.key} {group.summary}
+                      <th
+                        scope="row"
+                        colSpan={6}
+                        style={{ fontWeight: 700, background: tableColors.groupRowBg }}
+                      >
+                        {projectLabel(pg.projectKey)}
                       </th>
-                      <td colSpan={5} style={{ textAlign: 'left', color: colors.muted }}>
-                        không có trong sprint này
-                      </td>
                     </tr>
-                  )}
-                  {(group.own ? [group.own, ...group.children] : group.children).map((r) => (
-                    <IssueRow
-                      key={r.key} row={r} meta={meta[r.key]}
-                      child={group.isParent && r.key !== group.key}
+                    <ParentGroups
+                      rows={pg.rows} meta={meta} keyPrefix={`${pg.projectKey}-`}
                     />
-                  ))}
-                </Fragment>
-              ))}
+                  </Fragment>
+                ))}
             </tbody>
           </table>
         </div>
