@@ -40,12 +40,6 @@ export type CoverageRow = {
    * cảnh ("… · 276h cả sprint") — không bao giờ dùng để phán ai thiếu giờ.
    */
   capacityFullRangeSeconds: number
-  /**
-   * @deprecated Bí danh của `capacityToDateSeconds`, chỉ còn để caller cũ
-   * không vỡ. Code mới phải chọn rõ một trong hai field ở trên: đọc
-   * `capacitySeconds` là tự nhận không biết mình đang đo tới hôm nay hay cả kỳ.
-   */
-  capacitySeconds: number
   status: 'ok' | 'under' | 'empty'
   issues: CoverageIssueRow[]
 }
@@ -205,7 +199,6 @@ export function buildCoverage(args: {
       total,
       capacityToDateSeconds,
       capacityFullRangeSeconds,
-      capacitySeconds: capacityToDateSeconds,
       status,
       issues: [...issueMap.values()].sort((a, b) => b.total - a.total),
     }

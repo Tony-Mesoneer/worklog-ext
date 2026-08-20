@@ -95,7 +95,7 @@ describe('buildCoverage', () => {
       dates: enumerateDates('2026-08-17', '2026-08-23'), // gồm cả T7, CN
       daysOff: {},
     })
-    expect(table.rows[0]!.capacitySeconds).toBe(5 * 8 * H)
+    expect(table.rows[0]!.capacityToDateSeconds).toBe(5 * 8 * H)
   })
 
   it('capacity loại ngày nghỉ phép của đúng member đó', () => {
@@ -103,15 +103,15 @@ describe('buildCoverage', () => {
       worklogs: [], members: [member('u1'), member('u2')], dates,
       daysOff: { u1: ['2026-08-18'] },
     })
-    expect(table.rows[0]!.capacitySeconds).toBe(4 * 8 * H)
-    expect(table.rows[1]!.capacitySeconds).toBe(5 * 8 * H)
+    expect(table.rows[0]!.capacityToDateSeconds).toBe(4 * 8 * H)
+    expect(table.rows[1]!.capacityToDateSeconds).toBe(5 * 8 * H)
   })
 
   it('capacity theo hoursPerDay riêng của member part-time', () => {
     const table = buildCoverage({
       worklogs: [], members: [member('u1', 4)], dates, daysOff: {},
     })
-    expect(table.rows[0]!.capacitySeconds).toBe(5 * 4 * H)
+    expect(table.rows[0]!.capacityToDateSeconds).toBe(5 * 4 * H)
   })
 
   it('status: empty khi chưa log gì', () => {
@@ -141,7 +141,7 @@ describe('buildCoverage', () => {
       worklogs: [], members: [member('u1', 8, false)], dates, daysOff: {},
     })
     expect(table.rows).toHaveLength(1)
-    expect(table.rows[0]!.capacitySeconds).toBe(0)
+    expect(table.rows[0]!.capacityToDateSeconds).toBe(0)
     expect(table.rows[0]!.status).toBe('empty')
   })
 
@@ -307,13 +307,6 @@ describe('buildCoverage — capacity tới hôm nay', () => {
     })
     expect(table.rows[0]!.capacityToDateSeconds).toBe(0)
     expect(table.rows[0]!.capacityFullRangeSeconds).toBe(0)
-  })
-
-  it('capacitySeconds (deprecated) là bí danh của capacityToDateSeconds', () => {
-    const table = buildCoverage({
-      worklogs: [], members: [member('u1')], dates, daysOff: {}, today: '2026-08-20',
-    })
-    expect(table.rows[0]!.capacitySeconds).toBe(table.rows[0]!.capacityToDateSeconds)
   })
 
   it('today sau ngày cuối khoảng: bằng cả khoảng', () => {
