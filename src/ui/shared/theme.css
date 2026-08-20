@@ -593,6 +593,9 @@ code {
 
 .wl-option__sum {
   color: var(--muted);
+  /* min-width:0 là dòng bắt buộc: không có nó, flex item không co lại dưới
+   * kích thước nội dung nên summary dài tràn ra ngoài card thay vì ellipsis. */
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

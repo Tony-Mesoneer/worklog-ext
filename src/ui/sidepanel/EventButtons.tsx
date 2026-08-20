@@ -1,6 +1,8 @@
 // src/ui/sidepanel/EventButtons.tsx
 import type { SprintEvent } from '@/core/config-schema'
-import { colors } from '@/ui/shared/theme'
+import { formatDuration } from '@/core/duration'
+import { Button } from '@/ui/shared/Button'
+import { colors, fontSize, space } from '@/ui/shared/theme'
 
 type Props = {
   events: SprintEvent[]
@@ -10,19 +12,22 @@ type Props = {
 export function EventButtons({ events, onPick }: Props) {
   if (events.length === 0) {
     return (
-      <p style={{ fontSize: 12, color: colors.muted }}>
+      <p style={{ fontSize: fontSize.sm, color: colors.muted, margin: 0 }}>
         Chưa cấu hình sprint event — thêm trong Options.
       </p>
     )
   }
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: space.x1 }}>
       {events.map((e) => (
-        <button key={e.issueKey + e.name} onClick={() => onPick(e)}
-                title={`${e.issueKey} · ${e.defaultMinutes}m`}
-                style={{ fontSize: 12, padding: '4px 8px' }}>
+        <Button
+          key={e.issueKey + e.name}
+          size="sm"
+          onClick={() => onPick(e)}
+          title={`${e.issueKey} · ${formatDuration(e.defaultMinutes * 60)}`}
+        >
           {e.name}
-        </button>
+        </Button>
       ))}
     </div>
   )

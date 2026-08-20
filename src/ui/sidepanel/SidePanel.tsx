@@ -3,13 +3,17 @@ import { useCallback, useEffect, useState } from 'react'
 import { send, type DayLoadResult } from '@/sw/messages'
 import type { Config, SprintEvent } from '@/core/config-schema'
 import type { Worklog } from '@/core/coverage'
-import { nextFreeStart, parseHhMm, type DayEntry } from '@/core/timeline'
+import { findOverlaps, nextFreeStart, parseHhMm, type DayEntry } from '@/core/timeline'
 import { parseDuration, formatDuration } from '@/core/duration'
 import { todayInZone, addDays } from '@/core/jiraTime'
 import { Banner } from '@/ui/shared/Banner'
+import { Button } from '@/ui/shared/Button'
+import { Card } from '@/ui/shared/Card'
+import { ProgressBar } from '@/ui/shared/ProgressBar'
 import { ErrorBanner, toUiError, type UiError } from '@/ui/shared/errors'
-import { colors } from '@/ui/shared/theme'
-import { DayTimeline } from './DayTimeline'
+import { longDateLabel } from '@/ui/shared/format'
+import { colors, fontSize, space } from '@/ui/shared/theme'
+import { DayBlocks } from './DayBlocks'
 import { EventButtons } from './EventButtons'
 import { IssuePicker } from './IssuePicker'
 import { LogForm } from './LogForm'
@@ -21,6 +25,8 @@ const toEntries = (worklogs: Worklog[]): DayEntry[] =>
     durationMinutes: Math.round(w.timeSpentSeconds / 60),
   }))
 
+const TARGET_SECONDS = 8 * 3600
+
 export function SidePanel() {
   const [config, setConfig] = useState<Config | null>(null)
   const [date, setDate] = useState('')
@@ -30,6 +36,7 @@ export function SidePanel() {
   const [durationInput, setDurationInput] = useState('')
   const [comment, setComment] = useState('')
   const [busy, setBusy] = useState(false)
+  const [loadingDay, setLoadingDay] = useState(false)
   const [error, setError] = useState<UiError | null>(null)
   const [lastLogged, setLastLogged] = useState<{ id: string; issueKey: string } | null>(null)
 
@@ -47,13 +54,14 @@ export function SidePanel() {
   useEffect(() => { loadConfig() }, [loadConfig])
 
   const reload = useCallback(async (c: Config, d: string) => {
+    setLoadingDay(true)
     try {
       const res = await send<DayLoadResult>({ type: 'day/load', date: d })
       setWorklogs(res.worklogs)
       // Start time luôn nhảy tới khoảng trống kế tiếp sau khi dữ liệu đổi.
       setStartMinutes(nextFreeStart(toEntries(res.worklogs), parseHhMm(c.workdayStart), c.slotMinutes))
       setError(null)
-    } catch (e) { setError(toUiError(e)) }
+    } catch (e) { setError(toUiError(e)) } finally { setLoadingDay(false) }
   }, [])
 
   useEffect(() => {
@@ -112,7 +120,7 @@ export function SidePanel() {
 
   if (!config) {
     return (
-      <div style={{ padding: 12 }}>
+      <div style={{ padding: space.x3 }}>
         {error
           ? error.auth
             ? <ErrorBanner error={error} />
@@ -121,13 +129,13 @@ export function SidePanel() {
                 {error.message}
               </Banner>
             )
-          : 'Đang tải…'}
+          : <p style={{ color: colors.muted, margin: 0 }}>Đang tải…</p>}
       </div>
     )
   }
   if (config.jiraBaseUrl === '') {
     return (
-      <div style={{ padding: 12 }}>
+      <div style={{ padding: space.x3 }}>
         <Banner kind="info" action={{ label: 'Mở Options', onClick: () => chrome.runtime.openOptionsPage() }}>
           Chưa cấu hình Jira.
         </Banner>
@@ -137,57 +145,111 @@ export function SidePanel() {
 
   const entries = toEntries(worklogs)
   const totalSeconds = worklogs.reduce((s, w) => s + w.timeSpentSeconds, 0)
-  const target = 8 * 3600
+  const selectedMinutes = Math.round((parseDuration(durationInput) ?? 0) / 60)
+  const overlapKeys = selectedMinutes > 0
+    ? findOverlaps(entries, startMinutes, selectedMinutes).map((o) => o.issueKey)
+    : []
+  const today = todayInZone(config.timeZone, new Date())
+  const remaining = TARGET_SECONDS - totalSeconds
 
   return (
-    <div style={{ padding: 10, fontFamily: 'system-ui', display: 'grid', gap: 10 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <button onClick={() => setDate(addDays(date, -1))} disabled={busy}>←</button>
-        <strong style={{ fontSize: 13 }}>{date}</strong>
-        <button onClick={() => setDate(addDays(date, 1))} disabled={busy}>→</button>
-        <span style={{ marginLeft: 'auto', fontSize: 13, color: totalSeconds >= target ? colors.success : colors.warning }}>
-          {formatDuration(totalSeconds)} / {formatDuration(target)}
-        </span>
-      </div>
+    <div style={{ padding: space.x3, display: 'grid', gap: space.x3, minWidth: 0 }}>
+      {/* NHÓM 1 — ngày và tiến độ. Không còn ISO trần: "Thứ Năm, 20/08". */}
+      <Card>
+        <div style={{ display: 'grid', gap: space.x2, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: space.x2, minWidth: 0 }}>
+            <Button
+              variant="ghost" iconOnly aria-label="Ngày trước"
+              onClick={() => setDate(addDays(date, -1))} disabled={busy}
+            >
+              ←
+            </Button>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: fontSize.lg, fontWeight: 600, lineHeight: 1.2 }}>
+                {date === '' ? '' : longDateLabel(date)}
+              </div>
+              <div style={{ fontSize: fontSize.xs, color: colors.muted }}>
+                {date === today ? 'Hôm nay' : date}
+              </div>
+            </div>
+            <Button
+              variant="ghost" iconOnly aria-label="Ngày sau"
+              onClick={() => setDate(addDays(date, 1))} disabled={busy}
+            >
+              →
+            </Button>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: space.x2 }}>
+            <strong style={{ fontSize: fontSize.md, fontVariantNumeric: 'tabular-nums' }}>
+              {formatDuration(totalSeconds)}
+            </strong>
+            <span style={{ fontSize: fontSize.sm, color: colors.muted }}>
+              / {formatDuration(TARGET_SECONDS)}
+            </span>
+            <span style={{ marginLeft: 'auto', fontSize: fontSize.sm, color: colors.muted }}>
+              {remaining > 0 ? `còn thiếu ${formatDuration(remaining)}` : 'đã đủ giờ'}
+            </span>
+          </div>
+          <ProgressBar
+            value={totalSeconds} max={TARGET_SECONDS} height={8}
+            label={`Đã log ${formatDuration(totalSeconds)} trên mục tiêu ${formatDuration(TARGET_SECONDS)}`}
+          />
+        </div>
+      </Card>
 
       {error && <ErrorBanner error={error} onDismiss={() => setError(null)} />}
 
       {lastLogged && (
-        <Banner kind="info" action={{ label: 'Undo', onClick: () => void undo() }}>
+        <Banner kind="success" action={{ label: 'Undo', onClick: () => void undo() }}>
           Đã log vào {lastLogged.issueKey}
         </Banner>
       )}
 
-      <DayTimeline
-        entries={entries}
-        workdayStartMinutes={parseHhMm(config.workdayStart)}
-        slotMinutes={config.slotMinutes}
-        selectedStart={startMinutes}
-        selectedDuration={Math.round((parseDuration(durationInput) ?? 0) / 60)}
-      />
+      {/* NHÓM 2 — ngày đã trôi qua thế nào. */}
+      <Card title="Trong ngày">
+        <div style={{ opacity: loadingDay ? 0.55 : 1, transition: 'opacity .12s ease' }}>
+          <DayBlocks
+            entries={entries}
+            workdayStartMinutes={parseHhMm(config.workdayStart)}
+            selectedStart={startMinutes}
+            selectedDuration={selectedMinutes}
+          />
+        </div>
+      </Card>
 
-      <EventButtons events={config.sprintEvents} onPick={pickEvent} />
-      <IssuePicker value={issueKey} onChange={setIssueKey} projects={config.projects} />
+      {/* NHÓM 3 — form ghi giờ, kết thúc bằng nút primary. */}
+      <Card title="Ghi giờ">
+        <div style={{ display: 'grid', gap: space.x3, minWidth: 0 }}>
+          <div className="wl-field">
+            <span className="wl-field__label">Sprint event</span>
+            <EventButtons events={config.sprintEvents} onPick={pickEvent} />
+          </div>
 
-      <LogForm
-        entries={entries}
-        presets={config.durationPresets}
-        slotMinutes={config.slotMinutes}
-        workdayStartMinutes={parseHhMm(config.workdayStart)}
-        startMinutes={startMinutes}
-        durationInput={durationInput}
-        comment={comment}
-        issueKey={issueKey}
-        busy={busy}
-        onStartChange={setStartMinutes}
-        onDurationChange={setDurationInput}
-        onCommentChange={setComment}
-        onSubmit={() => void submit()}
-      />
+          <IssuePicker value={issueKey} onChange={setIssueKey} projects={config.projects} />
 
-      <button onClick={() => void send({ type: 'dashboard/open' })} style={{ fontSize: 12 }}>
-        Mở dashboard team
-      </button>
+          <LogForm
+            entries={entries}
+            presets={config.durationPresets}
+            slotMinutes={config.slotMinutes}
+            workdayStartMinutes={parseHhMm(config.workdayStart)}
+            startMinutes={startMinutes}
+            durationInput={durationInput}
+            comment={comment}
+            issueKey={issueKey}
+            busy={busy}
+            overlapKeys={overlapKeys}
+            onStartChange={setStartMinutes}
+            onDurationChange={setDurationInput}
+            onCommentChange={setComment}
+            onSubmit={() => void submit()}
+          />
+        </div>
+      </Card>
+
+      <Button variant="ghost" size="sm" onClick={() => void send({ type: 'dashboard/open' })}>
+        Mở dashboard team →
+      </Button>
     </div>
   )
 }

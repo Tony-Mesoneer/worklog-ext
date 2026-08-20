@@ -20,14 +20,18 @@ type Props = {
   valueText?: string
 }
 
-// Màu theo TỈ LỆ, không theo cờ nhị phân: 0 = đỏ (chưa log gì), dưới 60% = cam,
-// 60–99% = accent (đang đi đúng hướng), >= 100% = xanh.
+// Màu theo TỈ LỆ, không theo cờ nhị phân:
+//   0            → đỏ   (chưa log gì — đây mới là chuyện đáng báo)
+//   dưới 35%     → cam  (lệch xa)
+//   35–99%       → accent (đang đi đúng hướng; giữa sprint đây là trạng thái
+//                  BÌNH THƯỜNG, tô cam ở đây là lý do màu cảnh báo mất nghĩa)
+//   >= 100%      → xanh
 export function progressTone(value: number, max: number): string {
   if (value <= 0) return colors.danger
   if (max <= 0) return colors.accent
   const ratio = value / max
   if (ratio >= 1) return colors.success
-  if (ratio >= 0.6) return colors.accent
+  if (ratio >= 0.35) return colors.accent
   return colors.warning
 }
 

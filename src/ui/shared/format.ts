@@ -15,7 +15,6 @@ const utcDate = (date: string): Date => {
 }
 
 const WEEKDAY = new Intl.DateTimeFormat('vi-VN', { weekday: 'long', timeZone: 'UTC' })
-const DAY_MONTH = new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', timeZone: 'UTC' })
 
 // "Thứ Năm, 20/08" — thay cho ISO trần `2026-08-20` trong header side panel.
 // Intl vi-VN trả "thứ năm" chữ thường, ta hoa hoá chữ đầu.
@@ -24,7 +23,10 @@ export const weekdayLabel = (date: string): string => {
   return w.charAt(0).toUpperCase() + w.slice(1)
 }
 
-export const dayMonthLabel = (date: string): string => DAY_MONTH.format(utcDate(date))
+// Ghép tay thay vì Intl: ICU của vi-VN cho ra "20-08" khi chỉ xin day+month,
+// còn người Việt viết "20/08".
+export const dayMonthLabel = (date: string): string =>
+  `${date.slice(8, 10)}/${date.slice(5, 7)}`
 
 export const longDateLabel = (date: string): string =>
   `${weekdayLabel(date)}, ${dayMonthLabel(date)}`
