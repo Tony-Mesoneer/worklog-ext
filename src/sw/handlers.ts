@@ -1,15 +1,18 @@
 import { loadConfig, saveConfig } from '@/store/config'
 import { readSnapshot, writeSnapshot, pruneSnapshots } from '@/store/snapshot'
+import { readCeremonyCache, writeCeremonyCache } from '@/store/ceremony'
 import { createClient, type JiraClient } from '@/jira/client'
 import { cookieAuth, tokenAuth } from '@/jira/auth'
 import * as api from '@/jira/endpoints'
 import { formatStarted, offsetMinutesForZone } from '@/core/jiraTime'
 import { normalizeBreaks, splitAroundBreaks } from '@/core/timeline'
+import { resolveSprintEvents, type CeremonyCandidate } from '@/core/event-resolve'
 import type { Config } from '@/core/config-schema'
 import type { Worklog } from '@/core/coverage'
 import type {
   Message, AuthProbeResult, DayLoadResult, CoverageLoadResult,
   PointsLoadResult, SprintCurrentResult, WorklogAddResult,
+  EventsResolveResult, CeremoniesListResult,
 } from './messages'
 
 async function makeClient(config: Config): Promise<JiraClient> {
@@ -68,6 +71,56 @@ async function rollbackWorklogs(
     }
   }
   return orphans
+}
+
+// Gom ứng viên ceremony cho các sprint ĐANG MỞ, có gắn sprint id/startDate để
+// core tie-break được.
+//
+// Một request search cho TẤT CẢ tên event (các `summary ~` được OR lại). Khi có
+// nhiều sprint đang mở — chỉ xảy ra lúc chuyển sprint — thêm một request rẻ mỗi
+// sprint để biết ứng viên nào thuộc sprint nào; không có thông tin đó thì không
+// thể biết cái nào là của sprint mới, và đoán sai nghĩa là ghi giờ vào sprint cũ.
+async function fetchCeremonyCandidates(
+  c: JiraClient,
+  sprints: { id: number; startDate: string }[],
+  projects: string[],
+  summaries: string[],
+): Promise<CeremonyCandidate[]> {
+  const found = await api.searchSprintSubtasks(c, { projects, summaries })
+  if (found.length === 0) return []
+
+  const only = sprints[0]
+  if (sprints.length === 1 && only !== undefined) {
+    return found.map((i) => ({
+      key: i.key, summary: i.summary,
+      sprintId: only.id, sprintStartDate: only.startDate,
+    }))
+  }
+
+  const keys = found.map((i) => i.key)
+  const perSprint = await Promise.all(
+    sprints.map(async (s) => ({
+      sprint: s,
+      keys: new Set(await api.filterKeysInSprint(c, keys, s.id)),
+    })),
+  )
+  const out: CeremonyCandidate[] = []
+  for (const i of found) {
+    const hits = perSprint.filter((p) => p.keys.has(i.key))
+    if (hits.length === 0) {
+      // Không quy được về sprint nào: vẫn là ứng viên, nhưng không có mốc thời
+      // gian nên nó không được THẮNG tie-break (xem core/event-resolve).
+      out.push({ key: i.key, summary: i.summary, sprintId: null, sprintStartDate: null })
+      continue
+    }
+    for (const h of hits) {
+      out.push({
+        key: i.key, summary: i.summary,
+        sprintId: h.sprint.id, sprintStartDate: h.sprint.startDate,
+      })
+    }
+  }
+  return out
 }
 
 export async function handle(msg: Message): Promise<unknown> {
@@ -205,6 +258,85 @@ export async function handle(msg: Message): Promise<unknown> {
         from: sprint.startDate.slice(0, 10),
         to: sprint.endDate.slice(0, 10),
       } satisfies SprintCurrentResult
+    }
+
+    case 'events/resolve': {
+      const config = await loadConfig()
+      const events = config.sprintEvents
+      const summaries = events.map((e) => e.matchSummary).filter((x) => x !== '')
+
+      // Không có event nào tra theo tên → không gọi Jira, hành vi y như trước.
+      if (summaries.length === 0) {
+        return {
+          sprintName: '', events: resolveSprintEvents(events, []),
+        } satisfies EventsResolveResult
+      }
+
+      // Sprint id là KEY của cache, nên không biết board thì không có gì để
+      // gắn cache vào — và cũng không biết sprint nào đang mở để tie-break.
+      if (config.primaryBoardId === null) {
+        return {
+          sprintName: '',
+          events: resolveSprintEvents(events, [], {
+            unavailable: 'chưa chọn board chính trong Options',
+          }),
+        } satisfies EventsResolveResult
+      }
+
+      const c = await makeClient(config)
+      const sprints = await api.getActiveSprints(c, config.primaryBoardId)
+      if (sprints.length === 0) {
+        return {
+          sprintName: '',
+          events: resolveSprintEvents(events, [], {
+            unavailable: 'không có sprint nào đang mở',
+          }),
+        } satisfies EventsResolveResult
+      }
+
+      // Cache theo sprint MUỘN NHẤT: đó là sprint mà tie-break sẽ chọn, và là
+      // cái đổi khi rollover xảy ra.
+      const newest = [...sprints].sort(
+        (a, b) => (Date.parse(b.startDate) || 0) - (Date.parse(a.startDate) || 0),
+      )[0]!
+      const cacheArgs = {
+        sprintId: newest.id, projects: config.projects, matchSummaries: summaries,
+      }
+
+      if (!msg.force) {
+        const hit = await readCeremonyCache(cacheArgs)
+        if (hit) {
+          return {
+            sprintName: hit.sprintName,
+            events: resolveSprintEvents(events, hit.candidates),
+          } satisfies EventsResolveResult
+        }
+      }
+
+      const candidates = await fetchCeremonyCandidates(
+        c, sprints, config.projects, summaries,
+      )
+      try {
+        await writeCeremonyCache(cacheArgs, {
+          fetchedAt: Date.now(), sprintName: newest.name, candidates,
+        })
+      } catch (e) {
+        // Cache lỗi thì cứ trả dữ liệu tươi — không được biến lỗi storage thành
+        // "không tìm thấy ceremony".
+        console.warn('[sw] không ghi được cache ceremony', e)
+      }
+      return {
+        sprintName: newest.name,
+        events: resolveSprintEvents(events, candidates),
+      } satisfies EventsResolveResult
+    }
+
+    case 'ceremonies/list': {
+      const config = await loadConfig()
+      const c = await makeClient(config)
+      return await api.searchSprintSubtasks(c, {
+        projects: config.projects,
+      }) satisfies CeremoniesListResult
     }
 
     case 'coverage/load': {

@@ -1,5 +1,6 @@
 import type { Config } from '@/core/config-schema'
 import type { Worklog } from '@/core/coverage'
+import type { ResolvedSprintEvent } from '@/core/event-resolve'
 import type { SprintIssue } from '@/core/points'
 import type { Scope } from '@/core/snapshot-key'
 
@@ -16,6 +17,12 @@ export type Message =
   | { type: 'users/search'; query: string }
   | { type: 'boards/load'; projectKey: string }
   | { type: 'sprint/current' }
+  // Tra issue key cho sprint event theo TÊN sub-task. `force` bỏ qua cache khi
+  // người dùng bấm thử lại (cache không có TTL, nên đây là đường làm mới duy nhất).
+  | { type: 'events/resolve'; force: boolean }
+  // Danh sách sub-task trong sprint đang mở — nguồn cho dropdown ở Options, để
+  // người dùng CHỌN tên chứ không gõ tay (một lỗi chính tả = nút chết im lặng).
+  | { type: 'ceremonies/list' }
   | { type: 'coverage/load'; scope: Scope; force: boolean }
   | { type: 'points/load' }
   | { type: 'dashboard/open' }
@@ -39,6 +46,14 @@ export type DayLoadResult = { worklogs: Worklog[] }
 export type CoverageLoadResult = { worklogs: Worklog[]; fetchedAt: number; stale: boolean }
 export type PointsLoadResult = { sprintName: string; issues: SprintIssue[] }
 export type SprintCurrentResult = { name: string; from: string; to: string } | null
+
+// `events` song song với config.sprintEvents (cùng thứ tự, cùng độ dài).
+// issueKey null = UI PHẢI khoá nút và hiện `reason`.
+export type EventsResolveResult = {
+  sprintName: string
+  events: ResolvedSprintEvent[]
+}
+export type CeremoniesListResult = { key: string; summary: string }[]
 
 // Lỗi mang theo HTTP status. Không có nó thì UI không phân biệt được 401/403
 // (cần banner "session hết hạn" + link Options theo spec §13) với lỗi thường.
