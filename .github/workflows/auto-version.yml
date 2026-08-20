@@ -1,0 +1,68 @@
+name: Auto version
+
+# Sau mỗi lần merge vào main: đọc conventional commits từ tag gần nhất, quyết
+# định mức bump, commit + tag, rồi gọi workflow Release.
+# Chỉ có docs/chore/refactor/test/style/ci/build → không bump, không release.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: auto-version
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    name: Quyết định mức bump và tạo tag
+    runs-on: ubuntu-latest
+    # Không tự chạy lại trên chính commit mà job này vừa tạo.
+    if: "!startsWith(github.event.head_commit.message, 'chore(release):')"
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.next.outputs.tag }}
+      level: ${{ steps.next.outputs.level }}
+      next: ${{ steps.next.outputs.next }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Cần full history + tags để `git describe` tìm được tag gần nhất.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Xác định version tiếp theo
+        id: next
+        run: node scripts/next-version.mjs --github-output
+
+      - name: Bump, commit và tag
+        if: steps.next.outputs.level != ''
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          node scripts/bump-version.mjs "${{ steps.next.outputs.level }}"
+          git push origin HEAD:${{ github.ref_name }} --follow-tags
+
+      - name: Tóm tắt
+        run: |
+          if [ -n "${{ steps.next.outputs.level }}" ]; then
+            echo "### Bump \`${{ steps.next.outputs.level }}\` → \`${{ steps.next.outputs.tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### Không có commit nào cần release" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  release:
+    name: Release
+    needs: bump
+    if: needs.bump.outputs.tag != ''
+    permissions:
+      contents: write
+    # Push bằng GITHUB_TOKEN không tự kích hoạt workflow khác, nên phải gọi
+    # trực tiếp thay vì dựa vào trigger `push: tags`.
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.bump.outputs.tag }}

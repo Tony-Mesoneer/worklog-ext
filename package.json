@@ -1,13 +1,17 @@
 {
   "name": "worklog-ext",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "pack": "node scripts/pack.mjs",
+    "bump": "node scripts/bump-version.mjs",
+    "check:version": "node scripts/check-version-sync.mjs",
+    "next:version": "node scripts/next-version.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",
