@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   findFreeGaps, workIntervals, intervalMinutes, dayShortfall, myDailyTargetMinutes,
 } from '@/core/deficit'
-import type { Break, DayEntry } from '@/core/timeline'
+import { segmentsEnd, splitAroundBreaks, type Break, type DayEntry } from '@/core/timeline'
 
 // Giờ làm việc mặc định: 08:30–18:00, nghỉ trưa 12:00–13:00 → 8h30 khả dụng.
 const START = 8 * 60 + 30
@@ -27,8 +27,13 @@ const e = (from: string, to: string, issueKey = 'CAG-1'): DayEntry => ({
 const gaps = (entries: DayEntry[], breaks = LUNCH) =>
   findFreeGaps(entries, START, END, breaks).map((g) => [g.startMinutes, g.endMinutes])
 
+// slotMinutes = 15 chỉ để dayShortfall tính được proposedStartMinutes (tham
+// số bắt buộc, khớp config-schema mặc định) — KHÔNG đổi assertion nào.
+const SLOT = 15
 const shortfall = (entries: DayEntry[], targetMinutes = TARGET_8H, breaks = LUNCH) =>
-  dayShortfall({ entries, targetMinutes, workdayStartMinutes: START, dayEndMinutes: END, breaks })
+  dayShortfall({
+    entries, targetMinutes, workdayStartMinutes: START, slotMinutes: SLOT, dayEndMinutes: END, breaks,
+  })
 
 describe('workIntervals', () => {
   it('cắt giờ nghỉ ra khỏi ngày làm việc', () => {
@@ -115,25 +120,93 @@ describe('dayShortfall', () => {
   })
 
   it('các khoảng trống bị giờ nghỉ chia ra được cộng đúng, giờ nghỉ không tính', () => {
-    // Đã log 09:00–11:00 (2h) và 14:00–16:00 (2h) = 4h.
-    // Trống: 08:30–09:00 (30) + 11:00–12:00 (60) + 13:00–14:00 (60) + 16:00–18:00 (120)
-    //      = 4h30. Nếu tính cả 12:00–13:00 thì sẽ ra 5h30 — sai.
+    // Đã log 09:00–11:00 (2h) và 14:00–16:00 (2h) = 4h. nextFreeStart = 16:00
+    // (ngay sau worklog kết thúc muộn nhất). Từ 16:00 trở đi chỉ còn
+    // 16:00–18:00 (120) — 08:30–09:00, 11:00–12:00, 13:00–14:00 có thật nhưng
+    // nằm TRƯỚC 16:00 nên nút lấp-giờ (luôn bắt đầu tại nextFreeStart) không
+    // với tới được.
+    //
+    // SỬA: trước đây freeMinutes cộng cả các khoảng trống trước 16:00
+    // (= 4h30), khiến fillMinutes = 240 → đề xuất bắt đầu 16:00 và dài 240
+    // phút, chạy tới 20:00 — vượt 18:00 (workdayEnd). Số cũ (270/240/false)
+    // chính là lỗi tràn ngày; số mới đúng vì bị kẹp bởi phần còn lại của
+    // ngày kể từ mốc đề xuất.
     const s = shortfall([e('09:00', '11:00'), e('14:00', '16:00')])
-    expect(s.freeMinutes).toBe(4 * 60 + 30)
+    expect(s.freeMinutes).toBe(2 * 60)
     expect(s.missingMinutes).toBe(4 * 60)
-    expect(s.fillMinutes).toBe(4 * 60)
-    expect(s.capped).toBe(false)
+    expect(s.fillMinutes).toBe(2 * 60)
+    expect(s.capped).toBe(true)
   })
 
   it('bị kẹp bởi thời gian còn trống, không phải bởi mục tiêu', () => {
     // Mục tiêu 10h; đã log 09:00–12:00 (3h) + 13:00–17:00 (4h) = 7h → thiếu 3h.
-    // Nhưng ngày chỉ còn 08:30–09:00 (30) + 17:00–18:00 (60) = 1h30 trống.
-    // Đề xuất 3h là mời người dùng ghi chồng hoặc vượt giờ tan làm.
+    // nextFreeStart = 17:00 (ngay sau worklog kết thúc muộn nhất). Từ 17:00
+    // trở đi ngày chỉ còn 17:00–18:00 (60) — khoảng 08:30–09:00 có thật nhưng
+    // nằm TRƯỚC 17:00 nên không với tới được từ mốc nút sẽ prefill.
+    //
+    // SỬA: số cũ (90) cộng cả 08:30–09:00 (trước nextFreeStart) vào phần
+    // trống, nên "kẹp" ở 90 phút vẫn đề xuất bắt đầu 17:00 và dài 90 phút,
+    // chạy tới 18:30 — vượt 18:00 (workdayEnd), đúng cái lỗi tràn ngày mà
+    // fix này sửa. Số mới (60) là phần ngày thật sự còn lại kể từ mốc đề xuất.
     const s = shortfall([e('09:00', '12:00'), e('13:00', '17:00')], 10 * 60)
     expect(s.missingMinutes).toBe(3 * 60)
-    expect(s.freeMinutes).toBe(90)
-    expect(s.fillMinutes).toBe(90)
+    expect(s.freeMinutes).toBe(60)
+    expect(s.fillMinutes).toBe(60)
     expect(s.capped).toBe(true)
+  })
+
+  it('có khoảng trống TRƯỚC nextFreeStart: fillMinutes chỉ tính phần trống TỪ ĐÓ TRỞ ĐI, đề xuất không vượt giờ tan làm', () => {
+    // Ca cụ thể của quyết định sửa: log 08:30–09:00 và 11:00–12:00. Trống là
+    // 09:00–11:00 (2h, TRƯỚC nextFreeStart — không với tới được) và 13:00–18:00
+    // (5h, sau nextFreeStart). nextFreeStart nhảy qua giờ nghỉ nên = 13:00, KHÔNG
+    // phải 12:00. Mục tiêu cố tình rất lớn để phần thiếu luôn vượt cả ngày —
+    // phép kẹp phải lộ ra ở freeMinutes/fillMinutes, không phải ở missingMinutes.
+    const entries = [e('08:30', '09:00'), e('11:00', '12:00')]
+    const s = shortfall(entries, 20 * 60)
+    expect(s.proposedStartMinutes).toBe(at('13:00'))
+    // Không phải 2h + 5h = 7h (tổng cả ngày) — 2h đầu nằm trước nextFreeStart.
+    expect(s.freeMinutes).toBe(5 * 60)
+    expect(s.fillMinutes).toBe(5 * 60)
+    expect(s.capped).toBe(true)
+    // Bất biến của phép sửa: đề xuất (bắt đầu tại proposedStartMinutes, dài
+    // fillMinutes) không bao giờ vượt quá giờ tan làm.
+    expect(s.proposedStartMinutes + s.fillMinutes).toBeLessThanOrEqual(END)
+    expect(s.proposedStartMinutes + s.fillMinutes).toBe(END)
+  })
+
+  it('trống nằm hoàn toàn SAU nextFreeStart: hành vi không đổi so với trước khi sửa', () => {
+    // Log liền mạch từ đầu ngày (chỉ ngắt bởi giờ nghỉ) tới 15:00 — không có
+    // khoảng hở nào trước nextFreeStart, nên tổng-trống-cả-ngày (cách tính cũ)
+    // và trống-từ-nextFreeStart (cách tính mới) trùng nhau tuyệt đối.
+    const entries = [e('08:30', '12:00'), e('13:00', '15:00')]
+    const s = shortfall(entries)
+    expect(s.proposedStartMinutes).toBe(at('15:00'))
+    expect(s.freeMinutes).toBe(3 * 60)
+    expect(s.missingMinutes).toBe(150)
+    expect(s.fillMinutes).toBe(150)
+    expect(s.capped).toBe(false)
+  })
+
+  it('giờ nghỉ không bao giờ được tính là trống, kể cả khi đề xuất hợp lệ đi qua nó', () => {
+    // Log 08:30–11:00. nextFreeStart = 11:00. Từ 11:00 tới hết ngày còn
+    // 11:00–12:00 (60) + 13:00–18:00 (300) = 360 phút — KHÔNG phải 420 phút
+    // (18:00 − 11:00), tức giờ nghỉ 12:00–13:00 (60 phút) đã bị loại đúng.
+    const entries = [e('08:30', '11:00')]
+    const s = shortfall(entries, 6 * 60)
+    expect(s.proposedStartMinutes).toBe(at('11:00'))
+    expect(s.freeMinutes).toBe(360)
+    expect(s.freeMinutes).not.toBe(END - s.proposedStartMinutes)
+    expect(s.fillMinutes).toBe(210)
+    expect(s.capped).toBe(false)
+
+    // Đề xuất (11:00, 210 phút) hợp lệ đi qua giờ nghỉ — splitAroundBreaks vẫn
+    // cắt thành hai đoạn quanh 12:00–13:00 y như trước khi có phép sửa này.
+    const segments = splitAroundBreaks(s.proposedStartMinutes, s.fillMinutes, LUNCH)
+    expect(segments).toEqual([
+      { startMinutes: at('11:00'), durationMinutes: 60 },
+      { startMinutes: at('13:00'), durationMinutes: 150 },
+    ])
+    expect(segmentsEnd(segments)).toBeLessThanOrEqual(END)
   })
 
   it('mục tiêu nhỏ hơn của người bán thời gian cho ra số thiếu nhỏ hơn', () => {

@@ -7,7 +7,7 @@
 //
 // Ở cạnh nextFreeStart / findOverlaps / splitAroundBreaks trong timeline.ts và
 // dùng chung quy ước nửa mở [start, end) của chúng: kề nhau KHÔNG phải chồng.
-import { mergeBreaks, type Break, type DayEntry } from './timeline'
+import { mergeBreaks, nextFreeStart, type Break, type DayEntry } from './timeline'
 
 // Một khoảng phút kể từ nửa đêm, nửa mở [start, end).
 export type Interval = { startMinutes: number; endMinutes: number }
@@ -98,37 +98,52 @@ export type DayShortfall = {
   targetMinutes: number
   /** Tổng thời lượng worklog đã có (TỔNG duration, không phải vùng bị chiếm). */
   loggedMinutes: number
-  /** Tổng thời gian còn trống trong ngày = giờ làm việc − giờ nghỉ − đã log. */
+  /**
+   * Thời gian còn trống TỪ MỐC ĐỀ XUẤT (proposedStartMinutes) TRỞ ĐI, không
+   * phải tổng thời gian trống cả ngày — xem quyết định bên dưới.
+   */
   freeMinutes: number
   /** Thiếu so với mục tiêu, chưa kẹp. Không bao giờ âm. */
   missingMinutes: number
   /** Con số nên prefill = min(missing, free). Không bao giờ âm. */
   fillMinutes: number
-  /** true khi fill < missing: ngày không chứa nổi phần còn thiếu. */
+  /** true khi fill < missing: từ mốc đề xuất tới hết ngày không chứa nổi phần còn thiếu. */
   capped: boolean
+  /** Mốc bắt đầu mà nút lấp-giờ sẽ prefill — cùng giá trị nextFreeStart trả về. */
+  proposedStartMinutes: number
 }
 
 // Ngày này thiếu bao nhiêu, và lấp được bao nhiêu.
 //
-// Quyết định: `fillMinutes` bị kẹp bởi TỔNG thời gian còn trống của ngày (theo
-// đúng định nghĩa "giờ làm việc trừ giờ nghỉ trừ đã log"), không phải bởi mục
-// tiêu. Đề xuất một thời lượng mà ngày không chứa nổi là mời người dùng ghi
-// giờ chồng lên worklog cũ hoặc vượt giờ tan làm; khi bị kẹp, UI phải NÓI RA
-// chứ không im lặng đưa số nhỏ hơn.
+// Quyết định: `fillMinutes` bị kẹp bởi thời gian còn trống TÍNH TỪ MỐC ĐỀ
+// XUẤT (nextFreeStart) TRỞ ĐI, KHÔNG phải tổng thời gian trống cả ngày. Nút
+// lấp-giờ luôn prefill bắt đầu từ nextFreeStart — phần trống nằm TRƯỚC mốc đó
+// (ví dụ một khoảng hở giữa hai worklog cũ) có thật, nhưng không ai với tới
+// được từ mốc bắt đầu mà nút đề xuất, nên cộng nó vào là đưa ra một đề xuất
+// tràn qua giờ tan làm. Vì nextFreeStart luôn đứng SAU worklog kết thúc muộn
+// nhất, từ đó tới hết ngày chắc chắn không còn worklog nào chắn nữa — nên
+// findFreeGaps từ mốc này chỉ còn trừ giờ nghỉ, không trừ worklog. Đề xuất một
+// thời lượng mà đoạn còn lại của ngày không chứa nổi là mời người dùng ghi giờ
+// vượt giờ tan làm; khi bị kẹp, UI phải NÓI RA chứ không im lặng đưa số nhỏ hơn.
 export function dayShortfall(args: {
   entries: DayEntry[]
   targetMinutes: number
   workdayStartMinutes: number
+  slotMinutes: number
   dayEndMinutes: number
   breaks?: Break[]
 }): DayShortfall {
-  const { entries, targetMinutes, workdayStartMinutes, dayEndMinutes } = args
+  const { entries, targetMinutes, workdayStartMinutes, slotMinutes, dayEndMinutes } = args
   const breaks = args.breaks ?? []
 
   const loggedMinutes = entries
     .filter((e) => e.durationMinutes > 0)
     .reduce((sum, e) => sum + e.durationMinutes, 0)
-  const freeMinutes = intervalMinutes(findFreeGaps(entries, workdayStartMinutes, dayEndMinutes, breaks))
+  // Mốc mà nút lấp-giờ THẬT SỰ sẽ prefill — phải cùng một phép tính với
+  // nextFreeStart dùng trong SidePanel, không thì số hiện ra và số được ghi
+  // lệch nhau.
+  const proposedStartMinutes = nextFreeStart(entries, workdayStartMinutes, slotMinutes, dayEndMinutes, breaks)
+  const freeMinutes = intervalMinutes(findFreeGaps(entries, proposedStartMinutes, dayEndMinutes, breaks))
   // Math.max(0, …): log VƯỢT mục tiêu là chuyện thường (OT), và nó không bao
   // giờ được biến thành một con số âm chảy vào ô duration.
   const missingMinutes = Math.max(0, Math.round(targetMinutes) - loggedMinutes)
@@ -141,6 +156,7 @@ export function dayShortfall(args: {
     missingMinutes,
     fillMinutes,
     capped: fillMinutes < missingMinutes,
+    proposedStartMinutes,
   }
 }
 

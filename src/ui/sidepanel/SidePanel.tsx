@@ -10,7 +10,7 @@ import { dayShortfall, myDailyTargetMinutes } from '@/core/deficit'
 import type { IssueMetaMap } from '@/core/issue-hierarchy'
 import { resolveSprintEvents, type ResolvedSprintEvent } from '@/core/event-resolve'
 import {
-  findOverlaps, nextFreeStart, normalizeBreaks, parseHhMm, segmentsEnd,
+  findOverlaps, formatMinutes, nextFreeStart, normalizeBreaks, parseHhMm, segmentsEnd,
   splitAroundBreaks, type DayEntry,
 } from '@/core/timeline'
 import { parseDuration, formatDuration } from '@/core/duration'
@@ -265,6 +265,7 @@ export function SidePanel() {
     ? dayShortfall({
         entries, targetMinutes,
         workdayStartMinutes: parseHhMm(config.workdayStart),
+        slotMinutes: config.slotMinutes,
         dayEndMinutes, breaks,
       })
     : null
@@ -337,7 +338,8 @@ export function SidePanel() {
               </Button>
               {shortfall.capped && (
                 <span style={{ fontSize: fontSize.xs, color: colors.warning }}>
-                  ngày chỉ còn {formatDuration(shortfall.freeMinutes * 60)} trống
+                  từ {formatMinutes(shortfall.proposedStartMinutes)} đến hết ngày chỉ còn
+                  {' '}{formatDuration(shortfall.freeMinutes * 60)} trống
                   {' '}(thiếu {formatDuration(shortfall.missingMinutes * 60)})
                 </span>
               )}
