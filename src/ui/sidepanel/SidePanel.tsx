@@ -5,6 +5,7 @@ import {
 } from '@/sw/messages'
 import type { Config } from '@/core/config-schema'
 import type { Worklog } from '@/core/coverage'
+import type { IssueMetaMap } from '@/core/issue-hierarchy'
 import { resolveSprintEvents, type ResolvedSprintEvent } from '@/core/event-resolve'
 import {
   findOverlaps, nextFreeStart, normalizeBreaks, parseHhMm, segmentsEnd,
@@ -63,6 +64,8 @@ export function SidePanel() {
   const [config, setConfig] = useState<Config | null>(null)
   const [date, setDate] = useState('')
   const [worklogs, setWorklogs] = useState<Worklog[]>([])
+  // Metadata issue đi CẠNH worklogs (xem core/issue-hierarchy). Rỗng là hợp lệ.
+  const [issueMeta, setIssueMeta] = useState<IssueMetaMap>({})
   const [issueKey, setIssueKey] = useState('')
   const [startMinutes, setStartMinutes] = useState(0)
   const [durationInput, setDurationInput] = useState('')
@@ -117,6 +120,7 @@ export function SidePanel() {
     try {
       const res = await send<DayLoadResult>({ type: 'day/load', date: d })
       setWorklogs(res.worklogs)
+      setIssueMeta(res.meta ?? {})
       // Start time luôn nhảy tới khoảng trống kế tiếp sau khi dữ liệu đổi.
       setStartMinutes(nextFreeStart(
         toEntries(res.worklogs), parseHhMm(c.workdayStart), c.slotMinutes,
@@ -307,6 +311,7 @@ export function SidePanel() {
             dayEndMinutes={dayEndMinutes}
             breaks={breaks}
             selection={segments}
+            meta={issueMeta}
           />
         </div>
       </Card>

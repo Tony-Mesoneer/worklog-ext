@@ -26,6 +26,7 @@
 import { useState } from 'react'
 import { findOverlaps, formatMinutes, type Break, type DayEntry, type Segment } from '@/core/timeline'
 import { formatDuration } from '@/core/duration'
+import type { IssueMetaMap } from '@/core/issue-hierarchy'
 import { Button } from '@/ui/shared/Button'
 import { colors, fontSize } from '@/ui/shared/theme'
 
@@ -36,6 +37,12 @@ type Props = {
   breaks: Break[]
   /** Các đoạn SẼ ghi — nhiều hơn một khi yêu cầu đi qua giờ nghỉ. */
   selection: Segment[]
+  /**
+   * Metadata issue của ngày đang xem, đi cạnh worklog từ `day/load`. CHỈ dùng
+   * cho tooltip: khối trong timeline cố tình chỉ hiện issue key, thêm status
+   * vào chính khối sẽ phá mật độ mà bản thiết kế vừa đạt được.
+   */
+  meta: IssueMetaMap
 }
 
 // px mỗi phút — cố tình nhỏ. Một ngày kín 8h vẫn chỉ ~105px; ba worklog điển
@@ -123,7 +130,7 @@ function buildBlocks(
   return { blocks, tailFrom: Math.min(cursor, dayEnd) }
 }
 
-function BlockRow({ block }: { block: Block }) {
+function BlockRow({ block, meta }: { block: Block; meta: IssueMetaMap }) {
   const h = heightOf(block)
   const dur = formatDuration(block.minutes * 60)
 
@@ -166,8 +173,16 @@ function BlockRow({ block }: { block: Block }) {
     ? `wl-blk wl-blk--entry${block.hit ? ' wl-blk--hit' : ''}`
     : 'wl-blk wl-blk--sel'
 
+  const m = block.kind === 'entry' ? meta[block.issueKey] : undefined
+  const title = [
+    `${formatMinutes(block.start)} · ${dur}`,
+    m && m.summary !== '' ? m.summary : null,
+    m && m.statusName !== '' ? m.statusName : null,
+    m?.parentKey ? `↳ ${m.parentKey} ${m.parentSummary ?? ''}`.trim() : null,
+  ].filter((x) => x !== null).join(' · ')
+
   return (
-    <div className={cls} style={{ height: h }} title={`${formatMinutes(block.start)} · ${dur}`}>
+    <div className={cls} style={{ height: h }} title={title}>
       <span className="wl-blk__time" style={{ width: 32 }}>{formatMinutes(block.start)}</span>
       <span className="wl-blk__key" style={{ flex: 1 }}>
         {block.kind === 'entry' ? block.issueKey : 'sẽ ghi vào đây'}
@@ -178,7 +193,7 @@ function BlockRow({ block }: { block: Block }) {
 }
 
 export function DayBlocks({
-  entries, workdayStartMinutes, dayEndMinutes, breaks, selection,
+  entries, workdayStartMinutes, dayEndMinutes, breaks, selection, meta,
 }: Props) {
   const [showTail, setShowTail] = useState(false)
   const { blocks, tailFrom } = buildBlocks(
@@ -195,13 +210,13 @@ export function DayBlocks({
       )}
 
       {blocks.map((b, i) => (
-        <BlockRow key={`${b.kind}-${b.start}-${i}`} block={b} />
+        <BlockRow key={`${b.kind}-${b.start}-${i}`} block={b} meta={meta} />
       ))}
 
       {tailMinutes > 0 && (
         showTail ? (
           <>
-            <BlockRow block={{ kind: 'gap', start: tailFrom, minutes: tailMinutes }} />
+            <BlockRow block={{ kind: 'gap', start: tailFrom, minutes: tailMinutes }} meta={meta} />
             <Button variant="ghost" size="sm" onClick={() => setShowTail(false)}>
               Ẩn phần cuối ngày
             </Button>

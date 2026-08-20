@@ -603,12 +603,15 @@ button:hover:not(:disabled) {
   min-width: 0;
 }
 
-/* Nút chọn issue: một dòng, key đậm + summary mờ, cắt bằng ellipsis để panel
- * hẹp 320px không sinh cuộn ngang. */
+/* Nút chọn issue: key đậm + badge trạng thái + summary mờ trên một dòng, cắt
+ * bằng ellipsis để panel hẹp 320px không sinh cuộn ngang. Sub-task có thêm DÒNG
+ * THỨ HAI chỉ ra cha (`↳ CAG-2969 …`) — chỉ khi có cha, nên danh sách issue
+ * thường vẫn cao đúng một dòng như trước. */
 .wl-option {
   display: flex;
-  gap: var(--space-2);
-  align-items: baseline;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 1px;
   width: 100%;
   text-align: left;
   background: transparent;
@@ -631,9 +634,28 @@ button:hover:not(:disabled) {
   border-color: var(--accent);
 }
 
+.wl-option__row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+  /* min-width:0 để dòng con co được, nếu không summary dài đẩy rộng cả nút. */
+  min-width: 0;
+}
+
 .wl-option__key {
   font-weight: 600;
   flex: 0 0 auto;
+}
+
+/* Dòng cha của sub-task: nhỏ hơn và mờ hơn dòng chính, vì nó là BỐI CẢNH chứ
+ * không phải thứ người dùng đang chọn. */
+.wl-option__parent {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .wl-option__sum {
