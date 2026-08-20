@@ -6,6 +6,7 @@
 // Vì sao className chứ không style object: trạng thái :hover / :focus-visible /
 // :active / :disabled không diễn tả được bằng inline style. Toàn bộ trạng thái
 // nằm trong .wl-btn* ở theme.css, ở đây chỉ chọn variant.
+import { forwardRef } from 'react'
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
@@ -21,7 +22,8 @@ type Props = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'className'> & {
   children?: ReactNode
 }
 
-export function Button({
+// forwardRef: CellDetail cần focus() vào nút Đóng khi panel mở bằng bàn phím.
+export const Button = forwardRef<HTMLButtonElement, Props>(function Button({
   variant = 'secondary',
   size = 'md',
   block = false,
@@ -31,7 +33,7 @@ export function Button({
   type = 'button',
   children,
   ...rest
-}: Props) {
+}, ref) {
   const cls = [
     'wl-btn',
     `wl-btn--${variant}`,
@@ -43,6 +45,7 @@ export function Button({
   return (
     <button
       {...rest}
+      ref={ref}
       type={type}
       className={cls}
       disabled={disabled || loading}
@@ -52,4 +55,4 @@ export function Button({
       {children}
     </button>
   )
-}
+})

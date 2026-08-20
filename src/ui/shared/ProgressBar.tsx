@@ -40,7 +40,10 @@ export function ProgressBar({ value, max, height = 6, label, valueText }: Props)
   const tone = progressTone(value, max)
 
   return (
-    <div style={{ display: 'grid', gap: 3, minWidth: 0 }}>
+    // width:100% là bắt buộc khi meter nằm trong <td>: ô bảng co về bề rộng nội
+    // dung, không có nó thì thanh tụt xuống min-width 40px và mất hết ý nghĩa
+    // so sánh giữa các hàng.
+    <div style={{ display: 'grid', gap: 3, width: '100%', minWidth: 0 }}>
       {valueText !== undefined && (
         <span style={{ fontSize: 11, color: colors.muted, textAlign: 'right' }}>{valueText}</span>
       )}

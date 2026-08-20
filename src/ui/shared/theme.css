@@ -139,6 +139,21 @@ code {
   padding: 1px 4px;
 }
 
+/* <button> trần vẫn phải theo theme: nếu quên bọc bằng primitive Button thì nó
+ * hiện skin xám mặc định của hệ điều hành, lệch hẳn khỏi bề mặt tối. */
+button {
+  background: var(--surface-alt);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-input);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
 /* ── Button ──────────────────────────────────────────────────────────────── */
 
 .wl-btn {
@@ -318,6 +333,11 @@ code {
   padding: 0;
 }
 
+/* Card không padding bọc bảng: cắt góc để bảng không đâm ra ngoài bo góc. */
+.wl-card--flush {
+  overflow: hidden;
+}
+
 /* ── SegmentedControl ────────────────────────────────────────────────────── */
 
 .wl-seg {
@@ -377,7 +397,9 @@ code {
 .wl-meter {
   width: 100%;
   min-width: 40px;
-  background: var(--surface-alt);
+  /* Track phải nhìn thấy được: nền surface-alt gần như trùng nền hàng bảng nên
+   * thanh 12% trước đây trông như một vệt lơ lửng, không so sánh được với ai. */
+  background: var(--border);
   border-radius: var(--radius-pill);
   overflow: hidden;
 }
