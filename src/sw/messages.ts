@@ -12,6 +12,7 @@ export type Message =
   | { type: 'worklog/add'; issueKey: string; date: string; startMinutes: number; timeSpentSeconds: number; comment: string }
   | { type: 'worklog/delete'; issueKey: string; worklogId: string }
   | { type: 'issues/pick'; query: string }
+  | { type: 'issues/mine' }
   | { type: 'users/search'; query: string }
   | { type: 'boards/load'; projectKey: string }
   | { type: 'sprint/current' }

@@ -166,7 +166,7 @@ export function SidePanel() {
       />
 
       <EventButtons events={config.sprintEvents} onPick={pickEvent} />
-      <IssuePicker value={issueKey} onChange={setIssueKey} />
+      <IssuePicker value={issueKey} onChange={setIssueKey} projects={config.projects} />
 
       <LogForm
         entries={entries}

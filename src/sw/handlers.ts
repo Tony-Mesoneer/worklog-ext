@@ -119,6 +119,11 @@ export async function handle(msg: Message): Promise<unknown> {
       return api.pickIssues(await makeClient(config), msg.query)
     }
 
+    case 'issues/mine': {
+      const config = await loadConfig()
+      return api.searchMyIssues(await makeClient(config), { projects: config.projects })
+    }
+
     case 'users/search': {
       const config = await loadConfig()
       return api.searchUsers(await makeClient(config), msg.query)

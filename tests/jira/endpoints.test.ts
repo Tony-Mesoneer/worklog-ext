@@ -1,7 +1,7 @@
 // tests/jira/endpoints.test.ts
 import { describe, it, expect, vi } from 'vitest'
 import {
-  findStoryPointsFieldId, searchIssuesWithWorklogs, getIssueWorklogs,
+  findStoryPointsFieldId, searchIssuesWithWorklogs, searchMyIssues, getIssueWorklogs,
   addWorklog, getSprintIssues, getActiveSprint,
 } from '@/jira/endpoints'
 import type { JiraClient } from '@/jira/client'
@@ -95,6 +95,44 @@ describe('searchIssuesWithWorklogs', () => {
       projects: ['CAG'], accountIds: ['u1'], from: '2026-08-17', to: '2026-08-21',
     })
     expect(out.map((i) => i.key)).toEqual(['CAG-1', 'CAG-2'])
+  })
+})
+
+describe('searchMyIssues', () => {
+  it('dựng JQL đủ assignee, sprint, project', async () => {
+    const { client, calls } = fakeClient({
+      'POST /rest/api/3/search/jql': { issues: [{ key: 'CAG-1', fields: { summary: 'S1' } }] },
+    })
+
+    const out = await searchMyIssues(client, { projects: ['CAG', 'OPS'] })
+
+    const jql = (calls[0]!.body as { jql: string }).jql
+    expect(jql).toContain('assignee = currentUser()')
+    expect(jql).toContain('sprint in openSprints()')
+    expect(jql).toContain('project in ("CAG","OPS")')
+    expect(jql).toContain('ORDER BY updated DESC')
+    expect(out).toEqual([{ key: 'CAG-1', summary: 'S1' }])
+  })
+
+  it('bỏ điều kiện project khi không chọn project nào', async () => {
+    const { client, calls } = fakeClient({ 'POST /rest/api/3/search/jql': { issues: [] } })
+    await searchMyIssues(client, { projects: [] })
+    expect((calls[0]!.body as { jql: string }).jql).not.toContain('project in')
+  })
+
+  it('map issue Jira sang {key, summary}', async () => {
+    const { client } = fakeClient({
+      'POST /rest/api/3/search/jql': {
+        issues: [
+          { key: 'CAG-1', fields: { summary: 'Việc 1' } },
+          { key: 'CAG-2', fields: { summary: 'Việc 2' } },
+        ],
+      },
+    })
+    expect(await searchMyIssues(client, { projects: [] })).toEqual([
+      { key: 'CAG-1', summary: 'Việc 1' },
+      { key: 'CAG-2', summary: 'Việc 2' },
+    ])
   })
 })
 

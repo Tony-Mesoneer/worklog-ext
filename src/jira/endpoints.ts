@@ -83,6 +83,27 @@ export async function searchIssuesWithWorklogs(
   return out
 }
 
+// Danh sách issue của chính người dùng trong sprint hiện tại, dùng làm lựa
+// chọn mặc định ở side panel (spec §7) thay vì bắt gõ ≥2 ký tự.
+export async function searchMyIssues(
+  c: JiraClient, args: { projects: string[] },
+): Promise<{ key: string; summary: string }[]> {
+  const clauses = ['assignee = currentUser()', 'sprint in openSprints()']
+  if (args.projects.length > 0) {
+    clauses.push(`project in (${args.projects.map((p) => `"${p}"`).join(',')})`)
+  }
+  const jql = `${clauses.join(' AND ')} ORDER BY updated DESC`
+
+  const res = await c.call<{
+    issues: { key: string; fields: { summary: string } }[]
+  }>({
+    method: 'POST',
+    path: '/rest/api/3/search/jql',
+    body: { jql, fields: ['summary'], maxResults: 50 },
+  })
+  return res.issues.map((i) => ({ key: i.key, summary: i.fields.summary }))
+}
+
 export async function getIssueWorklogs(
   c: JiraClient, issueKey: string, issueSummary: string,
 ): Promise<Worklog[]> {
