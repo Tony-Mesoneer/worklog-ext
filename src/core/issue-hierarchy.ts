@@ -32,6 +32,14 @@ export type IssueMeta = {
    */
   statusName: string
   statusCategory: StatusCategory
+  /**
+   * Project key LẤY TỪ JIRA (`fields.project.key`), không cắt từ issue key.
+   * Một project bị đổi key vẫn phục vụ key cũ (`CAG-3052` vẫn mở được sau khi
+   * project đổi thành `CGW`), nên cắt tiền tố sẽ gom nhóm dưới một key KHÔNG
+   * CÒN TỒN TẠI — lead lọc theo project mới sẽ không thấy issue đó.
+   * null = chưa biết (Jira không trả field, hoặc meta thiếu).
+   */
+  projectKey: string | null
   /** null khi issue không phải sub-task (hoặc Jira không trả `fields.parent`). */
   parentKey: string | null
   parentSummary: string | null
@@ -150,4 +158,75 @@ export function mergeCoverageIssueRows(
     total += r.total
   }
   return { issueKey: key, issueSummary: summary, perDay, total }
+}
+
+// --- gom theo PROJECT ------------------------------------------------------
+//
+// Vì sao có tầng này: coverage query không còn lọc theo `config.projects` (một
+// worklog trên issue ngoài project vẫn là giờ THẬT của member, bỏ nó ra là mất
+// dữ liệu im lặng), nên danh sách issue của một member có thể trải trên nhiều
+// project. Không gom lại thì `ABC-12` nằm lẫn giữa các `CAG-…` mà không có gì
+// nói vì sao.
+
+/** Project không biết được (meta thiếu). Không phải lỗi — xem đầu file. */
+export const UNKNOWN_PROJECT = ''
+
+export type ProjectGroup<T> = {
+  /** Project key từ Jira, hoặc `UNKNOWN_PROJECT` khi meta không có. */
+  projectKey: string
+  rows: T[]
+}
+
+/**
+ * Các project key CÓ MẶT trong `rows`, theo thứ tự xuất hiện đầu tiên.
+ *
+ * Row không có meta (hoặc meta không có projectKey) tính vào `UNKNOWN_PROJECT`
+ * — nó vẫn là MỘT nhóm, nên dữ liệu thiếu meta hoàn toàn cho đúng một nhóm và
+ * bảng vẽ phẳng y như trước, chứ không biến mất khỏi tổng.
+ */
+export function distinctProjectKeys<T>(
+  rows: readonly T[],
+  meta: IssueMetaMap,
+  keyOf: (row: T) => string,
+): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const row of rows) {
+    const p = meta[keyOf(row)]?.projectKey ?? UNKNOWN_PROJECT
+    if (seen.has(p)) continue
+    seen.add(p)
+    out.push(p)
+  }
+  return out
+}
+
+/**
+ * Gom `rows` theo project — nhưng CHỈ khi có nhiều hơn một project.
+ *
+ * `null` = "không cần tầng project": đúng một project (trường hợp thường ngày,
+ * đo trên Jira thật: từ 2026-06-01 chỉ có 2 issue ngoài CAG) hoặc không có row
+ * nào. Một cái bọc "CAG" duy nhất chỉ thêm một bậc thụt lề và không nói gì —
+ * caller vẽ danh sách phẳng như trước, không có nhánh hiển thị nào phải đổi.
+ *
+ * Thứ tự XÁC ĐỊNH: nhóm theo lần xuất hiện đầu tiên của một row thuộc project
+ * đó, row trong nhóm theo thứ tự đầu vào. Caller đã sort `rows` (ví dụ theo
+ * tổng giờ giảm dần) thì thứ tự đó vẫn đọc được — cùng quy tắc với
+ * groupIssueRowsByParent.
+ */
+export function groupRowsByProject<T>(
+  rows: readonly T[],
+  meta: IssueMetaMap,
+  keyOf: (row: T) => string,
+): ProjectGroup<T>[] | null {
+  const keys = distinctProjectKeys(rows, meta, keyOf)
+  if (keys.length <= 1) return null
+
+  const groups = new Map<string, ProjectGroup<T>>(
+    keys.map((projectKey) => [projectKey, { projectKey, rows: [] }]),
+  )
+  for (const row of rows) {
+    const p = meta[keyOf(row)]?.projectKey ?? UNKNOWN_PROJECT
+    groups.get(p)!.rows.push(row)
+  }
+  return keys.map((k) => groups.get(k)!)
 }

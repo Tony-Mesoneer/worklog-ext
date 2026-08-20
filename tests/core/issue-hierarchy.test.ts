@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
-  groupIssueRowsByParent, mergeCoverageIssueRows, toStatusCategory,
+  distinctProjectKeys, groupIssueRowsByParent, groupRowsByProject,
+  mergeCoverageIssueRows, toStatusCategory, UNKNOWN_PROJECT,
   type IssueMeta, type IssueMetaMap,
 } from '@/core/issue-hierarchy'
 import type { CoverageIssueRow } from '@/core/coverage'
@@ -20,6 +21,7 @@ const meta = (
   summary: `Summary ${key}`,
   statusName: 'Open',
   statusCategory: 'new',
+  projectKey: null,
   parentKey: null,
   parentSummary: null,
   isSubtask: false,
@@ -182,5 +184,124 @@ describe('mergeCoverageIssueRows', () => {
     const merged = mergeCoverageIssueRows('CAG-1', 'X', [])
     expect(merged.total).toBe(0)
     expect(merged.perDay).toEqual({})
+  })
+})
+
+describe('groupRowsByProject', () => {
+  // Meta có project. `sub()` ở trên không đặt projectKey, nên các test dưới đây
+  // dựng meta riêng để nói rõ project của từng issue.
+  const inProject = (
+    key: string, projectKey: string, parentKey: string | null = null,
+  ): IssueMeta => meta(key, {
+    projectKey,
+    parentKey,
+    parentSummary: parentKey === null ? null : `Summary ${parentKey}`,
+    isSubtask: parentKey !== null,
+  })
+
+  it('MỘT project → null: không thêm tầng nào, bảng vẽ phẳng như trước', () => {
+    // Đây là trường hợp thường ngày (đo trên Jira thật: từ 2026-06-01 chỉ có 2
+    // issue ngoài CAG). Một cái bọc "CAG" duy nhất chỉ thêm thụt lề và không
+    // nói gì.
+    const rows = [row('CAG-1'), row('CAG-2')]
+    expect(groupRowsByProject(
+      rows, asMap(inProject('CAG-1', 'CAG'), inProject('CAG-2', 'CAG')), keyOf,
+    )).toBeNull()
+  })
+
+  it('không có row nào → null', () => {
+    expect(groupRowsByProject([], {}, keyOf)).toBeNull()
+  })
+
+  it('HAI project → hai nhóm, tổng của từng project đúng', () => {
+    const rows = [row('CAG-1', 8 * H), row('ABC-7', 3 * H), row('CAG-2', 2 * H)]
+    const groups = groupRowsByProject(
+      rows,
+      asMap(
+        inProject('CAG-1', 'CAG'), inProject('CAG-2', 'CAG'),
+        inProject('ABC-7', 'ABC'),
+      ),
+      keyOf,
+    )
+    expect(groups).not.toBeNull()
+    expect(groups!.map((g) => g.projectKey)).toEqual(['CAG', 'ABC'])
+    expect(groups![0]!.rows.map(keyOf)).toEqual(['CAG-1', 'CAG-2'])
+    expect(groups![1]!.rows.map(keyOf)).toEqual(['ABC-7'])
+    // Tổng theo project: 10h ở CAG, 3h ở ABC — không con nào bị mất.
+    const total = (rs: Row[]) => rs.reduce((t, r) => t + r.total, 0)
+    expect(total(groups![0]!.rows)).toBe(10 * H)
+    expect(total(groups![1]!.rows)).toBe(3 * H)
+    expect(total(groups!.flatMap((g) => g.rows))).toBe(13 * H)
+  })
+
+  it('project key lấy từ meta, KHÔNG từ tiền tố issue key', () => {
+    // Project đổi key vẫn phục vụ key cũ: `CAG-9` thuộc project `CGW`.
+    const groups = groupRowsByProject(
+      [row('CAG-1'), row('CAG-9')],
+      asMap(inProject('CAG-1', 'CAG'), inProject('CAG-9', 'CGW')),
+      keyOf,
+    )
+    expect(groups!.map((g) => g.projectKey)).toEqual(['CAG', 'CGW'])
+  })
+
+  it('gom theo cha vẫn hoạt động BÊN TRONG một nhóm project', () => {
+    const rows = [row('CAG-3052'), row('CAG-3053'), row('ABC-1')]
+    const metaMap = asMap(
+      inProject('CAG-3052', 'CAG', 'CAG-2969'),
+      inProject('CAG-3053', 'CAG', 'CAG-2969'),
+      inProject('ABC-1', 'ABC'),
+    )
+    const groups = groupRowsByProject(rows, metaMap, keyOf)!
+    expect(groups.map((g) => g.projectKey)).toEqual(['CAG', 'ABC'])
+
+    const cag = groupIssueRowsByParent(groups[0]!.rows, metaMap, keyOf)
+    expect(cag).toHaveLength(1)
+    expect(cag[0]!.key).toBe('CAG-2969')
+    expect(cag[0]!.isParent).toBe(true)
+    expect(cag[0]!.children.map(keyOf)).toEqual(['CAG-3052', 'CAG-3053'])
+
+    const abc = groupIssueRowsByParent(groups[1]!.rows, metaMap, keyOf)
+    expect(abc).toHaveLength(1)
+    expect(abc[0]!.isParent).toBe(false)
+  })
+
+  it('meta THIẾU HOÀN TOÀN → null: không throw, và bảng phẳng y như bản cũ', () => {
+    // Snapshot cache cũ / issue Jira không trả field `project`. Tất cả rơi vào
+    // cùng một nhóm "không biết" → đúng một project → không có tầng nào.
+    expect(groupRowsByProject([row('A-1'), row('A-2')], {}, keyOf)).toBeNull()
+    expect(distinctProjectKeys([row('A-1')], {}, keyOf)).toEqual([UNKNOWN_PROJECT])
+  })
+
+  it('issue KHÔNG BIẾT project vẫn có nhóm riêng, không bị bỏ khỏi tổng', () => {
+    const rows = [row('CAG-1', 5 * H), row('X-9', 2 * H)]
+    // X-9 có mặt trong rows nhưng không có meta.
+    const groups = groupRowsByProject(rows, asMap(inProject('CAG-1', 'CAG')), keyOf)!
+    expect(groups.map((g) => g.projectKey)).toEqual(['CAG', UNKNOWN_PROJECT])
+    expect(groups[1]!.rows.map(keyOf)).toEqual(['X-9'])
+    // Tổng cộng lại đúng bằng tổng đầu vào — không row nào bị rơi.
+    expect(groups.flatMap((g) => g.rows).reduce((t, r) => t + r.total, 0)).toBe(7 * H)
+  })
+
+  it('meta có nhưng projectKey null cũng là "không biết", không throw', () => {
+    const groups = groupRowsByProject(
+      [row('CAG-1'), row('CAG-2')],
+      asMap(inProject('CAG-1', 'CAG'), meta('CAG-2')),
+      keyOf,
+    )!
+    expect(groups.map((g) => g.projectKey)).toEqual(['CAG', UNKNOWN_PROJECT])
+  })
+
+  it('thứ tự XÁC ĐỊNH: nhóm theo lần xuất hiện đầu, row theo thứ tự đầu vào', () => {
+    const rows = [row('ABC-9'), row('CAG-1'), row('ABC-2'), row('CAG-5')]
+    const metaMap = asMap(
+      inProject('ABC-9', 'ABC'), inProject('ABC-2', 'ABC'),
+      inProject('CAG-1', 'CAG'), inProject('CAG-5', 'CAG'),
+    )
+    const first = groupRowsByProject(rows, metaMap, keyOf)!
+    expect(first.map((g) => g.projectKey)).toEqual(['ABC', 'CAG'])
+    expect(first[0]!.rows.map(keyOf)).toEqual(['ABC-9', 'ABC-2'])
+    expect(first[1]!.rows.map(keyOf)).toEqual(['CAG-1', 'CAG-5'])
+    // Gọi lại cùng input cho cùng kết quả.
+    expect(groupRowsByProject(rows, metaMap, keyOf)).toEqual(first)
   })
 })

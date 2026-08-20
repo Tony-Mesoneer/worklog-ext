@@ -48,19 +48,22 @@ export async function findStoryPointsFieldId(c: JiraClient): Promise<string | nu
 }
 
 // --- issue metadata --------------------------------------------------------
-// Ba field này KHÔNG tốn request nào thêm: chúng chỉ được thêm vào `fields` của
+// Bốn field này KHÔNG tốn request nào thêm: chúng chỉ được thêm vào `fields` của
 // những search vốn đã chạy.
 //   - `parent`     → { key, fields: { summary } } trên sub-task, thiếu ở issue
 //                    cấp trên. Đây là nguồn duy nhất của quan hệ cha/con.
 //   - `status`     → tên workflow thật + statusCategory.key để chọn màu.
 //   - `issuetype`  → cờ `subtask`.
-export const ISSUE_META_FIELDS = ['summary', 'parent', 'status', 'issuetype'] as const
+//   - `project`    → { key } — project THẬT của issue. Đây là lý do không cắt
+//                    tiền tố của issue key: xem IssueMeta.projectKey.
+export const ISSUE_META_FIELDS = ['summary', 'parent', 'status', 'issuetype', 'project'] as const
 
 type IssueFields = {
   summary?: unknown
   parent?: { key?: unknown; fields?: { summary?: unknown } } | null
   status?: { name?: unknown; statusCategory?: { key?: unknown } | null } | null
   issuetype?: { subtask?: unknown } | null
+  project?: { key?: unknown } | null
 }
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '')
@@ -71,11 +74,13 @@ const str = (v: unknown): string => (typeof v === 'string' ? v : '')
 export function toIssueMeta(key: string, fields: IssueFields | undefined): IssueMeta {
   const f = fields ?? {}
   const parentKey = str(f.parent?.key)
+  const projectKey = str(f.project?.key)
   return {
     key,
     summary: str(f.summary),
     statusName: str(f.status?.name),
     statusCategory: toStatusCategory(f.status?.statusCategory?.key),
+    projectKey: projectKey === '' ? null : projectKey,
     parentKey: parentKey === '' ? null : parentKey,
     parentSummary: parentKey === '' ? null : str(f.parent?.fields?.summary),
     isSubtask: f.issuetype?.subtask === true,

@@ -24,7 +24,7 @@ const fakeClient = (routes: Record<string, unknown>) => {
 
 // IssueMeta mong đợi cho một issue "trơn": không parent, status không rõ.
 const flatMeta = (key: string, summary: string) => ({
-  key, summary, statusName: '', statusCategory: 'new',
+  key, summary, statusName: '', statusCategory: 'new', projectKey: null,
   parentKey: null, parentSummary: null, isSubtask: false,
 })
 
@@ -68,10 +68,24 @@ describe('searchIssuesWithWorklogs', () => {
     expect(jql).toContain('worklogAuthor in ("u1","u2")')
     expect(jql).toContain('project in ("CAG")')
     expect(out).toEqual([flatMeta('CAG-1', 'S1')])
-    // parent/status/issuetype phải nằm trong fields, nếu không thì không có
-    // đường nào biết quan hệ cha/con mà không thêm request.
+    // parent/status/issuetype/project phải nằm trong fields, nếu không thì không
+    // có đường nào biết quan hệ cha/con hay project mà không thêm request.
     const fields = (calls[0]!.body as { fields: string[] }).fields
-    expect(fields).toEqual(['summary', 'parent', 'status', 'issuetype'])
+    expect(fields).toEqual(['summary', 'parent', 'status', 'issuetype', 'project'])
+  })
+
+  it('lấy project key TỪ JIRA, không cắt tiền tố của issue key', async () => {
+    // Project đã đổi key vẫn phục vụ key cũ: issue `CAG-9` có thể thuộc project
+    // `CGW`. Cắt "CAG-" ra sẽ gom nhóm dưới một key không còn tồn tại.
+    const { client } = fakeClient({
+      'POST /rest/api/3/search/jql': {
+        issues: [{ key: 'CAG-9', fields: { summary: 'S', project: { key: 'CGW' } } }],
+      },
+    })
+    const out = await searchIssuesWithWorklogs(client, {
+      projects: [], accountIds: ['u1'], from: '2026-08-17', to: '2026-08-21',
+    })
+    expect(out[0]!.projectKey).toBe('CGW')
   })
 
   it('map parent + status + issuetype của sub-task', async () => {
@@ -95,6 +109,7 @@ describe('searchIssuesWithWorklogs', () => {
       summary: 'Implement: queue a user move',
       statusName: 'In Testing',
       statusCategory: 'indeterminate',
+      projectKey: null,
       parentKey: 'CAG-2969',
       parentSummary: 'Allow moving user via SCIM',
       isSubtask: true,
@@ -151,7 +166,7 @@ describe('searchMyIssues', () => {
     expect(jql).toContain('ORDER BY updated DESC')
     expect(out).toEqual([flatMeta('CAG-1', 'S1')])
     expect((calls[0]!.body as { fields: string[] }).fields)
-      .toEqual(['summary', 'parent', 'status', 'issuetype'])
+      .toEqual(['summary', 'parent', 'status', 'issuetype', 'project'])
   })
 
   it('bỏ điều kiện project khi không chọn project nào', async () => {
@@ -179,7 +194,7 @@ describe('searchMyIssues', () => {
     expect(await searchMyIssues(client, { projects: [] })).toEqual([
       {
         key: 'CAG-1', summary: 'Việc 1', statusName: 'Closed',
-        statusCategory: 'done', parentKey: null, parentSummary: null,
+        statusCategory: 'done', projectKey: null, parentKey: null, parentSummary: null,
         isSubtask: false,
       },
       // Field thiếu (instance cũ, quyền hạn chế) không được làm vỡ gì.
@@ -327,12 +342,12 @@ describe('getSprintIssues', () => {
     const out = await getSprintIssues(client, 42, null)
     expect(out.meta['CAG-3065']).toEqual({
       key: 'CAG-3065', summary: 'Daily Scrum', statusName: 'In Progress',
-      statusCategory: 'indeterminate', parentKey: 'CAG-3063',
+      statusCategory: 'indeterminate', projectKey: null, parentKey: 'CAG-3063',
       parentSummary: 'S34 - Sprint activities', isSubtask: true,
     })
     // SprintIssue KHÔNG đổi hình dạng — buildPointsTable ăn nó nguyên vẹn.
     expect(out.issues[0]!.timeSpentSeconds).toBe(900)
-    expect(calls[0]!.path).toContain('fields=summary,parent,status,issuetype,assignee,timespent')
+    expect(calls[0]!.path).toContain('fields=summary,parent,status,issuetype,project,assignee,timespent')
   })
 
   it('storyPoints null khi không biết field id', async () => {
@@ -437,7 +452,7 @@ describe('searchSprintSubtasks', () => {
     expect((calls[0]!.body as { fields: string[] }).fields).toContain('parent')
     expect(out[0]).toEqual({
       key: 'CAG-3078', summary: 'Security Review',
-      statusName: '', statusCategory: 'new',
+      statusName: '', statusCategory: 'new', projectKey: null,
       parentKey: 'CAG-2727', parentSummary: 'SCIM user sync hardening',
       isSubtask: true,
     })
