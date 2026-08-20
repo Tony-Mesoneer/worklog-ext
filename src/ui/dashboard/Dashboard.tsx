@@ -145,11 +145,16 @@ export function Dashboard() {
 
   const dates = enumerateDates(from, to)
   // Chỉ dựng bảng khi đã có dữ liệu thật.
+  // `today` lấy từ state đã tính bằng todayInZone(config.timeZone, …) ở lần
+  // load đầu — cùng một giá trị mà các preset ngày dùng, không tính lần thứ
+  // hai và tuyệt đối không lấy ngày của browser. '' = chưa có config → truyền
+  // undefined để core giữ hành vi "cả khoảng".
   const table = worklogs === null ? null : buildCoverage({
     worklogs,
     members: config.members,
     dates,
     daysOff: config.daysOff,
+    ...(today === '' ? {} : { today }),
   })
 
   const detailMember = detail ? config.members.find((m) => m.accountId === detail.accountId) : null

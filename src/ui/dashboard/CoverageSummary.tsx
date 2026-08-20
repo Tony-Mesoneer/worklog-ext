@@ -12,7 +12,10 @@ import { colors, fontSize, space } from '@/ui/shared/theme'
 
 type Props = { data: CoverageTable }
 
-function Stat({ label, value, tone }: { label: string; value: string; tone?: string }) {
+function Stat(
+  { label, value, tone, note }:
+  { label: string; value: string; tone?: string; note?: string },
+) {
   return (
     <div style={{ display: 'grid', gap: 2, minWidth: 92 }}>
       <span style={{ fontSize: fontSize.xs, color: colors.muted, textTransform: 'uppercase', letterSpacing: '.04em' }}>
@@ -21,24 +24,42 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: str
       <strong style={{ fontSize: fontSize.xl, color: tone ?? colors.text, fontVariantNumeric: 'tabular-nums' }}>
         {value}
       </strong>
+      {/* Dòng phụ: bối cảnh cả kỳ. Nhỏ và mờ hơn, để không ai đọc lẫn nó
+          thành con số đang được đánh giá. */}
+      {note !== undefined && (
+        <span style={{ fontSize: fontSize.xs, color: colors.muted, fontVariantNumeric: 'tabular-nums' }}>
+          {note}
+        </span>
+      )}
     </div>
   )
 }
 
 export function CoverageSummary({ data }: Props) {
-  const capacity = data.rows.reduce((s, r) => s + r.capacitySeconds, 0)
-  // "Thiếu giờ" = có capacity mà log dưới capacity. Member inactive có capacity 0
-  // nên không bao giờ bị tính là thiếu — đúng ý core/coverage.
-  const short = data.rows.filter((r) => r.capacitySeconds > 0 && r.total < r.capacitySeconds)
-  const noneLogged = data.rows.filter((r) => r.capacitySeconds > 0 && r.total === 0)
+  // Mốc để ĐÁNH GIÁ là capacity tới hôm nay; capacity cả kỳ chỉ là bối cảnh.
+  // Bản cũ lấy cả kỳ nên giữa sprint luôn ra 12% và 4/4 thiếu giờ — số đúng về
+  // số học nhưng vô dụng, vì nó chỉ nói "sprint chưa diễn ra xong".
+  const capacity = data.capacityToDateSeconds
+  const capacityFull = data.capacityFullRangeSeconds
+  const cut = capacity !== capacityFull
+  // "Thiếu giờ" = có capacity TỚI HÔM NAY mà log dưới mức đó. Member inactive,
+  // và cả khoảng ngày nằm hoàn toàn ở tương lai, đều có capacity 0 nên không
+  // bao giờ bị tính là thiếu — chưa tới ngày nào thì chưa có gì để log.
+  const short = data.rows.filter((r) => r.capacityToDateSeconds > 0 && r.total < r.capacityToDateSeconds)
+  const noneLogged = data.rows.filter((r) => r.capacityToDateSeconds > 0 && r.total === 0)
 
   return (
     <div style={{
       display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end',
       gap: `${space.x3}px ${space.x5}px`,
     }}>
-      <Stat label="Đã log" value={hoursLabel(data.grandTotal)} />
-      <Stat label="Capacity" value={hoursLabel(capacity)} />
+      <Stat
+        label="Đã log / capacity"
+        value={`${hoursLabel(data.grandTotal)} / ${hoursLabel(capacity)}`}
+        // Khoảng đã xảy ra hết (ví dụ preset "Tuần trước") → hai con số bằng
+        // nhau, không thêm dòng phụ: trang đọc y như trước khi có thay đổi này.
+        {...(cut ? { note: `tới hôm nay · ${hoursLabel(capacityFull)} cả kỳ` } : {})}
+      />
       <Stat
         label="Coverage"
         value={percentLabel(data.grandTotal, capacity)}
@@ -61,7 +82,11 @@ export function CoverageSummary({ data }: Props) {
           value={data.grandTotal}
           max={capacity}
           height={8}
-          label={`Cả team đã log ${hoursLabel(data.grandTotal)} trên capacity ${hoursLabel(capacity)}`}
+          label={
+            `Cả team đã log ${hoursLabel(data.grandTotal)} trên capacity `
+            + `${hoursLabel(capacity)}${cut ? ' tới hôm nay' : ''}`
+            + `, cả kỳ ${hoursLabel(capacityFull)}`
+          }
         />
       </div>
     </div>

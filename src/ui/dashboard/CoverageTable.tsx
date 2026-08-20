@@ -29,6 +29,10 @@ const dayCellStyle = (date: string, off: boolean): CSSProperties => ({
 export function CoverageTable({ data, daysOff, onCellClick, onToggleDayOff }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
+  // Khoảng ngày có phần chưa xảy ra → nói rõ thanh đang đo tới hôm nay. Khoảng
+  // nằm hoàn toàn trong quá khứ thì hai con số bằng nhau, thêm chữ chỉ gây nhiễu.
+  const cutToToday = data.capacityToDateSeconds !== data.capacityFullRangeSeconds
+
   const toggle = (accountId: string) => {
     const next = new Set(expanded)
     next.has(accountId) ? next.delete(accountId) : next.add(accountId)
@@ -60,7 +64,7 @@ export function CoverageTable({ data, daysOff, onCellClick, onToggleDayOff }: Pr
               </th>
             ))}
             <th scope="col" style={{ width: TOTAL_COL_WIDTH, minWidth: TOTAL_COL_WIDTH }}>
-              Tổng / capacity
+              {cutToToday ? 'Tổng / tới hôm nay' : 'Tổng / capacity'}
             </th>
           </tr>
         </thead>
@@ -121,16 +125,20 @@ export function CoverageTable({ data, daysOff, onCellClick, onToggleDayOff }: Pr
 
                   {/* Tín hiệu TỈ LỆ, không phải cờ nhị phân. Bản cũ tô cam cả bốn
                       member vì giữa sprint ai cũng dưới capacity, nên "hơi chậm"
-                      và "chưa log gì" trông y như nhau. */}
+                      và "chưa log gì" trông y như nhau.
+                      Mốc là capacity TỚI HÔM NAY — so với capacity cả kỳ thì
+                      giữa sprint thanh nào cũng gần rỗng, cũng mất nghĩa y vậy. */}
                   <td style={{ width: TOTAL_COL_WIDTH, minWidth: TOTAL_COL_WIDTH }}>
                     <ProgressBar
                       value={row.total}
-                      max={row.capacitySeconds}
+                      max={row.capacityToDateSeconds}
                       height={4}
-                      valueText={`${hoursLabel(row.total)} / ${hoursLabel(row.capacitySeconds)}`}
+                      valueText={`${hoursLabel(row.total)} / ${hoursLabel(row.capacityToDateSeconds)}`}
                       label={
                         `${row.member.displayName}: đã log ${hoursLabel(row.total)} `
-                        + `trên capacity ${hoursLabel(row.capacitySeconds)}`
+                        + `trên capacity ${hoursLabel(row.capacityToDateSeconds)}`
+                        + `${cutToToday ? ' tới hôm nay' : ''}`
+                        + `, cả kỳ ${hoursLabel(row.capacityFullRangeSeconds)}`
                       }
                     />
                   </td>

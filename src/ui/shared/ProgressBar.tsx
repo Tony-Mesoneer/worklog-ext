@@ -36,7 +36,12 @@ export function progressTone(value: number, max: number): string {
 }
 
 export function ProgressBar({ value, max, height = 6, label, valueText }: Props) {
-  const ratio = max > 0 ? Math.min(1, Math.max(0, value / max)) : 0
+  // max <= 0 mà value > 0 (ví dụ: log giờ vào ngày nghỉ, nên capacity tới hôm
+  // nay bằng 0) — tỉ lệ không định nghĩa được. Vẽ thanh đầy thay vì rỗng: rỗng
+  // cạnh con số "3h" đọc ra như lỗi, còn đầy đọc ra "đã log, không có mốc".
+  const ratio = max > 0
+    ? Math.min(1, Math.max(0, value / max))
+    : value > 0 ? 1 : 0
   const tone = progressTone(value, max)
 
   return (
