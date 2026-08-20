@@ -4,6 +4,7 @@ import {
   buildSlots, occupiedBy, formatMinutes, findOverlaps,
   DAY_END_MINUTES, type DayEntry,
 } from '@/core/timeline'
+import { colors } from '@/ui/shared/theme'
 
 type Props = {
   entries: DayEntry[]
@@ -58,14 +59,14 @@ export function LogForm(p: Props) {
              placeholder="Ghi chú (không bắt buộc)" style={{ padding: 5 }} />
 
       {p.durationInput !== '' && seconds === null && (
-        <span style={{ fontSize: 12, color: '#c62828' }}>
+        <span style={{ fontSize: 12, color: colors.danger }}>
           Không hiểu "{p.durationInput}" — thử 1h30, 90m, 1.5h
         </span>
       )}
 
       {overlaps.length > 0 && (
         // Cảnh báo, KHÔNG chặn: Jira cho phép chồng giờ và đôi khi chồng là đúng.
-        <span style={{ fontSize: 12, color: '#ef6c00' }}>
+        <span style={{ fontSize: 12, color: colors.warning }}>
           Chồng giờ với {overlaps.map((o) => o.issueKey).join(', ')}
         </span>
       )}

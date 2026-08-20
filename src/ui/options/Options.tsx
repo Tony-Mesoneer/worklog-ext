@@ -3,6 +3,7 @@ import { send, type AuthProbeResult } from '@/sw/messages'
 import type { Config, ConfigMember, SprintEvent } from '@/core/config-schema'
 import { Banner } from '@/ui/shared/Banner'
 import { toUiError } from '@/ui/shared/errors'
+import { colors, radii } from '@/ui/shared/theme'
 
 // Ở Options thì "mở Options" là vô nghĩa, nên 401/403 có text riêng: nó chỉ
 // người dùng xuống đúng khối token bên dưới.
@@ -100,7 +101,7 @@ export function Options() {
           <button onClick={connect}>Kết nối</button>
         </div>
         {probe && (
-          <p style={{ fontSize: 13, color: '#2e7d32' }}>
+          <p style={{ fontSize: 13, color: colors.success }}>
             Đã kết nối: {probe.displayName} · {probe.timeZone} · chế độ {probe.mode}
           </p>
         )}
@@ -157,13 +158,13 @@ function TokenSection({ config, save, probeAuth, open, setOpen }: SectionProps &
   return (
     <section>
       <h2 style={{ fontSize: 15 }}>2. API token (dự phòng)</h2>
-      <p style={{ fontSize: 13, color: '#555', margin: '4px 0' }}>
+      <p style={{ fontSize: 13, color: colors.muted, margin: '4px 0' }}>
         Mặc định extension dùng session Jira đang đăng nhập trong Chrome. Chỉ cần
         token khi session hết hạn, khi bạn đăng nhập Jira ở profile Chrome khác,
         hoặc khi Jira chặn request bằng session.
       </p>
       {saved && (
-        <p style={{ fontSize: 13, color: '#2e7d32', margin: '4px 0' }}>
+        <p style={{ fontSize: 13, color: colors.success, margin: '4px 0' }}>
           Đã lưu token cho <code>{config.token?.email}</code> — đang dùng chế độ token.
         </p>
       )}
@@ -205,7 +206,7 @@ function TokenSection({ config, save, probeAuth, open, setOpen }: SectionProps &
               Đóng
             </button>
           </div>
-          <p style={{ fontSize: 12, color: '#777', margin: 0 }}>
+          <p style={{ fontSize: 12, color: colors.muted, margin: 0 }}>
             Tạo token tại <code>id.atlassian.com</code> → Security → API tokens.
             Token chỉ lưu trong máy này (<code>chrome.storage.local</code>), không
             đồng bộ lên Google account và không gửi đi đâu ngoài Jira.
@@ -246,7 +247,8 @@ function ProjectsSection({ config, save }: SectionProps) {
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
         {config.projects.map((p) => (
           <span key={p} style={{
-            background: '#eee', borderRadius: 12, padding: '2px 10px', fontSize: 13,
+            background: colors.surfaceAlt, border: `1px solid ${colors.border}`,
+            borderRadius: radii.chip, padding: '2px 10px', fontSize: 13,
             display: 'inline-flex', gap: 6, alignItems: 'center',
           }}>
             {p}
@@ -282,13 +284,13 @@ function BoardSection({ config, save }: SectionProps) {
   return (
     <section>
       <h2 style={{ fontSize: 15 }}>4. Board chính</h2>
-      <p style={{ fontSize: 13, color: '#555' }}>
+      <p style={{ fontSize: 13, color: colors.muted }}>
         Dùng cho preset "Sprint hiện tại" và tab Story points.
       </p>
       {!projectKey ? (
-        <p style={{ fontSize: 13, color: '#888' }}>Thêm một project ở trên trước đã.</p>
+        <p style={{ fontSize: 13, color: colors.muted }}>Thêm một project ở trên trước đã.</p>
       ) : boardsError !== null ? (
-        <p style={{ fontSize: 13, color: '#c62828' }}>
+        <p style={{ fontSize: 13, color: colors.danger }}>
           Không lấy được danh sách board của {projectKey}: {boardsError}
         </p>
       ) : (

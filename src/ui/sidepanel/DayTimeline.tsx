@@ -1,5 +1,6 @@
 // src/ui/sidepanel/DayTimeline.tsx
 import { buildSlots, occupiedBy, formatMinutes, DAY_END_MINUTES, type DayEntry } from '@/core/timeline'
+import { colors } from '@/ui/shared/theme'
 
 type Props = {
   entries: DayEntry[]
@@ -23,13 +24,13 @@ export function DayTimeline({
         return (
           <div key={s} style={{
             display: 'flex', gap: 6, alignItems: 'center', fontSize: 11,
-            background: inSelection ? '#c8e6c9' : busy ? '#eceff1' : 'transparent',
+            background: inSelection ? colors.accentSoft : busy ? colors.surfaceAlt : 'transparent',
             padding: '1px 4px', borderRadius: 3,
           }}>
-            <span style={{ width: 38, color: '#607d8b' }}>
+            <span style={{ width: 38, color: colors.muted }}>
               {s % 60 === 0 ? formatMinutes(s) : ''}
             </span>
-            <span style={{ flex: 1, color: '#37474f' }}>
+            <span style={{ flex: 1, color: colors.text }}>
               {busy ? busy.issueKey : ''}
             </span>
           </div>

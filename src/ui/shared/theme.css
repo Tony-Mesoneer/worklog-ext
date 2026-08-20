@@ -1,0 +1,111 @@
+/* src/ui/shared/theme.css
+ *
+ * Stylesheet dùng chung cho cả ba UI surface (options, sidepanel, dashboard).
+ * Trước đây không có file CSS nào — mọi style là inline object hardcode màu
+ * light-theme, nên input/select/date-picker/checkbox/scrollbar luôn hiện theo
+ * skin sáng mặc định của Chrome bất kể div xung quanh tô màu gì. Khai báo
+ * `color-scheme: dark` bên dưới là dòng quan trọng nhất trong file này: nó
+ * khiến Chrome tự vẽ các control gốc (date input, checkbox, scrollbar) theo
+ * theme tối, không cần style tay từng cái.
+ */
+
+:root {
+  color-scheme: dark;
+
+  --bg: #141218;
+  --surface: #1D1A23;
+  --surface-alt: #232030;
+  --border: #2E2A38;
+  --text: #E8E5EE;
+  --muted: #9B95A8;
+  --accent: #967DD6;
+  --accent-soft: rgba(150, 125, 214, 0.16);
+
+  --success: #6FCF8B;
+  --warning: #F2A25C;
+  --danger: #F0757D;
+
+  --radius-panel: 10px;
+  --radius-input: 8px;
+  --radius-chip: 6px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+input,
+select,
+textarea {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-input);
+  font-family: inherit;
+  font-size: inherit;
+}
+
+button {
+  background: var(--surface-alt);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-input);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+table {
+  border-color: var(--border);
+  color: var(--text);
+}
+
+th,
+td {
+  border-color: var(--border);
+}
+
+/* Scrollbar (WebKit/Chromium) — extension chỉ chạy trong Chrome nên không cần
+ * fallback `scrollbar-color` cho engine khác. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--surface);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: var(--radius-chip);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}

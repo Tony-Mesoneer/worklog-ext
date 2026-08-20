@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { send } from '@/sw/messages'
 import { ErrorBanner, toUiError, type UiError } from '@/ui/shared/errors'
+import { colors, radii } from '@/ui/shared/theme'
 
 type Props = { value: string; onChange: (issueKey: string) => void; projects: string[] }
 
@@ -21,9 +22,14 @@ function IssueButton({ issue, onPick }: {
   return (
     <li>
       <button onClick={() => onPick(issue.key)}
-              style={{ width: '100%', textAlign: 'left', fontSize: 12, padding: '4px 6px' }}>
+              style={{
+                width: '100%', textAlign: 'left', fontSize: 12, padding: '4px 6px',
+                borderRadius: radii.chip,
+              }}>
         <strong>{issue.key}</strong>{' '}
-        <span>{issue.summary.length > 48 ? `${issue.summary.slice(0, 48)}…` : issue.summary}</span>
+        <span style={{ color: colors.muted }}>
+          {issue.summary.length > 48 ? `${issue.summary.slice(0, 48)}…` : issue.summary}
+        </span>
       </button>
     </li>
   )
@@ -91,10 +97,10 @@ export function IssuePicker({ value, onChange, projects }: Props) {
         )
       ) : (
         <div style={{ margin: '4px 0' }}>
-          {mineLoading && <div style={{ fontSize: 12, color: '#666' }}>Đang tải issue của bạn…</div>}
+          {mineLoading && <div style={{ fontSize: 12, color: colors.muted }}>Đang tải issue của bạn…</div>}
           {mineError && <ErrorBanner error={mineError} />}
           {!mineLoading && !mineError && mine.length === 0 && (
-            <div style={{ fontSize: 12, color: '#666' }}>
+            <div style={{ fontSize: 12, color: colors.muted }}>
               Không có issue nào assign cho bạn trong sprint hiện tại.
             </div>
           )}

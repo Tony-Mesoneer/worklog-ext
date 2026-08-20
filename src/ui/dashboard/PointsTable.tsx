@@ -4,9 +4,10 @@ import { send, type PointsLoadResult } from '@/sw/messages'
 import { buildPointsTable, type PointsTable as Data } from '@/core/points'
 import { hoursLabel } from '@/ui/shared/format'
 import { ErrorBanner, toUiError, type UiError } from '@/ui/shared/errors'
+import { colors } from '@/ui/shared/theme'
 
 const td: CSSProperties = {
-  borderBottom: '1px solid #eceff1', padding: '4px 8px', fontSize: 12,
+  borderBottom: `1px solid ${colors.border}`, padding: '4px 8px', fontSize: 12, color: colors.text,
 }
 
 export function PointsPanel() {
@@ -37,7 +38,7 @@ export function PointsPanel() {
       <div style={{ overflowX: 'auto' }}>
         <table style={{ borderCollapse: 'collapse', minWidth: '100%' }}>
           <thead>
-            <tr style={{ background: '#fafafa' }}>
+            <tr style={{ background: colors.surface }}>
               <th style={{ ...td, textAlign: 'left' }}>Issue</th>
               <th style={{ ...td, textAlign: 'left' }}>Assignee</th>
               <th style={{ ...td, textAlign: 'left' }}>Status</th>
@@ -50,13 +51,13 @@ export function PointsPanel() {
             {data.rows.map((r) => {
               const noPoints = r.storyPoints === null || r.storyPoints === 0
               return (
-                <tr key={r.key} style={{ background: r.isOutlier ? '#fff3e0' : undefined }}>
+                <tr key={r.key} style={{ background: r.isOutlier ? colors.accentSoft : undefined }}>
                   <td style={{ ...td, textAlign: 'left' }}>
                     <strong>{r.key}</strong> {r.summary}
                   </td>
                   <td style={{ ...td, textAlign: 'left' }}>{r.assigneeName ?? '—'}</td>
                   <td style={{ ...td, textAlign: 'left' }}>{r.status}</td>
-                  <td style={{ ...td, textAlign: 'right', color: noPoints ? '#c62828' : undefined }}>
+                  <td style={{ ...td, textAlign: 'right', color: noPoints ? colors.danger : undefined }}>
                     {noPoints ? 'chưa có' : r.storyPoints}
                   </td>
                   <td style={{ ...td, textAlign: 'right' }}>{hoursLabel(r.timeSpentSeconds)}</td>

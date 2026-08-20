@@ -8,6 +8,7 @@ import { parseDuration, formatDuration } from '@/core/duration'
 import { todayInZone, addDays } from '@/core/jiraTime'
 import { Banner } from '@/ui/shared/Banner'
 import { ErrorBanner, toUiError, type UiError } from '@/ui/shared/errors'
+import { colors } from '@/ui/shared/theme'
 import { DayTimeline } from './DayTimeline'
 import { EventButtons } from './EventButtons'
 import { IssuePicker } from './IssuePicker'
@@ -144,7 +145,7 @@ export function SidePanel() {
         <button onClick={() => setDate(addDays(date, -1))} disabled={busy}>←</button>
         <strong style={{ fontSize: 13 }}>{date}</strong>
         <button onClick={() => setDate(addDays(date, 1))} disabled={busy}>→</button>
-        <span style={{ marginLeft: 'auto', fontSize: 13, color: totalSeconds >= target ? '#2e7d32' : '#ef6c00' }}>
+        <span style={{ marginLeft: 'auto', fontSize: 13, color: totalSeconds >= target ? colors.success : colors.warning }}>
           {formatDuration(totalSeconds)} / {formatDuration(target)}
         </span>
       </div>

@@ -1,5 +1,6 @@
 // src/ui/dashboard/FilterBar.tsx
 import { addDays } from '@/core/jiraTime'
+import { colors } from '@/ui/shared/theme'
 
 export type Preset = 'sprint' | 'thisWeek' | 'lastWeek' | 'thisMonth' | 'custom'
 
@@ -56,7 +57,7 @@ export function FilterBar(p: Props) {
 
       <button onClick={p.onRefresh} style={{ marginLeft: 'auto' }}>Làm mới</button>
       {p.fetchedAt !== null && (
-        <span style={{ color: p.stale ? '#ef6c00' : '#78909c' }}>
+        <span style={{ color: p.stale ? colors.warning : colors.muted }}>
           {p.stale ? 'dữ liệu cũ lúc ' : 'cập nhật '}
           {new Date(p.fetchedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
         </span>

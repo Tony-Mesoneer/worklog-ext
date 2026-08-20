@@ -1,5 +1,6 @@
 // src/ui/sidepanel/EventButtons.tsx
 import type { SprintEvent } from '@/core/config-schema'
+import { colors } from '@/ui/shared/theme'
 
 type Props = {
   events: SprintEvent[]
@@ -9,7 +10,7 @@ type Props = {
 export function EventButtons({ events, onPick }: Props) {
   if (events.length === 0) {
     return (
-      <p style={{ fontSize: 12, color: '#78909c' }}>
+      <p style={{ fontSize: 12, color: colors.muted }}>
         Chưa cấu hình sprint event — thêm trong Options.
       </p>
     )

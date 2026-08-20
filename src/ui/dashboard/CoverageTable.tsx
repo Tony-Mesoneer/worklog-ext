@@ -4,6 +4,7 @@ import type { CSSProperties } from 'react'
 import type { CoverageTable as Data } from '@/core/coverage'
 import { isWeekend } from '@/core/coverage'
 import { cellLabel, hoursLabel } from '@/ui/shared/format'
+import { colors, table as tableColors, statusColors } from '@/ui/shared/theme'
 
 type Props = {
   data: Data
@@ -11,14 +12,14 @@ type Props = {
   onToggleDayOff: (accountId: string, date: string) => void
 }
 
-const STATUS_COLOR = { ok: '#2e7d32', under: '#ef6c00', empty: '#c62828' } as const
-
 const th: CSSProperties = {
-  position: 'sticky', top: 0, background: '#fafafa',
-  borderBottom: '1px solid #cfd8dc', padding: '4px 6px', fontSize: 12, textAlign: 'right',
+  position: 'sticky', top: 0, background: tableColors.headerBg,
+  borderBottom: `1px solid ${colors.border}`, padding: '4px 6px', fontSize: 12, textAlign: 'right',
+  color: colors.text,
 }
 const td: CSSProperties = {
-  borderBottom: '1px solid #eceff1', padding: '3px 6px', fontSize: 12, textAlign: 'right',
+  borderBottom: `1px solid ${colors.border}`, padding: '3px 6px', fontSize: 12, textAlign: 'right',
+  color: colors.text,
 }
 
 export function CoverageTable({ data, onCellClick, onToggleDayOff }: Props) {
@@ -31,13 +32,13 @@ export function CoverageTable({ data, onCellClick, onToggleDayOff }: Props) {
   }
 
   return (
-    <div style={{ overflowX: 'auto' }}>
+    <div style={{ overflowX: 'auto', borderRadius: 10, border: `1px solid ${colors.border}` }}>
       <table style={{ borderCollapse: 'collapse', minWidth: '100%' }}>
         <thead>
           <tr>
             <th style={{ ...th, textAlign: 'left', minWidth: 200 }}>Member / Issue</th>
             {data.dates.map((d) => (
-              <th key={d} style={{ ...th, background: isWeekend(d) ? '#eceff1' : '#fafafa', minWidth: 54 }}>
+              <th key={d} style={{ ...th, background: isWeekend(d) ? tableColors.headerWeekendBg : tableColors.headerBg, minWidth: 54 }}>
                 {d.slice(5)}
               </th>
             ))}
@@ -47,17 +48,17 @@ export function CoverageTable({ data, onCellClick, onToggleDayOff }: Props) {
         <tbody>
           {data.rows.map((row) => (
             <Fragment key={row.member.accountId}>
-              <tr style={{ background: '#f5f7f8' }}>
+              <tr style={{ background: tableColors.groupRowBg }}>
                 <td style={{ ...td, textAlign: 'left', fontWeight: 600 }}>
                   <button onClick={() => toggle(row.member.accountId)}
                           style={{ border: 0, background: 'none', cursor: 'pointer', padding: 0, marginRight: 6 }}>
                     {expanded.has(row.member.accountId) ? '▾' : '▸'}
                   </button>
                   {row.member.displayName}
-                  {!row.member.active && <span style={{ color: '#90a4ae' }}> (inactive)</span>}
+                  {!row.member.active && <span style={{ color: colors.muted }}> (inactive)</span>}
                 </td>
                 {data.dates.map((d) => (
-                  <td key={d} style={{ ...td, background: isWeekend(d) ? '#f5f5f5' : undefined, cursor: 'pointer' }}
+                  <td key={d} style={{ ...td, background: isWeekend(d) ? tableColors.bodyWeekendBg : undefined, cursor: 'pointer' }}
                       onClick={() => onCellClick(row.member.accountId, d)}
                       onContextMenu={(e) => { e.preventDefault(); onToggleDayOff(row.member.accountId, d) }}
                       title="Click: xem chi tiết · Click phải: đánh dấu nghỉ">
@@ -65,7 +66,7 @@ export function CoverageTable({ data, onCellClick, onToggleDayOff }: Props) {
                   </td>
                 ))}
                 {/* Màu cảnh báo CHỈ ở đây — tô cả bảng thì cảnh báo mất tác dụng. */}
-                <td style={{ ...td, fontWeight: 700, color: STATUS_COLOR[row.status] }}
+                <td style={{ ...td, fontWeight: 700, color: statusColors[row.status] }}
                     title={`Capacity ${hoursLabel(row.capacitySeconds)}`}>
                   {hoursLabel(row.total)}
                 </td>
@@ -73,11 +74,11 @@ export function CoverageTable({ data, onCellClick, onToggleDayOff }: Props) {
 
               {expanded.has(row.member.accountId) && row.issues.map((issue) => (
                 <tr key={`${row.member.accountId}-${issue.issueKey}`}>
-                  <td style={{ ...td, textAlign: 'left', paddingLeft: 28, color: '#455a64' }}>
+                  <td style={{ ...td, textAlign: 'left', paddingLeft: 28, color: colors.muted }}>
                     <strong>{issue.issueKey}</strong> {issue.issueSummary}
                   </td>
                   {data.dates.map((d) => (
-                    <td key={d} style={{ ...td, background: isWeekend(d) ? '#f5f5f5' : undefined }}>
+                    <td key={d} style={{ ...td, background: isWeekend(d) ? tableColors.bodyWeekendBg : undefined }}>
                       {cellLabel(issue.perDay[d] ?? 0)}
                     </td>
                   ))}
@@ -88,10 +89,10 @@ export function CoverageTable({ data, onCellClick, onToggleDayOff }: Props) {
           ))}
         </tbody>
         <tfoot>
-          <tr style={{ background: '#eceff1', fontWeight: 700 }}>
+          <tr style={{ background: tableColors.footerBg, fontWeight: 700 }}>
             <td style={{ ...td, textAlign: 'left' }}>Tổng</td>
             {data.dates.map((d) => (
-              <td key={d} style={{ ...td, background: isWeekend(d) ? '#e0e4e6' : undefined }}>
+              <td key={d} style={{ ...td, background: isWeekend(d) ? tableColors.footerWeekendBg : undefined }}>
                 {cellLabel(data.totalPerDay[d] ?? 0)}
               </td>
             ))}

@@ -8,6 +8,7 @@ import { todayInZone, addDays } from '@/core/jiraTime'
 import type { Scope } from '@/core/snapshot-key'
 import { Banner } from '@/ui/shared/Banner'
 import { ErrorBanner, toUiError, type UiError } from '@/ui/shared/errors'
+import { colors } from '@/ui/shared/theme'
 import { FilterBar, type Preset } from './FilterBar'
 import { CoverageTable } from './CoverageTable'
 import { CellDetail } from './CellDetail'
@@ -149,7 +150,7 @@ export function Dashboard() {
             </div>
           )}
           {table === null ? (
-            <div style={{ marginTop: 12, fontSize: 13, color: '#607d8b' }}>
+            <div style={{ marginTop: 12, fontSize: 13, color: colors.muted }}>
               {error
                 ? 'Chưa có dữ liệu nào để hiện — xử lý lỗi ở trên rồi bấm "Làm mới".'
                 : 'Đang tải dữ liệu…'}
