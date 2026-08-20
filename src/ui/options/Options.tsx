@@ -143,7 +143,7 @@ export function Options() {
         open={showToken} setOpen={setShowToken}
       />
 
-      {/* Khối 3–6 theo cùng mẫu: đọc từ `config`, ghi bằng `save({...})`.
+      {/* Khối 2–5 theo cùng mẫu: đọc từ `config`, ghi bằng `save({...})`.
           Mỗi thay đổi lưu ngay — không có nút Save toàn trang. */}
       <ProjectsSection config={config} save={save} />
       <BoardSection config={config} save={save} />
@@ -157,6 +157,12 @@ type SectionProps = { config: Config; save: (p: Partial<Config>) => Promise<void
 
 // Đường dự phòng theo spec §4: session Jira hết hạn giữa lúc dùng, người dùng
 // đăng nhập Jira ở profile Chrome khác, hoặc instance bật XSRF khắt khe hơn.
+//
+// Thu gọn thành một dòng dưới khối Jira: phần lớn người dùng dùng session,
+// không bao giờ cần mở khối này. Không đánh số như các khối chính — nó là
+// phụ lục của "1. Jira", không phải một bước cấu hình riêng.
+// Vẫn PHẢI tự mở khi probe fail hoặc authMode === 'token' (xem `open` do
+// Options truyền xuống) — đó là đường dự phòng duy nhất khi session hết hạn.
 function TokenSection({ config, save, probeAuth, open, setOpen }: SectionProps & {
   probeAuth: () => Promise<boolean>
   open: boolean
@@ -188,8 +194,22 @@ function TokenSection({ config, save, probeAuth, open, setOpen }: SectionProps &
     } finally { setBusy(false) }
   }
 
+  if (!open) {
+    return (
+      <div>
+        <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>
+          {/* Email không phải bí mật (khác API token) — hiện được để người dùng
+              biết mình đang ở chế độ nào mà không cần mở form. */}
+          {saved
+            ? `Đang dùng API token (${config.token?.email}) — sửa hoặc xoá`
+            : 'Cần dùng API token thay vì session? (dự phòng)'}
+        </Button>
+      </div>
+    )
+  }
+
   return (
-    <Card title="2. API token (dự phòng)">
+    <Card title="API token (dự phòng)">
       <div style={{ display: 'grid', gap: space.x3 }}>
         <Hint>
           Mặc định extension dùng session Jira đang đăng nhập trong Chrome. Chỉ cần
@@ -201,61 +221,53 @@ function TokenSection({ config, save, probeAuth, open, setOpen }: SectionProps &
             Đã lưu token cho <code>{config.token?.email}</code> — đang dùng chế độ token.
           </p>
         )}
-        {!open ? (
-          <div>
-            <Button onClick={() => setOpen(true)}>
-              {saved ? 'Sửa token' : 'Nhập API token'}
+        <div style={{ display: 'grid', gap: space.x2, maxWidth: 480 }}>
+          <div className="wl-field">
+            <label className="wl-field__label" htmlFor={emailId}>Email Atlassian</label>
+            <input
+              id={emailId}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="ten@cong-ty.com"
+              autoComplete="off"
+            />
+          </div>
+          {/* KHÔNG bao giờ đổ token đã lưu ra lại input, và không bao giờ log. */}
+          <div className="wl-field">
+            <label className="wl-field__label" htmlFor={tokenId}>API token</label>
+            <input
+              id={tokenId}
+              type="password"
+              value={apiToken}
+              onChange={(e) => setApiToken(e.target.value)}
+              placeholder={saved ? 'Token mới (để trống nếu không đổi)' : 'API token'}
+              autoComplete="off"
+            />
+          </div>
+          <div style={{ display: 'flex', gap: space.x2, flexWrap: 'wrap' }}>
+            <Button
+              variant="primary"
+              loading={busy}
+              onClick={() => void submit()}
+              disabled={email.trim() === '' || apiToken.trim() === ''}
+            >
+              Lưu token và kiểm tra
+            </Button>
+            {saved && (
+              <Button variant="danger" onClick={() => void clear()} disabled={busy}>
+                Xoá token, quay lại session
+              </Button>
+            )}
+            <Button variant="ghost" onClick={() => { setApiToken(''); setOpen(false) }} disabled={busy}>
+              Đóng
             </Button>
           </div>
-        ) : (
-          <div style={{ display: 'grid', gap: space.x2, maxWidth: 480 }}>
-            <div className="wl-field">
-              <label className="wl-field__label" htmlFor={emailId}>Email Atlassian</label>
-              <input
-                id={emailId}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="ten@cong-ty.com"
-                autoComplete="off"
-              />
-            </div>
-            {/* KHÔNG bao giờ đổ token đã lưu ra lại input, và không bao giờ log. */}
-            <div className="wl-field">
-              <label className="wl-field__label" htmlFor={tokenId}>API token</label>
-              <input
-                id={tokenId}
-                type="password"
-                value={apiToken}
-                onChange={(e) => setApiToken(e.target.value)}
-                placeholder={saved ? 'Token mới (để trống nếu không đổi)' : 'API token'}
-                autoComplete="off"
-              />
-            </div>
-            <div style={{ display: 'flex', gap: space.x2, flexWrap: 'wrap' }}>
-              <Button
-                variant="primary"
-                loading={busy}
-                onClick={() => void submit()}
-                disabled={email.trim() === '' || apiToken.trim() === ''}
-              >
-                Lưu token và kiểm tra
-              </Button>
-              {saved && (
-                <Button variant="danger" onClick={() => void clear()} disabled={busy}>
-                  Xoá token, quay lại session
-                </Button>
-              )}
-              <Button variant="ghost" onClick={() => { setApiToken(''); setOpen(false) }} disabled={busy}>
-                Đóng
-              </Button>
-            </div>
-            <Hint>
-              Tạo token tại <code>id.atlassian.com</code> → Security → API tokens.
-              Token chỉ lưu trong máy này (<code>chrome.storage.local</code>), không
-              đồng bộ lên Google account và không gửi đi đâu ngoài Jira.
-            </Hint>
-          </div>
-        )}
+          <Hint>
+            Tạo token tại <code>id.atlassian.com</code> → Security → API tokens.
+            Token chỉ lưu trong máy này (<code>chrome.storage.local</code>), không
+            đồng bộ lên Google account và không gửi đi đâu ngoài Jira.
+          </Hint>
+        </div>
       </div>
     </Card>
   )
@@ -277,7 +289,7 @@ function ProjectsSection({ config, save }: SectionProps) {
   }
 
   return (
-    <Card title="3. Project">
+    <Card title="2. Project">
       <div style={{ display: 'grid', gap: space.x3 }}>
         <div className="wl-field">
           <label className="wl-field__label" htmlFor={fieldId}>Project key</label>
@@ -344,7 +356,7 @@ function BoardSection({ config, save }: SectionProps) {
   }, [projectKey])
 
   return (
-    <Card title="4. Board chính">
+    <Card title="3. Board chính">
       <div style={{ display: 'grid', gap: space.x3 }}>
         <Hint>Dùng cho preset "Sprint hiện tại" và tab Story points.</Hint>
         {!projectKey ? (
@@ -404,7 +416,7 @@ function MembersSection({ config, save, setError }: SectionProps & {
   }
 
   return (
-    <Card title="5. Member theo dõi">
+    <Card title="4. Member theo dõi">
       <div style={{ display: 'grid', gap: space.x3 }}>
         <div className="wl-field">
           <label className="wl-field__label" htmlFor={fieldId}>Tìm người trong Jira</label>
@@ -513,7 +525,7 @@ function EventsSection({ config, save }: SectionProps) {
   }
 
   return (
-    <Card title="6. Sprint event">
+    <Card title="5. Sprint event">
       <div style={{ display: 'grid', gap: space.x3 }}>
         <Hint>Mỗi event là một nút một-cú-bấm trong side panel.</Hint>
         <div className="wl-table-scroll">
