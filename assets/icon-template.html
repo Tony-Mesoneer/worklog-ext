@@ -1,0 +1,32 @@
+<!doctype html>
+<!--
+  Khuôn render icon extension. Mỗi kích thước render riêng với font-size và
+  bán kính bo góc tinh chỉnh theo kích thước đó — scale một ảnh lớn xuống 16px
+  cho ra chữ nhoè, nên không scale, render từng cỡ.
+  Tham số truyền qua query: ?size=128&text=Meso&font=42&radius=28
+-->
+<html>
+<head><meta charset="utf-8" /><style>
+  html, body { margin: 0; padding: 0; background: transparent; }
+  .icon {
+    display: flex; align-items: center; justify-content: center;
+    background: rgb(150, 125, 214);
+    font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+    color: #fff; font-weight: 700; letter-spacing: -0.03em;
+    -webkit-font-smoothing: antialiased;
+  }
+</style></head>
+<body>
+<div class="icon" id="i"></div>
+<script>
+  const q = new URLSearchParams(location.search)
+  const size = Number(q.get('size'))
+  const el = document.getElementById('i')
+  el.style.width = size + 'px'
+  el.style.height = size + 'px'
+  el.style.borderRadius = q.get('radius') + 'px'
+  el.style.fontSize = q.get('font') + 'px'
+  el.textContent = q.get('text')
+</script>
+</body>
+</html>
