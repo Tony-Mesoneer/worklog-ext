@@ -113,7 +113,7 @@ describe('migrateConfig', () => {
     expect(c.members[0]).toEqual({ accountId: 'u1', displayName: 'A', hoursPerDay: 8, active: true })
   })
 
-  it('lọc sprint event thiếu issueKey', () => {
+  it('lọc sprint event không có cả issueKey lẫn matchSummary', () => {
     const c = migrateConfig({
       sprintEvents: [
         { name: 'Daily', issueKey: 'CAG-1', defaultMinutes: 15, comment: '' },
@@ -121,6 +121,53 @@ describe('migrateConfig', () => {
       ],
     })
     expect(c.sprintEvents).toHaveLength(1)
+  })
+
+  describe('sprintEvents.matchSummary', () => {
+    it('config cũ chỉ có issueKey vẫn chạy nguyên vẹn, matchSummary thành \'\'', () => {
+      const c = migrateConfig({
+        sprintEvents: [{ name: 'Daily', issueKey: 'CAG-3065', defaultMinutes: 15, comment: 'x' }],
+      })
+      expect(c.sprintEvents).toEqual([
+        { name: 'Daily', issueKey: 'CAG-3065', matchSummary: '', defaultMinutes: 15, comment: 'x' },
+      ])
+    })
+
+    it('event chỉ có matchSummary (không issueKey) được GIỮ — đây là hình dạng mới', () => {
+      const c = migrateConfig({
+        sprintEvents: [{ name: 'Daily', matchSummary: 'Daily Scrum', defaultMinutes: 15, comment: '' }],
+      })
+      expect(c.sprintEvents).toEqual([
+        { name: 'Daily', issueKey: '', matchSummary: 'Daily Scrum', defaultMinutes: 15, comment: '' },
+      ])
+    })
+
+    it('matchSummary sai kiểu → \'\' chứ không throw', () => {
+      const c = migrateConfig({
+        sprintEvents: [{ name: 'Daily', issueKey: 'CAG-1', matchSummary: 42 }],
+      })
+      expect(c.sprintEvents[0]!.matchSummary).toBe('')
+    })
+
+    it('trim khoảng trắng ở cả issueKey và matchSummary', () => {
+      const c = migrateConfig({
+        sprintEvents: [{ name: 'Daily', issueKey: ' CAG-1 ', matchSummary: ' Daily Scrum ' }],
+      })
+      expect(c.sprintEvents[0]!.issueKey).toBe('CAG-1')
+      expect(c.sprintEvents[0]!.matchSummary).toBe('Daily Scrum')
+    })
+
+    it('entry chỉ có khoảng trắng ở cả hai field bị loại — không để lại dòng rỗng', () => {
+      const c = migrateConfig({
+        sprintEvents: [{ name: 'Daily', issueKey: '   ', matchSummary: ' ' }],
+      })
+      expect(c.sprintEvents).toEqual([])
+    })
+
+    it('thiếu name thì lấy matchSummary làm tên, không phải chuỗi rỗng', () => {
+      const c = migrateConfig({ sprintEvents: [{ matchSummary: 'Daily Scrum' }] })
+      expect(c.sprintEvents[0]!.name).toBe('Daily Scrum')
+    })
   })
 
   it('default không chứa token', () => {
@@ -153,7 +200,9 @@ describe('migrateConfig', () => {
       expect(c.primaryBoardId).toBe(42)
       expect(c.daysOff).toEqual({ u1: ['2026-01-01'] })
       expect(c.members).toEqual([{ accountId: 'u1', displayName: 'A', hoursPerDay: 8, active: true }])
-      expect(c.sprintEvents).toEqual([{ name: 'Daily', issueKey: 'CAG-1', defaultMinutes: 15, comment: '' }])
+      expect(c.sprintEvents).toEqual([
+        { name: 'Daily', issueKey: 'CAG-1', matchSummary: '', defaultMinutes: 15, comment: '' },
+      ])
     })
 
     it('config đã ở v2 với giờ làm việc tuỳ chỉnh thì giữ nguyên, không bị ghi đè lại', () => {

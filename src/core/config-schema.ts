@@ -5,9 +5,17 @@ import { parseHhMm } from './timeline'
 // migrateConfig ghi đè chúng bằng default mới một lần khi nâng version.
 export const CONFIG_VERSION = 2
 
+// `matchSummary` là TÊN sub-task ceremony trong sprint đang mở ("Daily Scrum").
+// Có nó thì issue key được tra tại runtime, nên sprint mới có sub-task mới là
+// nút tự trỏ đúng chỗ. `issueKey` trở thành override thủ công cho trường hợp
+// muốn ghim cứng một issue. Cả hai là string, '' nghĩa là "không đặt" — giữ
+// đúng lối khoan dung của migrateConfig (sai kiểu → default, không bao giờ
+// throw). Một event PHẢI có ít nhất một trong hai, không thì không biết ghi
+// giờ vào đâu.
 export type SprintEvent = {
   name: string
   issueKey: string
+  matchSummary: string
   defaultMinutes: number
   comment: string
 }
@@ -123,14 +131,25 @@ export function migrateConfig(raw: unknown): Config {
       return true
     })
 
+  // Danh tính của một event là issueKey HOẶC matchSummary — mất cả hai thì
+  // entry vô nghĩa và bị loại. Config cũ (chỉ có issueKey) đi qua đây không sứt
+  // sát gì: matchSummary thiếu → '' → hành vi y như trước.
   const sprintEvents: SprintEvent[] = (Array.isArray(r['sprintEvents']) ? r['sprintEvents'] : [])
     .filter(isRecord)
-    .filter((e) => typeof e['issueKey'] === 'string' && e['issueKey'] !== '')
     .map((e) => ({
-      name: str(e['name'], e['issueKey'] as string),
-      issueKey: e['issueKey'] as string,
+      issueKey: str(e['issueKey'], '').trim(),
+      matchSummary: str(e['matchSummary'], '').trim(),
+      rawName: str(e['name'], ''),
       defaultMinutes: num(e['defaultMinutes'], 30),
       comment: str(e['comment'], ''),
+    }))
+    .filter((e) => e.issueKey !== '' || e.matchSummary !== '')
+    .map((e) => ({
+      name: e.rawName !== '' ? e.rawName : (e.matchSummary !== '' ? e.matchSummary : e.issueKey),
+      issueKey: e.issueKey,
+      matchSummary: e.matchSummary,
+      defaultMinutes: e.defaultMinutes,
+      comment: e.comment,
     }))
 
   // `breaks` sai kiểu → default. Nhưng MẢNG RỖNG được giữ nguyên: đó là lựa
