@@ -1,15 +1,20 @@
 // src/ui/dashboard/CoverageTable.tsx
 import { Fragment, useState } from 'react'
 import type { CSSProperties } from 'react'
-import type { CoverageTable as Data } from '@/core/coverage'
+import type { CoverageIssueRow, CoverageTable as Data } from '@/core/coverage'
 import { isWeekend } from '@/core/coverage'
+import type { IssueMeta, IssueMetaMap } from '@/core/issue-hierarchy'
+import { groupIssueRowsByParent, mergeCoverageIssueRows } from '@/core/issue-hierarchy'
+import { StatusBadge } from '@/ui/shared/StatusBadge'
 import { formatDuration } from '@/core/duration'
 import { ProgressBar } from '@/ui/shared/ProgressBar'
 import { cellLabel, dayMonthLabel, hoursLabel } from '@/ui/shared/format'
-import { colors, table as tableColors } from '@/ui/shared/theme'
+import { colors, space, table as tableColors } from '@/ui/shared/theme'
 
 type Props = {
   data: Data
+  /** Metadata issue đi cạnh worklogs (xem core/issue-hierarchy). Rỗng là hợp lệ. */
+  meta: IssueMetaMap
   /** accountId → ngày đã đánh dấu nghỉ. Chỉ để VẼ; capacity đã tính ở core. */
   daysOff: Record<string, string[]>
   onCellClick: (accountId: string, date: string) => void
@@ -26,7 +31,62 @@ const dayCellStyle = (date: string, off: boolean): CSSProperties => ({
   minWidth: DAY_COL_WIDTH,
 })
 
-export function CoverageTable({ data, daysOff, onCellClick, onToggleDayOff }: Props) {
+// Hai mức thụt của hàng con: nhóm cha thụt như hàng issue cũ, sub-task thụt
+// thêm một bậc. Thụt là thứ duy nhất diễn tả quan hệ trong một cái bảng — không
+// có nó thì cha và con đọc ra ngang hàng, đúng cái khiếu nại ban đầu.
+const INDENT_GROUP = 30
+const INDENT_CHILD = 46
+
+// Một hàng issue trong phần mở rộng của member. Dùng cho cả ba loại hàng —
+// issue không cha, dòng tổng của nhóm cha, sub-task — khác nhau ở thụt lề và độ
+// đậm, không ở cấu trúc.
+function IssueRow({
+  row, dates, off, indent, meta, isGroupHeader = false, subtask = false,
+}: {
+  row: CoverageIssueRow
+  dates: string[]
+  off: Set<string>
+  indent: number
+  meta: IssueMeta | undefined
+  isGroupHeader?: boolean
+  subtask?: boolean
+}) {
+  return (
+    <tr className="wl-row--sub">
+      <th
+        scope="row"
+        style={{
+          paddingLeft: indent,
+          fontWeight: 400,
+          position: 'sticky', left: 0, background: colors.bg, zIndex: 1,
+        }}
+      >
+        <span style={{ display: 'inline-flex', gap: space.x2, alignItems: 'baseline', minWidth: 0 }}>
+          {/* Ký tự ↳ nói "đây là con của dòng trên" ngay cả khi cột bị cuộn
+              ngang tới mức thụt lề không còn thấy được. */}
+          <strong style={{ color: isGroupHeader ? colors.text : undefined }}>
+            {subtask ? '↳ ' : ''}{row.issueKey}
+          </strong>
+          {meta && <StatusBadge name={meta.statusName} category={meta.statusCategory} />}
+          <span>{row.issueSummary}</span>
+        </span>
+      </th>
+      {dates.map((d) => (
+        <td key={d} className="wl-table__num" style={dayCellStyle(d, off.has(d))}>
+          {cellLabel(row.perDay[d] ?? 0)}
+        </td>
+      ))}
+      <td
+        className="wl-table__num"
+        style={{ fontWeight: isGroupHeader ? 600 : 400, color: isGroupHeader ? colors.text : undefined }}
+      >
+        {hoursLabel(row.total)}
+      </td>
+    </tr>
+  )
+}
+
+export function CoverageTable({ data, meta, daysOff, onCellClick, onToggleDayOff }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
   // Khoảng ngày có phần chưa xảy ra → nói rõ thanh đang đo tới hôm nay. Khoảng
@@ -144,25 +204,44 @@ export function CoverageTable({ data, daysOff, onCellClick, onToggleDayOff }: Pr
                   </td>
                 </tr>
 
-                {isOpen && row.issues.map((issue) => (
-                  <tr key={`${row.member.accountId}-${issue.issueKey}`} className="wl-row--sub">
-                    <th
-                      scope="row"
-                      style={{
-                        paddingLeft: 30, fontWeight: 400,
-                        position: 'sticky', left: 0, background: colors.bg, zIndex: 1,
-                      }}
-                    >
-                      <strong>{issue.issueKey}</strong> {issue.issueSummary}
-                    </th>
-                    {data.dates.map((d) => (
-                      <td key={d} className="wl-table__num" style={dayCellStyle(d, off.has(d))}>
-                        {cellLabel(issue.perDay[d] ?? 0)}
-                      </td>
-                    ))}
-                    <td className="wl-table__num">{hoursLabel(issue.total)}</td>
-                  </tr>
-                ))}
+                {/* Hàng issue được GOM theo cha. Nhóm và thứ tự do core quyết
+                    định (groupIssueRowsByParent), component chỉ vẽ. */}
+                {isOpen && groupIssueRowsByParent(
+                  row.issues, meta, (i) => i.issueKey,
+                ).map((group) => {
+                  const rowKey = `${row.member.accountId}-${group.key}`
+                  if (!group.isParent) {
+                    // Issue không có cha: một hàng, y như trước.
+                    return (
+                      <IssueRow
+                        key={rowKey} row={group.own!} dates={data.dates} off={off}
+                        indent={INDENT_GROUP} meta={meta[group.own!.issueKey]}
+                      />
+                    )
+                  }
+                  // Dòng cha = TỔNG của các con (và của chính cha nếu cha cũng
+                  // có giờ). Cha không có giờ riêng vẫn hiện làm tiêu đề, nếu
+                  // không thì sub-task lại trông như issue độc lập.
+                  const header = mergeCoverageIssueRows(
+                    group.key, group.summary,
+                    group.own ? [group.own, ...group.children] : group.children,
+                  )
+                  return (
+                    <Fragment key={rowKey}>
+                      <IssueRow
+                        row={header} dates={data.dates} off={off}
+                        indent={INDENT_GROUP} meta={meta[group.key]} isGroupHeader
+                      />
+                      {(group.own ? [group.own, ...group.children] : group.children).map((child) => (
+                        <IssueRow
+                          key={`${rowKey}-${child.issueKey}`} row={child}
+                          dates={data.dates} off={off} indent={INDENT_CHILD}
+                          meta={meta[child.issueKey]} subtask
+                        />
+                      ))}
+                    </Fragment>
+                  )
+                })}
               </Fragment>
             )
           })}

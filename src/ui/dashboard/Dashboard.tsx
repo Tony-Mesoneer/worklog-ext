@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import { send, type CoverageLoadResult, type SprintCurrentResult } from '@/sw/messages'
 import type { Config } from '@/core/config-schema'
 import type { Worklog } from '@/core/coverage'
+import type { IssueMetaMap } from '@/core/issue-hierarchy'
 import { buildCoverage, enumerateDates } from '@/core/coverage'
 import { todayInZone, addDays } from '@/core/jiraTime'
 import type { Scope } from '@/core/snapshot-key'
@@ -35,6 +36,9 @@ export function Dashboard() {
   // bắt buộc: nếu load đầu tiên lỗi mà ta vẫn render bảng với [], cả team bị
   // tô đỏ "không log giờ nào" — spec §9/§13 cấm tuyệt đối.
   const [worklogs, setWorklogs] = useState<Worklog[] | null>(null)
+  // Metadata issue đi CẠNH worklogs (xem core/issue-hierarchy). Snapshot cache
+  // từ trước tính năng này trả về map rỗng — bảng khi đó vẽ phẳng như bản cũ.
+  const [issueMeta, setIssueMeta] = useState<IssueMetaMap>({})
   const [fetchedAt, setFetchedAt] = useState<number | null>(null)
   const [stale, setStale] = useState(false)
   const [error, setError] = useState<UiError | null>(null)
@@ -69,6 +73,7 @@ export function Dashboard() {
       const res = await send<CoverageLoadResult>({ type: 'coverage/load', scope, force })
       if (gen !== generation.current) return
       setWorklogs(res.worklogs)
+      setIssueMeta(res.meta ?? {})
       setFetchedAt(res.fetchedAt)
       setStale(res.stale)
       setError(null)
@@ -225,6 +230,7 @@ export function Dashboard() {
                 <div style={{ opacity: loading ? 0.6 : 1, transition: 'opacity .12s ease' }}>
                   <CoverageTable
                     data={table}
+                    meta={issueMeta}
                     daysOff={config.daysOff}
                     onCellClick={(accountId, date) => setDetail({ accountId, date })}
                     onToggleDayOff={(a, d) => void toggleDayOff(a, d)}
