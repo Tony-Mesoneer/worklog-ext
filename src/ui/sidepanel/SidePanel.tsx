@@ -5,6 +5,8 @@ import {
 } from '@/sw/messages'
 import type { Config } from '@/core/config-schema'
 import type { Worklog } from '@/core/coverage'
+import { isWeekend } from '@/core/coverage'
+import { dayShortfall, myDailyTargetMinutes } from '@/core/deficit'
 import type { IssueMetaMap } from '@/core/issue-hierarchy'
 import { resolveSprintEvents, type ResolvedSprintEvent } from '@/core/event-resolve'
 import {
@@ -33,7 +35,6 @@ const toEntries = (worklogs: Worklog[]): DayEntry[] =>
     durationMinutes: Math.round(w.timeSpentSeconds / 60),
   }))
 
-const TARGET_SECONDS = 8 * 3600
 
 // Lối vào Options LUÔN hiện, không phụ thuộc config/lỗi — trước đây banner
 // "Mở Options" chỉ hiện khi jiraBaseUrl rỗng nên biến mất ngay khi cấu hình
@@ -244,7 +245,40 @@ export function SidePanel() {
   const end = segments.length > 0 ? segmentsEnd(segments) : 0
   const pastEndMinutes = end > dayEndMinutes ? end : null
   const today = todayInZone(config.timeZone, new Date())
-  const remaining = TARGET_SECONDS - totalSeconds
+  // Mục tiêu là hoursPerDay CỦA CHÍNH NGƯỜI DÙNG, không phải 8h cứng: người làm
+  // 4h/ngày mà bị báo thiếu giờ mỗi ngày sẽ học cách bỏ qua mọi cảnh báo.
+  const targetMinutes = myDailyTargetMinutes(config.members, config.myAccountId)
+  const targetSeconds = targetMinutes * 60
+  const remaining = targetSeconds - totalSeconds
+
+  // Lối tắt log-bù. Chỉ hiện khi nó THẬT SỰ có ích, ngoài ra không render gì —
+  // không placeholder, không hint xám:
+  //  • ngày ĐÃ QUA (không phải hôm nay: một ngày đang diễn ra mà chưa đủ giờ là
+  //    bình thường, nhắc mỗi ngày là dạy người dùng phớt lờ; không phải tương lai),
+  //  • không phải cuối tuần, không phải ngày đã đánh dấu nghỉ,
+  //  • và còn thiếu thật.
+  // `today` lấy từ timezone của profile Jira, không phải của máy.
+  const myDaysOff = config.daysOff[config.myAccountId] ?? []
+  const isPastWorkday =
+    date !== '' && date < today && !isWeekend(date) && !myDaysOff.includes(date)
+  const shortfall = isPastWorkday && !loadingDay
+    ? dayShortfall({
+        entries, targetMinutes,
+        workdayStartMinutes: parseHhMm(config.workdayStart),
+        dayEndMinutes, breaks,
+      })
+    : null
+  const canFill = shortfall !== null && shortfall.fillMinutes > 0
+
+  // Prefill, KHÔNG submit: người dùng vẫn phải chọn issue rồi bấm Log. Ghi
+  // worklog bằng một cú bấm khi chưa chọn issue là việc app này không làm.
+  const fillShortfall = () => {
+    if (!shortfall || shortfall.fillMinutes <= 0) return
+    setStartMinutes(nextFreeStart(
+      entries, parseHhMm(config.workdayStart), config.slotMinutes, dayEndMinutes, breaks,
+    ))
+    setDurationInput(formatDuration(shortfall.fillMinutes * 60))
+  }
 
   return (
     <div style={{ padding: space.x3, display: 'grid', gap: space.x3, minWidth: 0 }}>
@@ -279,16 +313,36 @@ export function SidePanel() {
               {formatDuration(totalSeconds)}
             </strong>
             <span style={{ fontSize: fontSize.sm, color: colors.muted }}>
-              / {formatDuration(TARGET_SECONDS)}
+              / {formatDuration(targetSeconds)}
             </span>
             <span style={{ marginLeft: 'auto', fontSize: fontSize.sm, color: colors.muted }}>
               {remaining > 0 ? `còn thiếu ${formatDuration(remaining)}` : 'đã đủ giờ'}
             </span>
           </div>
           <ProgressBar
-            value={totalSeconds} max={TARGET_SECONDS} height={8}
-            label={`Đã log ${formatDuration(totalSeconds)} trên mục tiêu ${formatDuration(TARGET_SECONDS)}`}
+            value={totalSeconds} max={targetSeconds} height={8}
+            label={`Đã log ${formatDuration(totalSeconds)} trên mục tiêu ${formatDuration(targetSeconds)}`}
           />
+
+          {/* Lối tắt log-bù — hành động PHỤ, đi cạnh con số "còn thiếu", không
+              cạnh tranh với nút Log. Bị kẹp thì phải nói ra ngay tại chỗ. */}
+          {canFill && shortfall && (
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: space.x2, flexWrap: 'wrap' }}>
+              <Button
+                variant="secondary" size="sm" onClick={fillShortfall} disabled={busy}
+                title={`Điền sẵn ${formatDuration(shortfall.fillMinutes * 60)} vào ô thời lượng,`
+                  + ' bắt đầu từ khoảng trống kế tiếp — bạn vẫn chọn issue rồi bấm Log'}
+              >
+                Lấp {formatDuration(shortfall.fillMinutes * 60)} vào ngày này
+              </Button>
+              {shortfall.capped && (
+                <span style={{ fontSize: fontSize.xs, color: colors.warning }}>
+                  ngày chỉ còn {formatDuration(shortfall.freeMinutes * 60)} trống
+                  {' '}(thiếu {formatDuration(shortfall.missingMinutes * 60)})
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </Card>
 
