@@ -1,5 +1,5 @@
 // src/ui/dashboard/Dashboard.tsx
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { send, type CoverageLoadResult, type SprintCurrentResult } from '@/sw/messages'
 import type { Config } from '@/core/config-schema'
 import type { Worklog } from '@/core/coverage'
@@ -52,13 +52,23 @@ export function Dashboard() {
     finally { setLoading(false) }
   }, [])
 
+  // Chỉ những field này định nghĩa phạm vi fetch. Đưa cả `config` vào deps sẽ
+  // khiến mọi thay đổi local (ví dụ ngày nghỉ) kích một lần fetch vô ích —
+  // `config/save` trả về `config` với projects/members là mảng mới mỗi lần,
+  // nên phải so theo nội dung (join) chứ không theo tham chiếu mảng.
+  const projectsKey = config?.projects.join(',') ?? ''
+  const accountIdsKey = config?.members.map((m) => m.accountId).join(',') ?? ''
+  const scope = useMemo<Scope | null>(
+    () => config ? { projects: config.projects, from, to, accountIds: config.members.map((m) => m.accountId) } : null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [projectsKey, accountIdsKey, from, to],
+  )
+
   useEffect(() => {
-    if (!config || from === '' || to === '') return
-    void load(config, {
-      projects: config.projects, from, to,
-      accountIds: config.members.map((m) => m.accountId),
-    }, false)
-  }, [config, from, to, load])
+    if (!config || !scope || from === '' || to === '') return
+    void load(config, scope, false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope, load])
 
   const toggleDayOff = async (accountId: string, date: string) => {
     if (!config) return
@@ -107,10 +117,7 @@ export function Dashboard() {
           <FilterBar
             from={from} to={to} preset={preset} sprintRange={sprintRange}
             onChange={(f, t, p) => { setFrom(f); setTo(t); setPreset(p) }}
-            onRefresh={() => void load(config, {
-              projects: config.projects, from, to,
-              accountIds: config.members.map((m) => m.accountId),
-            }, true)}
+            onRefresh={() => scope && void load(config, scope, true)}
             fetchedAt={fetchedAt} stale={stale}
           />
           {stale && (

@@ -91,7 +91,9 @@ export function CoverageTable({ data, onCellClick, onToggleDayOff }: Props) {
           <tr style={{ background: '#eceff1', fontWeight: 700 }}>
             <td style={{ ...td, textAlign: 'left' }}>Tổng</td>
             {data.dates.map((d) => (
-              <td key={d} style={td}>{cellLabel(data.totalPerDay[d] ?? 0)}</td>
+              <td key={d} style={{ ...td, background: isWeekend(d) ? '#e0e4e6' : undefined }}>
+                {cellLabel(data.totalPerDay[d] ?? 0)}
+              </td>
             ))}
             <td style={td}>{hoursLabel(data.grandTotal)}</td>
           </tr>
