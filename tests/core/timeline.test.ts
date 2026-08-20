@@ -1,8 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import {
   parseHhMm, formatMinutes, snapUp, nextFreeStart, lastSlotStart,
-  buildSlots, occupiedBy, findOverlaps, DAY_END_MINUTES, type DayEntry,
+  buildSlots, occupiedBy, findOverlaps, type DayEntry,
 } from '@/core/timeline'
+
+// Giờ tan làm dùng cho các test cũ. Trước đây đây là hằng số DAY_END_MINUTES
+// trong core; giờ giá trị này đến từ config.workdayEnd, nên test tự khai nó.
+const DAY_END = 20 * 60
 
 const entry = (id: string, startMinutes: number, durationMinutes: number): DayEntry =>
   ({ id, issueKey: `CAG-${id}`, startMinutes, durationMinutes })
@@ -27,44 +31,44 @@ describe('snapUp', () => {
 
 describe('nextFreeStart', () => {
   it('ngày trống → workdayStart', () => {
-    expect(nextFreeStart([], 540, 15)).toBe(540)
+    expect(nextFreeStart([], 540, 15, DAY_END)).toBe(540)
   })
 
   it('có worklog → ngay sau worklog cuối, snap lên lưới', () => {
     // 09:00 + 90m = 10:30
-    expect(nextFreeStart([entry('a', 540, 90)], 540, 15)).toBe(630)
+    expect(nextFreeStart([entry('a', 540, 90)], 540, 15, DAY_END)).toBe(630)
   })
 
   it('lấy điểm kết thúc MUỘN NHẤT, không phải entry cuối trong mảng', () => {
     // Mảng không được sắp xếp; entry dài hơn kết thúc muộn hơn.
     const entries = [entry('a', 600, 30), entry('b', 540, 180)]
-    expect(nextFreeStart(entries, 540, 15)).toBe(720) // 09:00 + 3h = 12:00
+    expect(nextFreeStart(entries, 540, 15, DAY_END)).toBe(720) // 09:00 + 3h = 12:00
   })
 
   it('snap lên khi worklog kết thúc lệch lưới', () => {
     // 09:00 + 20m = 09:20 → snap lên 09:30
-    expect(nextFreeStart([entry('a', 540, 20)], 540, 15)).toBe(570)
+    expect(nextFreeStart([entry('a', 540, 20)], 540, 15, DAY_END)).toBe(570)
   })
 
   it('không bao giờ trả về trước workdayStart', () => {
     // Worklog lúc 07:00 xong 07:30, nhưng ngày làm việc bắt đầu 09:00.
-    expect(nextFreeStart([entry('a', 420, 30)], 540, 15)).toBe(540)
+    expect(nextFreeStart([entry('a', 420, 30)], 540, 15, DAY_END)).toBe(540)
   })
 
   it('clamp về slot cuối khi ngày đã kín tới cuối lưới', () => {
     // 09:00 + 10h30 = 19:30 → còn trong lưới.
-    expect(nextFreeStart([entry('a', 540, 630)], 540, 15)).toBe(1170)
+    expect(nextFreeStart([entry('a', 540, 630)], 540, 15, DAY_END)).toBe(1170)
     // 09:00 + 11h = 20:00 → ngoài lưới, phải kẹp về 19:45.
-    expect(nextFreeStart([entry('a', 540, 660)], 540, 15)).toBe(1185)
+    expect(nextFreeStart([entry('a', 540, 660)], 540, 15, DAY_END)).toBe(1185)
     // Qua nửa đêm: không được trả 24:15 (formatStarted sẽ sinh T24:15 và Jira
     // trả 400 không đọc được).
-    expect(nextFreeStart([entry('a', 540, 900)], 540, 15)).toBe(1185)
+    expect(nextFreeStart([entry('a', 540, 900)], 540, 15, DAY_END)).toBe(1185)
   })
 
   it('snap theo lưới tính từ workdayStart, không từ nửa đêm', () => {
     // workdayStart 09:30, slot 60 → lưới 09:30/10:30/…; kết thúc 10:00 phải ra
     // 10:30, không phải 10:00 (10:00 không có trong dropdown).
-    expect(nextFreeStart([entry('a', 570, 30)], 570, 60)).toBe(630)
+    expect(nextFreeStart([entry('a', 570, 30)], 570, 60, DAY_END)).toBe(630)
   })
 
   // INVARIANT: dropdown "Bắt đầu" chỉ có option trong buildSlots(...). Nếu
@@ -80,8 +84,8 @@ describe('nextFreeStart', () => {
       }
     }
     for (const c of cases) {
-      const slots = buildSlots(c.start, DAY_END_MINUTES, c.slot)
-      const got = nextFreeStart(c.entries, c.start, c.slot)
+      const slots = buildSlots(c.start, DAY_END, c.slot)
+      const got = nextFreeStart(c.entries, c.start, c.slot, DAY_END)
       expect(slots, `start=${c.start} slot=${c.slot}`).toContain(got)
     }
   })
@@ -91,15 +95,15 @@ describe('lastSlotStart', () => {
   it('trùng với phần tử cuối của buildSlots', () => {
     for (const start of [480, 540, 555]) {
       for (const slot of [15, 30, 45, 60]) {
-        const slots = buildSlots(start, DAY_END_MINUTES, slot)
-        expect(lastSlotStart(start, slot)).toBe(slots[slots.length - 1])
+        const slots = buildSlots(start, DAY_END, slot)
+        expect(lastSlotStart(start, slot, DAY_END)).toBe(slots[slots.length - 1])
       }
     }
   })
 
   it('lưới rỗng thì trả về chính workdayStart', () => {
     expect(lastSlotStart(1200, 15, 1200)).toBe(1200)
-    expect(lastSlotStart(540, 0)).toBe(540)
+    expect(lastSlotStart(540, 0, DAY_END)).toBe(540)
   })
 })
 
