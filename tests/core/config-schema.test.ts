@@ -31,8 +31,12 @@ describe('migrateConfig', () => {
     expect(c.breaks).toEqual([{ start: '12:00', end: '13:00' }])
   })
 
+  // Các test breaks bên dưới cố tình gắn version: CONFIG_VERSION — chúng kiểm
+  // tra logic PARSE breaks trên một config đã ở v2, tách biệt với việc
+  // ghi đè khi nâng version từ v1 (xem nhóm test "migration v1 → v2" bên dưới).
   it('giữ giờ nghỉ người dùng đã set, kể cả nhiều khoảng', () => {
     const c = migrateConfig({
+      version: CONFIG_VERSION,
       breaks: [{ start: '12:00', end: '13:00' }, { start: '15:00', end: '15:15' }],
     })
     expect(c.breaks).toEqual([
@@ -41,13 +45,14 @@ describe('migrateConfig', () => {
   })
 
   it('breaks = [] là lựa chọn hợp lệ (ngày không có giờ nghỉ), không bị thay bằng default', () => {
-    expect(migrateConfig({ breaks: [] }).breaks).toEqual([])
+    expect(migrateConfig({ version: CONFIG_VERSION, breaks: [] }).breaks).toEqual([])
   })
 
   it('breaks sai kiểu → default; phần tử rác bị bỏ, phần tử tốt được giữ', () => {
-    expect(migrateConfig({ breaks: 'trưa' }).breaks).toEqual(defaultConfig.breaks)
-    expect(migrateConfig({ breaks: {} }).breaks).toEqual(defaultConfig.breaks)
+    expect(migrateConfig({ version: CONFIG_VERSION, breaks: 'trưa' }).breaks).toEqual(defaultConfig.breaks)
+    expect(migrateConfig({ version: CONFIG_VERSION, breaks: {} }).breaks).toEqual(defaultConfig.breaks)
     const c = migrateConfig({
+      version: CONFIG_VERSION,
       breaks: [
         { start: '12:00', end: '13:00' },
         { start: 'trưa', end: '13:00' },   // không phải HH:MM
@@ -60,13 +65,15 @@ describe('migrateConfig', () => {
   })
 
   it('giờ làm việc sai định dạng → default, không để NaN lan xuống', () => {
-    expect(migrateConfig({ workdayStart: 'sáng' }).workdayStart).toBe('08:30')
-    expect(migrateConfig({ workdayStart: '8h30' }).workdayStart).toBe('08:30')
-    expect(migrateConfig({ workdayEnd: '99:99' }).workdayEnd).toBe('18:00')
+    expect(migrateConfig({ version: CONFIG_VERSION, workdayStart: 'sáng' }).workdayStart).toBe('08:30')
+    expect(migrateConfig({ version: CONFIG_VERSION, workdayStart: '8h30' }).workdayStart).toBe('08:30')
+    expect(migrateConfig({ version: CONFIG_VERSION, workdayEnd: '99:99' }).workdayEnd).toBe('18:00')
   })
 
   it('giờ tan làm không sau giờ bắt đầu → về default', () => {
-    expect(migrateConfig({ workdayStart: '09:00', workdayEnd: '08:00' }).workdayEnd).toBe('18:00')
+    const c = migrateConfig({ version: CONFIG_VERSION, workdayStart: '09:00', workdayEnd: '08:00' })
+    expect(c.workdayStart).toBe('09:00')
+    expect(c.workdayEnd).toBe('18:00')
   })
 
   it('điền field thiếu bằng default, không xoá field đã có', () => {
@@ -118,6 +125,48 @@ describe('migrateConfig', () => {
 
   it('default không chứa token', () => {
     expect(defaultConfig.token).toBeUndefined()
+  })
+
+  describe('migration v1 → v2 (giờ làm việc/giờ nghỉ)', () => {
+    it('config v1 (không có version, hoặc version < 2) được nâng lên giờ làm việc mặc định mới', () => {
+      // Mô phỏng config v1 thật: workdayStart cũ '09:00', chưa từng có
+      // workdayEnd/breaks vì hai field này chỉ xuất hiện từ v1 nhưng không có
+      // UI để set — nghĩa là bất kỳ giá trị nào ở đây cũng chỉ có thể là cũ.
+      const c = migrateConfig({ version: 1, workdayStart: '09:00' })
+      expect(c.version).toBe(CONFIG_VERSION)
+      expect(c.workdayStart).toBe('08:30')
+      expect(c.workdayEnd).toBe('18:00')
+      expect(c.breaks).toEqual([{ start: '12:00', end: '13:00' }])
+    })
+
+    it('migration v1 → v2 không đụng vào field khác — projects/members/sprintEvents/daysOff/primaryBoardId nguyên vẹn', () => {
+      const c = migrateConfig({
+        version: 1,
+        workdayStart: '09:00',
+        projects: ['CAG'],
+        primaryBoardId: 42,
+        daysOff: { u1: ['2026-01-01'] },
+        members: [{ accountId: 'u1', displayName: 'A', hoursPerDay: 8, active: true }],
+        sprintEvents: [{ name: 'Daily', issueKey: 'CAG-1', defaultMinutes: 15, comment: '' }],
+      })
+      expect(c.projects).toEqual(['CAG'])
+      expect(c.primaryBoardId).toBe(42)
+      expect(c.daysOff).toEqual({ u1: ['2026-01-01'] })
+      expect(c.members).toEqual([{ accountId: 'u1', displayName: 'A', hoursPerDay: 8, active: true }])
+      expect(c.sprintEvents).toEqual([{ name: 'Daily', issueKey: 'CAG-1', defaultMinutes: 15, comment: '' }])
+    })
+
+    it('config đã ở v2 với giờ làm việc tuỳ chỉnh thì giữ nguyên, không bị ghi đè lại', () => {
+      const c = migrateConfig({
+        version: CONFIG_VERSION,
+        workdayStart: '07:00',
+        workdayEnd: '16:00',
+        breaks: [{ start: '11:30', end: '12:30' }],
+      })
+      expect(c.workdayStart).toBe('07:00')
+      expect(c.workdayEnd).toBe('16:00')
+      expect(c.breaks).toEqual([{ start: '11:30', end: '12:30' }])
+    })
   })
 
   it('dedupe member trùng accountId, giữ bản đầu tiên', () => {

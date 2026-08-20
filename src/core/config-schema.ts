@@ -1,6 +1,9 @@
 import { parseHhMm } from './timeline'
 
-export const CONFIG_VERSION = 1
+// v1 → v2: workdayStart/workdayEnd/breaks được thêm ở v1 nhưng KHÔNG có UI để
+// sửa, nên bất kỳ giá trị nào đã lưu (nếu có) chỉ có thể là default cũ —
+// migrateConfig ghi đè chúng bằng default mới một lần khi nâng version.
+export const CONFIG_VERSION = 2
 
 export type SprintEvent = {
   name: string
@@ -96,6 +99,13 @@ export function migrateConfig(raw: unknown): Config {
   const r = isRecord(raw) ? raw : {}
   const d = defaultConfig
 
+  // version < 2: config này sinh ra trước khi workdayStart/workdayEnd/breaks
+  // có nghĩa thật (chưa từng có UI để người dùng tự sửa ba field này), nên
+  // giá trị đang lưu — nếu có — chắc chắn chỉ là default cũ. Ghi đè, KHÔNG
+  // đọc từ `r` cho ba field đó.
+  const rawVersion = typeof r['version'] === 'number' ? r['version'] : 0
+  const needsWorkdayMigration = rawVersion < 2
+
   const seenAccountIds = new Set<string>()
   const members: ConfigMember[] = (Array.isArray(r['members']) ? r['members'] : [])
     .filter(isRecord)
@@ -126,17 +136,19 @@ export function migrateConfig(raw: unknown): Config {
   // `breaks` sai kiểu → default. Nhưng MẢNG RỖNG được giữ nguyên: đó là lựa
   // chọn hợp lệ "ngày làm việc không có giờ nghỉ", không phải dữ liệu thiếu.
   const breaksRaw = r['breaks']
-  const breaks: BreakInterval[] = Array.isArray(breaksRaw)
-    ? breaksRaw
-        .filter(isRecord)
-        .filter((b) => isHhMm(b['start']) && isHhMm(b['end']))
-        .map((b) => ({ start: b['start'] as string, end: b['end'] as string }))
-        // end <= start là vô nghĩa; normalizeBreaks cũng bỏ, nhưng bỏ sớm ở đây
-        // để config đọc ra không chứa rác.
-        // So sánh bằng PHÚT, không bằng chuỗi: "9:00" hợp lệ về định dạng
-        // nhưng "9:00" > "12:00" nếu so chuỗi.
-        .filter((b) => parseHhMm(b.end) > parseHhMm(b.start))
-    : d.breaks.map((b) => ({ ...b }))
+  const breaks: BreakInterval[] = needsWorkdayMigration
+    ? d.breaks.map((b) => ({ ...b }))
+    : Array.isArray(breaksRaw)
+      ? breaksRaw
+          .filter(isRecord)
+          .filter((b) => isHhMm(b['start']) && isHhMm(b['end']))
+          .map((b) => ({ start: b['start'] as string, end: b['end'] as string }))
+          // end <= start là vô nghĩa; normalizeBreaks cũng bỏ, nhưng bỏ sớm ở đây
+          // để config đọc ra không chứa rác.
+          // So sánh bằng PHÚT, không bằng chuỗi: "9:00" hợp lệ về định dạng
+          // nhưng "9:00" > "12:00" nếu so chuỗi.
+          .filter((b) => parseHhMm(b.end) > parseHhMm(b.start))
+      : d.breaks.map((b) => ({ ...b }))
 
   const daysOffRaw = isRecord(r['daysOff']) ? r['daysOff'] : {}
   const daysOff: Record<string, string[]> = {}
@@ -167,8 +179,10 @@ export function migrateConfig(raw: unknown): Config {
     storyPointsFieldId: typeof spfRaw === 'string' ? spfRaw : null,
     members,
     daysOff,
-    workdayStart: hhMm(r['workdayStart'], d.workdayStart),
-    workdayEnd: workdayEndOf(hhMm(r['workdayStart'], d.workdayStart), r['workdayEnd']),
+    workdayStart: needsWorkdayMigration ? d.workdayStart : hhMm(r['workdayStart'], d.workdayStart),
+    workdayEnd: needsWorkdayMigration
+      ? d.workdayEnd
+      : workdayEndOf(hhMm(r['workdayStart'], d.workdayStart), r['workdayEnd']),
     breaks,
     slotMinutes: num(r['slotMinutes'], d.slotMinutes),
     durationPresets: numArray(r['durationPresets'], d.durationPresets),
