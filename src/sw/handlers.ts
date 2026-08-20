@@ -1,5 +1,5 @@
 import { loadConfig, saveConfig } from '@/store/config'
-import { readSnapshot, writeSnapshot, pruneSnapshots } from '@/store/snapshot'
+import { readSnapshot, writeSnapshot, pruneSnapshots, snapshotMeta } from '@/store/snapshot'
 import { readCeremonyCache, writeCeremonyCache } from '@/store/ceremony'
 import { createClient, type JiraClient } from '@/jira/client'
 import { cookieAuth, tokenAuth } from '@/jira/auth'
@@ -9,6 +9,7 @@ import { normalizeBreaks, splitAroundBreaks } from '@/core/timeline'
 import { resolveSprintEvents, type CeremonyCandidate } from '@/core/event-resolve'
 import type { Config } from '@/core/config-schema'
 import type { Worklog } from '@/core/coverage'
+import type { IssueMetaMap } from '@/core/issue-hierarchy'
 import type {
   Message, AuthProbeResult, DayLoadResult, CoverageLoadResult,
   PointsLoadResult, SprintCurrentResult, WorklogAddResult,
@@ -39,21 +40,25 @@ async function makeClient(config: Config): Promise<JiraClient> {
 // phải thấy CẢ NGÀY của người dùng — worklog trên issue ngoài project (rất
 // thường là issue sprint event) mà bị lọc ra sẽ khiến tổng giờ báo thiếu và
 // nextFreeStart trả về giờ đã có việc mà không hề cảnh báo chồng giờ.
+// Trả kèm `meta` (status + parent của từng issue), lấy từ CÙNG một search đã
+// chạy — không thêm request nào. Nó đi cạnh worklogs chứ không nằm trong Worklog:
+// xem src/core/issue-hierarchy.
 async function fetchWorklogs(
   c: JiraClient,
   projects: string[],
   accountIds: string[],
   from: string,
   to: string,
-): Promise<Worklog[]> {
+): Promise<{ worklogs: Worklog[]; meta: IssueMetaMap }> {
   const issues = await api.searchIssuesWithWorklogs(c, { projects, accountIds, from, to })
   const perIssue = await Promise.all(
     issues.map((i) => api.getIssueWorklogs(c, i.key, i.summary)),
   )
   const wanted = new Set(accountIds)
-  return perIssue
+  const worklogs = perIssue
     .flat()
     .filter((w) => wanted.has(w.authorAccountId) && w.date >= from && w.date <= to)
+  return { worklogs, meta: api.toIssueMetaMap(issues) }
 }
 
 // Xoá các worklog vừa tạo, theo thứ tự NGƯỢC. Trả về id của những cái xoá
@@ -161,8 +166,10 @@ export async function handle(msg: Message): Promise<unknown> {
       }
       const c = await makeClient(config)
       // Không truyền projects: side panel cần cả ngày, không giới hạn project.
-      const worklogs = await fetchWorklogs(c, [], [config.myAccountId], msg.date, msg.date)
-      return { worklogs } satisfies DayLoadResult
+      const { worklogs, meta } = await fetchWorklogs(
+        c, [], [config.myAccountId], msg.date, msg.date,
+      )
+      return { worklogs, meta } satisfies DayLoadResult
     }
 
     case 'worklog/add': {
@@ -347,12 +354,15 @@ export async function handle(msg: Message): Promise<unknown> {
       if (cached && !cached.stale && !msg.force) {
         return {
           worklogs: cached.snapshot.worklogs,
+          // Snapshot cache từ trước tính năng cha/con không có meta → rỗng, và
+          // UI vẽ y như bảng cũ thay vì vỡ.
+          meta: snapshotMeta(cached.snapshot),
           fetchedAt: cached.snapshot.fetchedAt,
           stale: false,
         } satisfies CoverageLoadResult
       }
 
-      let fresh: Worklog[]
+      let fresh: { worklogs: Worklog[]; meta: IssueMetaMap }
       try {
         const c = await makeClient(config)
         fresh = await fetchWorklogs(
@@ -364,6 +374,7 @@ export async function handle(msg: Message): Promise<unknown> {
         if (cached) {
           return {
             worklogs: cached.snapshot.worklogs,
+            meta: snapshotMeta(cached.snapshot),
             fetchedAt: cached.snapshot.fetchedAt,
             stale: true,
           } satisfies CoverageLoadResult
@@ -376,12 +387,14 @@ export async function handle(msg: Message): Promise<unknown> {
       // trả về snapshot cũ hơn. Cache lỗi thì cứ trả dữ liệu tươi.
       const now = Date.now()
       try {
-        await writeSnapshot(msg.scope, fresh, now)
+        await writeSnapshot(msg.scope, fresh.worklogs, now, fresh.meta)
         await pruneSnapshots()
       } catch (e) {
         console.warn('[sw] không ghi được snapshot', e)
       }
-      return { worklogs: fresh, fetchedAt: now, stale: false } satisfies CoverageLoadResult
+      return {
+        worklogs: fresh.worklogs, meta: fresh.meta, fetchedAt: now, stale: false,
+      } satisfies CoverageLoadResult
     }
 
     case 'points/load': {
@@ -391,9 +404,13 @@ export async function handle(msg: Message): Promise<unknown> {
       }
       const c = await makeClient(config)
       const sprint = await api.getActiveSprint(c, config.primaryBoardId)
-      if (!sprint) return { sprintName: '', issues: [] } satisfies PointsLoadResult
-      const issues = await api.getSprintIssues(c, sprint.id, config.storyPointsFieldId)
-      return { sprintName: sprint.name, issues } satisfies PointsLoadResult
+      if (!sprint) {
+        return { sprintName: '', issues: [], meta: {} } satisfies PointsLoadResult
+      }
+      const { issues, meta } = await api.getSprintIssues(
+        c, sprint.id, config.storyPointsFieldId,
+      )
+      return { sprintName: sprint.name, issues, meta } satisfies PointsLoadResult
     }
 
     case 'dashboard/open': {

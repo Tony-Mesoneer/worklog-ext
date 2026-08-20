@@ -1,6 +1,7 @@
 import type { Config } from '@/core/config-schema'
 import type { Worklog } from '@/core/coverage'
 import type { ResolvedSprintEvent } from '@/core/event-resolve'
+import type { IssueMeta, IssueMetaMap } from '@/core/issue-hierarchy'
 import type { SprintIssue } from '@/core/points'
 import type { Scope } from '@/core/snapshot-key'
 
@@ -42,9 +43,25 @@ export type AuthProbeResult = {
 // Trả về mảng id (theo thứ tự thời gian) để undo xoá được hết.
 export type WorklogAddResult = { ids: string[] }
 
-export type DayLoadResult = { worklogs: Worklog[] }
-export type CoverageLoadResult = { worklogs: Worklog[]; fetchedAt: number; stale: boolean }
-export type PointsLoadResult = { sprintName: string; issues: SprintIssue[] }
+// `meta` đi CẠNH worklogs, không nằm trong Worklog: xem src/core/issue-hierarchy.
+// Khoá theo issue key, và issue nào không có trong map thì UI coi là "chưa biết"
+// — snapshot cache từ trước thay đổi này đơn giản trả về map rỗng.
+export type DayLoadResult = { worklogs: Worklog[]; meta: IssueMetaMap }
+export type CoverageLoadResult = {
+  worklogs: Worklog[]
+  meta: IssueMetaMap
+  fetchedAt: number
+  stale: boolean
+}
+export type PointsLoadResult = {
+  sprintName: string
+  issues: SprintIssue[]
+  meta: IssueMetaMap
+}
+// Danh sách "issue của tôi trong sprint" mang đủ status + parent, vì nó đi qua
+// /search/jql. Đường GÕ TÌM (`issues/pick`) dùng /issue/picker và chỉ có key +
+// summary — bất đối xứng CÓ CHỦ Ý, xem IssuePicker.
+export type IssuesMineResult = IssueMeta[]
 export type SprintCurrentResult = { name: string; from: string; to: string } | null
 
 // `events` song song với config.sprintEvents (cùng thứ tự, cùng độ dài).

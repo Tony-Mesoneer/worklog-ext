@@ -3,8 +3,19 @@ import {
   SNAPSHOT_TTL_MS, SNAPSHOT_MAX_KEYS, type Scope,
 } from '@/core/snapshot-key'
 import type { Worklog } from '@/core/coverage'
+import type { IssueMetaMap } from '@/core/issue-hierarchy'
 
-export type Snapshot = { fetchedAt: number; worklogs: Worklog[] }
+// `meta` OPTIONAL có chủ ý: snapshot đã nằm trong storage.local từ trước khi có
+// tính năng cha/con không có field này, và một cache cũ phải đọc được chứ không
+// được làm cả dashboard vỡ. Thiếu = rỗng (xem snapshotMeta).
+export type Snapshot = {
+  fetchedAt: number
+  worklogs: Worklog[]
+  meta?: IssueMetaMap
+}
+
+/** Map metadata của một snapshot; snapshot cũ (không có field) → rỗng. */
+export const snapshotMeta = (s: Snapshot): IssueMetaMap => s.meta ?? {}
 
 export async function readSnapshot(
   scope: Scope,
@@ -17,10 +28,10 @@ export async function readSnapshot(
 }
 
 export async function writeSnapshot(
-  scope: Scope, worklogs: Worklog[], now: number,
+  scope: Scope, worklogs: Worklog[], now: number, meta: IssueMetaMap = {},
 ): Promise<void> {
   await chrome.storage.local.set({
-    [snapshotKey(scope)]: { fetchedAt: now, worklogs } satisfies Snapshot,
+    [snapshotKey(scope)]: { fetchedAt: now, worklogs, meta } satisfies Snapshot,
   })
 }
 
@@ -39,6 +50,8 @@ export async function patchSnapshot(
   await chrome.storage.local.set({
     [snapshotKey(scope)]: {
       fetchedAt: existing.snapshot.fetchedAt, worklogs,
+      // Giữ nguyên meta: patch chỉ thêm/bớt worklog, không biết gì mới về issue.
+      meta: snapshotMeta(existing.snapshot),
     } satisfies Snapshot,
   })
 }
