@@ -413,9 +413,34 @@ describe('searchSprintSubtasks', () => {
     const jql = (calls[0]!.body as { jql: string }).jql
     expect(jql).not.toContain('summary ~')
     expect(out).toEqual([
-      { key: 'CAG-3065', summary: 'Daily Scrum' },
-      { key: 'CAG-3067', summary: 'Sprint Retro' },
+      flatMeta('CAG-3065', 'Daily Scrum'),
+      flatMeta('CAG-3067', 'Sprint Retro'),
     ])
+  })
+
+  it('mang theo task CHA — dropdown Options cần nó để phân biệt sub-task trùng tên', async () => {
+    const { client, calls } = fakeClient({
+      'POST /rest/api/3/search/jql': {
+        issues: [
+          {
+            key: 'CAG-3078',
+            fields: {
+              summary: 'Security Review',
+              parent: { key: 'CAG-2727', fields: { summary: 'SCIM user sync hardening' } },
+              issuetype: { subtask: true },
+            },
+          },
+        ],
+      },
+    })
+    const out = await searchSprintSubtasks(client, { projects: ['CAG'] })
+    expect((calls[0]!.body as { fields: string[] }).fields).toContain('parent')
+    expect(out[0]).toEqual({
+      key: 'CAG-3078', summary: 'Security Review',
+      statusName: '', statusCategory: 'new',
+      parentKey: 'CAG-2727', parentSummary: 'SCIM user sync hardening',
+      isSubtask: true,
+    })
   })
 
   it('bỏ summary rỗng thay vì sinh `summary ~ ""`', async () => {

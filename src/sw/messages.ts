@@ -23,6 +23,8 @@ export type Message =
   | { type: 'events/resolve'; force: boolean }
   // Danh sách sub-task trong sprint đang mở — nguồn cho dropdown ở Options, để
   // người dùng CHỌN tên chứ không gõ tay (một lỗi chính tả = nút chết im lặng).
+  // Mang theo cả `parent`: nhiều sub-task trong cùng sprint có thể TRÙNG TÊN
+  // ("Security Review" mỗi story một cái), và cha là thứ duy nhất phân biệt.
   | { type: 'ceremonies/list' }
   | { type: 'coverage/load'; scope: Scope; force: boolean }
   | { type: 'points/load' }
@@ -70,7 +72,9 @@ export type EventsResolveResult = {
   sprintName: string
   events: ResolvedSprintEvent[]
 }
-export type CeremoniesListResult = { key: string; summary: string }[]
+// Dùng lại IssueMeta thay vì một type riêng: nó đã mang parentKey/parentSummary,
+// và `parent` nằm sẵn trong field list của search sub-task.
+export type CeremoniesListResult = IssueMeta[]
 
 // Lỗi mang theo HTTP status. Không có nó thì UI không phân biệt được 401/403
 // (cần banner "session hết hạn" + link Options theo spec §13) với lỗi thường.

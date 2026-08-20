@@ -286,9 +286,14 @@ const jqlString = (s: string): string => `"${s.replace(/\\/g, '\\\\').replace(/"
 // tên chính xác nằm ở core/event-resolve, KHÔNG ở đây.
 //
 // `summaries` rỗng → lấy toàn bộ sub-task trong sprint đang mở (dropdown Options).
+//
+// Trả IssueMeta (chứ không chỉ key + summary) vì `parent` đi kèm KHÔNG tốn
+// request nào thêm — nó chỉ là một field nữa trong search vốn đã chạy — và
+// dropdown ở Options cần tên cha để phân biệt các sub-task trùng tên. Đường
+// tra ceremony vẫn chỉ dùng key + summary.
 export async function searchSprintSubtasks(
   c: JiraClient, args: { projects: string[]; summaries?: string[] },
-): Promise<{ key: string; summary: string }[]> {
+): Promise<IssueMeta[]> {
   const clauses = ['issuetype = Sub-task', 'sprint in openSprints()']
   if (args.projects.length > 0) {
     clauses.push(`project in (${args.projects.map((p) => jqlString(p)).join(',')})`)
@@ -300,13 +305,13 @@ export async function searchSprintSubtasks(
   const jql = `${clauses.join(' AND ')} ORDER BY summary ASC`
 
   const res = await c.call<{
-    issues: { key: string; fields: { summary: string } }[]
+    issues: { key: string; fields: IssueFields }[]
   }>({
     method: 'POST',
     path: '/rest/api/3/search/jql',
-    body: { jql, fields: ['summary'], maxResults: 100 },
+    body: { jql, fields: [...ISSUE_META_FIELDS], maxResults: 100 },
   })
-  return res.issues.map((i) => ({ key: i.key, summary: i.fields.summary }))
+  return res.issues.map((i) => toIssueMeta(i.key, i.fields))
 }
 
 // Lọc ra những key thuộc đúng một sprint. Chỉ cần khi có NHIỀU sprint đang mở:

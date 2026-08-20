@@ -2,6 +2,10 @@ import { useEffect, useId, useState } from 'react'
 import type { ReactNode } from 'react'
 import { send, type AuthProbeResult, type CeremoniesListResult } from '@/sw/messages'
 import type { Config, ConfigMember, SprintEvent } from '@/core/config-schema'
+import {
+  buildCeremonyOptions, summaryCounts, type CeremonyOption,
+} from '@/core/ceremony-options'
+import { normalizeSummary } from '@/core/event-resolve'
 import { Banner } from '@/ui/shared/Banner'
 import { Button } from '@/ui/shared/Button'
 import { Card } from '@/ui/shared/Card'
@@ -536,21 +540,72 @@ function IssueKeyCell({ value, canClear, label, onCommit }: {
   )
 }
 
+// Dấu hiệu "không chọn được" đứng NGAY SAU tên, trước tên cha: option bị cắt
+// theo bề rộng dropdown, và phần bị cắt phải là tên cha (thông tin phụ) chứ
+// không phải lý do bị khoá.
+const dupLabel = (o: CeremonyOption) =>
+  `${o.value} · trùng tên (${o.duplicateCount} sub-task), không chọn được` +
+  (o.parentLabel === null ? '' : ` — ${o.parentLabel}`)
+
+// Dòng chọn hiện TÊN + CHA, vì trong sprint thật có nhiều sub-task trùng tên
+// ("Security Review" mỗi story một cái) và tên cha là thứ duy nhất phân biệt.
+// Tên bị trùng thì KHOÁ luôn: chọn nó không bao giờ tra được issue (xem
+// core/ceremony-options), nên mời người dùng chọn là mời họ vào một cái bẫy.
+// Không ẨN nó đi — người dùng đang đi tìm đúng cái tên đó và phải hiểu vì sao
+// không chọn được.
 function SubtaskSelect({ value, options, label, onChange }: {
   value: string
-  options: string[]
+  options: CeremonyOption[]
   label: string
   onChange: (next: string) => void
 }) {
+  // Tên ĐANG LƯU mà không có option dùng được nào mang giá trị đó vẫn phải là
+  // một option, không thì <select> tự nhảy về "dùng issue key" và ghi đè cấu
+  // hình đang có. Nói rõ nó đang ở tình trạng nào thay vì hiện tên trơ trọi.
+  const saved = value.trim()
+  const usableMatch = options.some((o) => o.usable && o.value === saved)
+  const dupMatch = options.find((o) => !o.usable && o.value === saved)
+  const savedNote = dupMatch !== undefined
+    ? `${saved} — đang lưu, trùng tên trong sprint`
+    : `${saved} — đang lưu, không có trong sprint đang mở`
+
   return (
     <select
-      value={value} style={{ width: '100%', maxWidth: 240 }}
+      value={saved} style={{ width: '100%', maxWidth: 320 }}
       aria-label={label}
       onChange={(e) => onChange(e.target.value)}
     >
       <option value="">{NO_MATCH}</option>
-      {options.map((o) => <option key={o} value={o}>{o}</option>)}
+      {saved !== '' && !usableMatch && (
+        <option value={saved}>{savedNote}</option>
+      )}
+      {options.map((o) => (
+        <option key={o.issueKey} value={o.value} disabled={!o.usable}>
+          {o.usable ? o.label : dupLabel(o)}
+        </option>
+      ))}
     </select>
+  )
+}
+
+// Cảnh báo tại chỗ cho cấu hình ĐÃ LƯU đã trở thành nhập nhằng. Side panel đã
+// nói lý do nút bị khoá, nhưng Options là nơi SỬA được, nên nó phải nói ở đây
+// nữa — không thì người dùng chỉ biết có chuyện khi bấm nút và thấy nút xám.
+function AmbiguousNote({ summary, count }: { summary: string; count: number }) {
+  return (
+    <p
+      // maxWidth khớp với <select> ở trên, và whiteSpace ghi đè `nowrap` của
+      // .wl-table: thiếu một trong hai thì dòng cảnh báo tự nong cột này ra và
+      // đẩy các cột còn lại (issue key, phút, comment) ra ngoài vùng cuộn.
+      style={{
+        margin: `${space.x1}px 0 0`, maxWidth: 320, whiteSpace: 'normal',
+        fontSize: fontSize.sm, color: colors.warning, lineHeight: 1.45,
+      }}
+    >
+      Có {count} sub-task tên “{summary}” trong sprint đang mở — extension không
+      phân biệt được cái nào, nên nút trong side panel bị khoá. Nhập issue key ở
+      cột bên cạnh để ghim đúng một issue.
+    </p>
   )
 }
 
@@ -577,12 +632,10 @@ function EventsSection({ config, save }: SectionProps) {
     return () => { cancelled = true }
   }, [config.projects.join(','), config.primaryBoardId])
 
-  // Tên đã lưu mà không có trong danh sách vẫn phải là một option, không thì
-  // <select> tự nhảy về "dùng issue key" và ghi đè cấu hình đang đúng.
-  const options = [...new Set([
-    ...subtasks.map((t) => t.summary),
-    ...config.sprintEvents.map((e) => e.matchSummary).filter((x) => x !== ''),
-  ])].sort((a, b) => a.localeCompare(b))
+  // Một dòng cho MỖI sub-task (kèm cha), và tên trùng bị đánh dấu không dùng
+  // được. Logic thuần nằm ở core/ceremony-options — ở đây chỉ còn hiển thị.
+  const options = buildCeremonyOptions(subtasks)
+  const dupCounts = summaryCounts(subtasks)
 
   // Danh tính của một event là issueKey HOẶC matchSummary. Patch nào làm mất
   // cả hai đều bị bỏ: migrateConfig sẽ xoá dòng đó và nó biến mất giữa lúc sửa.
@@ -624,6 +677,12 @@ function EventsSection({ config, save }: SectionProps) {
           còn ghi giờ vào sprint cũ. Chỉ nhập <em>issue key</em> khi muốn ghim cứng
           một issue.
         </Hint>
+        <Hint>
+          Mỗi dòng trong danh sách hiện <em>tên sub-task — task cha</em> để phân biệt
+          các sub-task trùng tên. Tên nào bị <em>nhiều</em> sub-task dùng trong cùng
+          sprint thì bị khoá: extension khớp theo tên chính xác nên không thể biết
+          chọn cái nào. Muốn dùng đúng một trong số đó thì nhập <em>issue key</em>.
+        </Hint>
 
         {loading && <Hint>Đang tải sub-task của sprint đang mở…</Hint>}
         {loadError !== null && (
@@ -654,6 +713,9 @@ function EventsSection({ config, save }: SectionProps) {
             <tbody>
               {config.sprintEvents.map((ev, i) => {
                 const id = ev.matchSummary !== '' ? ev.matchSummary : ev.issueKey
+                // Cấu hình ĐÃ LƯU có thể vừa trở thành nhập nhằng (sprint mới
+                // sinh thêm sub-task cùng tên) — phải nói ngay tại dòng đó.
+                const ambiguousCount = dupCounts.get(normalizeSummary(ev.matchSummary)) ?? 0
                 return (
                   <tr key={`${id}#${i}`}>
                     <th scope="row" style={{ textAlign: 'left', fontWeight: 400 }}>
@@ -669,6 +731,9 @@ function EventsSection({ config, save }: SectionProps) {
                         label={`Sub-task của ${id}`}
                         onChange={(next) => update(i, { matchSummary: next })}
                       />
+                      {ambiguousCount > 1 && (
+                        <AmbiguousNote summary={ev.matchSummary.trim()} count={ambiguousCount} />
+                      )}
                     </td>
                     <td style={{ textAlign: 'left' }}>
                       <IssueKeyCell
