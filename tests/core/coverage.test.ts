@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  enumerateDates, isWeekend, buildCoverage,
+  enumerateDates, isWeekend, buildCoverage, isShortHours,
   type Worklog, type Member,
 } from '@/core/coverage'
 
@@ -321,5 +321,79 @@ describe('buildCoverage — capacity tới hôm nay', () => {
       worklogs: [], members: [member('u1')], dates, daysOff: {}, today: '2026-09-30',
     })
     expect(table.rows[0]!.capacityToDateSeconds).toBe(10 * 8 * H)
+  })
+
+  // --- ngưỡng "thiếu giờ" ---------------------------------------------------
+  // Capacity đếm tới HẾT hôm nay, nên hôm nay luôn tính trọn một ngày: lúc 9h
+  // sáng ai cũng đang hụt gần đủ một ngày. Cờ chỉ bật khi hụt HƠN một ngày làm
+  // việc của chính member đó. Số hiển thị không đổi, chỉ cờ đổi nghĩa.
+  it('hụt đúng một ngày làm việc: KHÔNG bị gắn cờ thiếu giờ', () => {
+    // capacity tới hôm nay = 5 × 8h = 40h, đã log 32h → hụt đúng 8h.
+    const table = buildCoverage({
+      worklogs: [
+        ...['2026-08-17', '2026-08-18', '2026-08-19', '2026-08-20'].map((d) => wl('u1', d, 8)),
+      ],
+      members: [member('u1')], dates, daysOff: {}, today: '2026-08-21',
+    })
+    const row = table.rows[0]!
+    expect(row.capacityToDateSeconds - row.total).toBe(8 * H)
+    expect(isShortHours(row)).toBe(false)
+    expect(row.status).toBe('ok')
+  })
+
+  it('hụt hơn một ngày làm việc: bị gắn cờ thiếu giờ', () => {
+    const table = buildCoverage({
+      worklogs: [
+        ...['2026-08-17', '2026-08-18', '2026-08-19'].map((d) => wl('u1', d, 8)),
+        wl('u1', '2026-08-20', 7),
+      ],
+      members: [member('u1')], dates, daysOff: {}, today: '2026-08-21',
+    })
+    const row = table.rows[0]!
+    expect(row.capacityToDateSeconds - row.total).toBe(9 * H)
+    expect(isShortHours(row)).toBe(true)
+    expect(row.status).toBe('under')
+  })
+
+  it('member part-time: ngưỡng là ngày làm việc NGẮN của chính họ', () => {
+    // 4h/ngày → capacity tới hôm nay 20h. Hụt 4h là đúng một ngày (không cờ),
+    // hụt 5h là hơn một ngày (có cờ) — trong khi cùng con số 5h thì người
+    // full-time vẫn chưa bị gắn cờ.
+    const exact = buildCoverage({
+      worklogs: [wl('u1', '2026-08-17', 16)],
+      members: [member('u1', 4)], dates, daysOff: {}, today: '2026-08-21',
+    })
+    expect(isShortHours(exact.rows[0]!)).toBe(false)
+
+    const over = buildCoverage({
+      worklogs: [wl('u1', '2026-08-17', 15)],
+      members: [member('u1', 4)], dates, daysOff: {}, today: '2026-08-21',
+    })
+    expect(over.rows[0]!.capacityToDateSeconds - over.rows[0]!.total).toBe(5 * H)
+    expect(isShortHours(over.rows[0]!)).toBe(true)
+
+    const fullTime = buildCoverage({
+      worklogs: [wl('u1', '2026-08-17', 35)],
+      members: [member('u1', 8)], dates, daysOff: {}, today: '2026-08-21',
+    })
+    expect(fullTime.rows[0]!.capacityToDateSeconds - fullTime.rows[0]!.total).toBe(5 * H)
+    expect(isShortHours(fullTime.rows[0]!)).toBe(false)
+  })
+
+  it('chưa log gì: vẫn empty, và vẫn bị coi là thiếu giờ', () => {
+    // 'empty' là một SỰ KIỆN riêng, không phải mức nhẹ hơn của 'under': hàng
+    // tóm tắt đếm nó vào "thiếu giờ" vì hụt cả 40h thì rõ ràng là quá một ngày.
+    const table = buildCoverage({
+      worklogs: [], members: [member('u1')], dates, daysOff: {}, today: '2026-08-21',
+    })
+    expect(table.rows[0]!.status).toBe('empty')
+    expect(isShortHours(table.rows[0]!)).toBe(true)
+  })
+
+  it('member inactive không bao giờ bị gắn cờ thiếu giờ', () => {
+    const table = buildCoverage({
+      worklogs: [], members: [member('u1', 8, false)], dates, daysOff: {}, today: '2026-08-21',
+    })
+    expect(isShortHours(table.rows[0]!)).toBe(false)
   })
 })

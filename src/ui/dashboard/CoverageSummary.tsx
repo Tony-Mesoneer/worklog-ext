@@ -6,6 +6,7 @@
 // MỌI số ở đây suy ra từ CoverageTable đã có trong bộ nhớ (grandTotal, capacity
 // và total từng row). Không thêm request nào.
 import type { CoverageTable } from '@/core/coverage'
+import { isShortHours } from '@/core/coverage'
 import { ProgressBar } from '@/ui/shared/ProgressBar'
 import { hoursLabel, percentLabel } from '@/ui/shared/format'
 import { colors, fontSize, space } from '@/ui/shared/theme'
@@ -42,10 +43,12 @@ export function CoverageSummary({ data }: Props) {
   const capacity = data.capacityToDateSeconds
   const capacityFull = data.capacityFullRangeSeconds
   const cut = capacity !== capacityFull
-  // "Thiếu giờ" = có capacity TỚI HÔM NAY mà log dưới mức đó. Member inactive,
-  // và cả khoảng ngày nằm hoàn toàn ở tương lai, đều có capacity 0 nên không
-  // bao giờ bị tính là thiếu — chưa tới ngày nào thì chưa có gì để log.
-  const short = data.rows.filter((r) => r.capacityToDateSeconds > 0 && r.total < r.capacityToDateSeconds)
+  // "Thiếu giờ" = hụt HƠN MỘT NGÀY LÀM VIỆC của chính member đó so với capacity
+  // tới hôm nay (luật ở core/coverage.ts: isShortHours). Hụt đúng-hoặc-dưới một
+  // ngày không được gắn cờ, vì hôm nay luôn được đếm trọn một ngày nên lúc 9h
+  // sáng ai cũng đang hụt gần một ngày. Member inactive và khoảng ngày chưa tới
+  // có capacity 0 nên không bao giờ bị tính là thiếu.
+  const short = data.rows.filter(isShortHours)
   const noneLogged = data.rows.filter((r) => r.capacityToDateSeconds > 0 && r.total === 0)
 
   return (

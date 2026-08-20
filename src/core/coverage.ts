@@ -65,6 +65,33 @@ export type CoverageTable = {
   capacityFullRangeSeconds: number
 }
 
+/**
+ * "Thiếu giờ" theo nghĩa ĐÁNG ĐỂ HÀNH ĐỘNG: hụt hơn MỘT NGÀY LÀM VIỆC của chính
+ * member đó so với capacity tới hôm nay.
+ *
+ * Tại sao có ngưỡng: capacity đếm tới HẾT hôm nay, nên hôm nay luôn được tính
+ * trọn một ngày. Lúc 9h sáng thì mọi người về mặt cấu trúc đều đang hụt gần đủ
+ * một ngày, và cờ "THIẾU GIỜ" đọc ra N/N mỗi buổi sáng — đúng cái kiểu báo động
+ * giả mà lần thay đổi trước vừa dẹp, chỉ là rộng một ngày.
+ *
+ * Tại sao KHÔNG cắt hôm nay ra khỏi capacity thay vì đặt ngưỡng: giờ log của
+ * hôm nay nằm ở TỬ SỐ. Bỏ hôm nay khỏi mẫu số sẽ cho coverage vượt 100% và đọc
+ * ra như một lỗi. Mọi con số hiển thị giữ nguyên, chỉ CỜ đổi nghĩa.
+ *
+ * Ngưỡng là `hoursPerDay` của chính member: người làm nửa ngày có ngưỡng nửa
+ * ngày, không thì họ luôn bị gắn cờ trễ hơn người full-time.
+ *
+ * capacityToDate = 0 (member inactive, hoặc khoảng ngày chưa tới) → hiệu số âm
+ * → không bao giờ bị gắn cờ, không cần trường hợp riêng.
+ */
+export function isShortHours(row: CoverageRow): boolean {
+  return shortBeyondOneDay(row.total, row.capacityToDateSeconds, row.member.hoursPerDay)
+}
+
+const shortBeyondOneDay = (
+  total: number, capacityToDateSeconds: number, hoursPerDay: number,
+): boolean => capacityToDateSeconds - total > hoursPerDay * 3600
+
 export function enumerateDates(from: string, to: string): string[] {
   const out: string[] = []
   let d = from
@@ -162,8 +189,15 @@ export function buildCoverage(args: {
     //
     // Log giờ trong khi capacityToDate = 0 (làm vào ngày nghỉ) → 'ok': không
     // trừ ra số âm, không tạo tỉ lệ > 100% để rồi đọc như lỗi.
+    //
+    // 'under' dùng ngưỡng một ngày làm việc (xem isShortHours): hụt đúng một
+    // ngày KHÔNG bị gắn cờ, hụt hơn một ngày thì có.
     const status: CoverageRow['status'] =
-      total === 0 ? 'empty' : total < capacityToDateSeconds ? 'under' : 'ok'
+      total === 0
+        ? 'empty'
+        : shortBeyondOneDay(total, capacityToDateSeconds, m.hoursPerDay)
+          ? 'under'
+          : 'ok'
 
     return {
       member: m,
