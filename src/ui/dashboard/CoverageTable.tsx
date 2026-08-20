@@ -9,7 +9,7 @@ import { StatusBadge } from '@/ui/shared/StatusBadge'
 import { formatDuration } from '@/core/duration'
 import { ProgressBar } from '@/ui/shared/ProgressBar'
 import { cellLabel, dayMonthLabel, hoursLabel } from '@/ui/shared/format'
-import { colors, space, table as tableColors } from '@/ui/shared/theme'
+import { colors, table as tableColors } from '@/ui/shared/theme'
 
 type Props = {
   data: Data
@@ -42,6 +42,7 @@ const INDENT_CHILD = 46
 // đậm, không ở cấu trúc.
 function IssueRow({
   row, dates, off, indent, meta, isGroupHeader = false, subtask = false,
+  ownOfParent = false,
 }: {
   row: CoverageIssueRow
   dates: string[]
@@ -50,6 +51,12 @@ function IssueRow({
   meta: IssueMeta | undefined
   isGroupHeader?: boolean
   subtask?: boolean
+  /**
+   * Hàng con này chính là issue CHA (cha cũng được log giờ trực tiếp). Dòng
+   * nhóm phía trên đã là TỔNG, nên nhắc lại key + summary + badge ở đây đọc ra
+   * như dữ liệu bị lặp hai lần; chỉ ghi rõ đây là phần giờ ghi thẳng trên cha.
+   */
+  ownOfParent?: boolean
 }) {
   return (
     <tr className="wl-row--sub">
@@ -61,15 +68,27 @@ function IssueRow({
           position: 'sticky', left: 0, background: colors.bg, zIndex: 1,
         }}
       >
-        <span style={{ display: 'inline-flex', gap: space.x2, alignItems: 'baseline', minWidth: 0 }}>
-          {/* Ký tự ↳ nói "đây là con của dòng trên" ngay cả khi cột bị cuộn
-              ngang tới mức thụt lề không còn thấy được. */}
-          <strong style={{ color: isGroupHeader ? colors.text : undefined }}>
-            {subtask ? '↳ ' : ''}{row.issueKey}
-          </strong>
-          {meta && <StatusBadge name={meta.statusName} category={meta.statusCategory} />}
-          <span>{row.issueSummary}</span>
-        </span>
+        {/* Nội dung chảy theo dòng chữ bình thường (không flex): ở viewport hẹp
+            cột này phải WRAP như trước, còn flex thì cắt key giữa từ và làm
+            hàng cao gấp mấy lần. Chỉ key được giữ nowrap. */}
+        <strong
+          style={{ whiteSpace: 'nowrap', color: isGroupHeader ? colors.text : undefined }}
+        >
+          {subtask ? '↳ ' : ''}{row.issueKey}
+        </strong>
+        {ownOfParent ? (
+          <> giờ ghi trực tiếp trên issue cha</>
+        ) : (
+          <>
+            {meta && (
+              <>
+                {' '}
+                <StatusBadge name={meta.statusName} category={meta.statusCategory} />
+              </>
+            )}
+            {' '}{row.issueSummary}
+          </>
+        )}
       </th>
       {dates.map((d) => (
         <td key={d} className="wl-table__num" style={dayCellStyle(d, off.has(d))}>
@@ -237,6 +256,7 @@ export function CoverageTable({ data, meta, daysOff, onCellClick, onToggleDayOff
                           key={`${rowKey}-${child.issueKey}`} row={child}
                           dates={data.dates} off={off} indent={INDENT_CHILD}
                           meta={meta[child.issueKey]} subtask
+                          ownOfParent={child.issueKey === group.key}
                         />
                       ))}
                     </Fragment>
