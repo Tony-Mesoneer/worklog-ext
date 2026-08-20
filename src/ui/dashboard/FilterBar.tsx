@@ -15,6 +15,14 @@ type Props = {
   // (mondayOf của một Chủ nhật lùi 6 ngày) và "Tháng này" kết thúc ở một ngày
   // trong quá khứ.
   today: string
+  /**
+   * Các project key CÓ THỂ chọn: hợp của `config.projects` và những project
+   * thật sự xuất hiện trong dữ liệu. Rỗng → không vẽ ô lọc.
+   */
+  projectOptions: string[]
+  /** '' = tất cả project. Đây là mặc định: lọc là TUỲ CHỌN, không phải cổng. */
+  project: string
+  onProjectChange: (project: string) => void
   onChange: (from: string, to: string, preset: Preset) => void
   onRefresh: () => void
   fetchedAt: number | null
@@ -33,6 +41,7 @@ export function FilterBar(p: Props) {
   const today = p.today
   const fromId = useId()
   const toId = useId()
+  const projectId = useId()
 
   const apply = (preset: Preset) => {
     if (preset === 'sprint' && p.sprintRange) {
@@ -86,6 +95,24 @@ export function FilterBar(p: Props) {
           />
         </div>
       </div>
+
+      {/* Lọc theo project là THU HẸP tuỳ chọn, không phải phạm vi fetch: dữ
+          liệu luôn được lấy cho mọi project mà team đã log, ô này chỉ để lead
+          tập trung vào một project khi muốn. Mặc định "Tất cả". */}
+      {p.projectOptions.length > 0 && (
+        <div className="wl-field">
+          <label className="wl-field__label" htmlFor={projectId}>Project</label>
+          <select
+            id={projectId} value={p.project}
+            onChange={(e) => p.onProjectChange(e.target.value)}
+          >
+            <option value="">Tất cả project</option>
+            {p.projectOptions.map((key) => (
+              <option key={key} value={key}>{key}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <div style={{ marginLeft: 'auto', display: 'flex', gap: space.x2, alignItems: 'center' }}>
         {p.fetchedAt !== null && (

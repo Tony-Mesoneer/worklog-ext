@@ -31,6 +31,10 @@ export function Dashboard() {
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [preset, setPreset] = useState<Preset>('thisWeek')
+  // '' = tất cả project. `config.projects` KHÔNG còn là cổng chặn dữ liệu (query
+  // không lọc theo project nữa) — nó chỉ là gợi ý cho ô lọc này, và mặc định
+  // vẫn là "tất cả": một worklog trên project khác phải được ĐẾM, không bị ẩn.
+  const [project, setProject] = useState('')
   const [sprintRange, setSprintRange] = useState<SprintCurrentResult>(null)
   // null = CHƯA từng có dữ liệu. Phân biệt với [] (Jira trả về rỗng thật) là
   // bắt buộc: nếu load đầu tiên lỗi mà ta vẫn render bảng với [], cả team bị
@@ -89,12 +93,13 @@ export function Dashboard() {
   // khiến mọi thay đổi local (ví dụ ngày nghỉ) kích một lần fetch vô ích —
   // `config/save` trả về `config` với projects/members là mảng mới mỗi lần,
   // nên phải so theo nội dung (join) chứ không theo tham chiếu mảng.
-  const projectsKey = config?.projects.join(',') ?? ''
+  // `projects` KHÔNG còn trong scope: phạm vi fetch là tác giả + khoảng ngày,
+  // nên đổi danh sách project trong Options không còn kích một lần fetch nào.
   const accountIdsKey = config?.members.map((m) => m.accountId).join(',') ?? ''
   const scope = useMemo<Scope | null>(
-    () => config ? { projects: config.projects, from, to, accountIds: config.members.map((m) => m.accountId) } : null,
+    () => config ? { from, to, accountIds: config.members.map((m) => m.accountId) } : null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [projectsKey, accountIdsKey, from, to],
+    [accountIdsKey, from, to],
   )
 
   useEffect(() => {
@@ -149,13 +154,28 @@ export function Dashboard() {
   }
 
   const dates = enumerateDates(from, to)
+
+  // Các project CÓ MẶT trong dữ liệu, hợp với danh sách đã cấu hình. Lấy từ
+  // `meta` (project key thật của Jira), không cắt tiền tố issue key.
+  const projectOptions = [...new Set([
+    ...config.projects,
+    ...Object.values(issueMeta).map((m) => m.projectKey).filter((p): p is string => p !== null),
+  ])].sort()
+
+  // Thu hẹp theo project là phép lọc SAU khi fetch. Worklog không có meta (mọi
+  // snapshot cũ) không thuộc project nào biết được, nên nó chỉ bị ẩn khi lead
+  // chủ động chọn một project — mặc định "tất cả" thì nó vẫn được đếm.
+  const shown = project === ''
+    ? worklogs
+    : (worklogs ?? []).filter((w) => issueMeta[w.issueKey]?.projectKey === project)
+
   // Chỉ dựng bảng khi đã có dữ liệu thật.
   // `today` lấy từ state đã tính bằng todayInZone(config.timeZone, …) ở lần
   // load đầu — cùng một giá trị mà các preset ngày dùng, không tính lần thứ
   // hai và tuyệt đối không lấy ngày của browser. '' = chưa có config → truyền
   // undefined để core giữ hành vi "cả khoảng".
-  const table = worklogs === null ? null : buildCoverage({
-    worklogs,
+  const table = shown === null ? null : buildCoverage({
+    worklogs: shown,
     members: config.members,
     dates,
     daysOff: config.daysOff,
@@ -199,6 +219,7 @@ export function Dashboard() {
           <Card title="Bộ lọc">
             <FilterBar
               from={from} to={to} preset={preset} sprintRange={sprintRange} today={today}
+              projectOptions={projectOptions} project={project} onProjectChange={setProject}
               onChange={(f, t, p) => { setFrom(f); setTo(t); setPreset(p) }}
               onRefresh={() => scope && void load(scope, true)}
               fetchedAt={fetchedAt} stale={stale} loading={loading}
@@ -250,7 +271,7 @@ export function Dashboard() {
           date={detail.date}
           dayOff={(config.daysOff[detail.accountId] ?? []).includes(detail.date)}
           onToggleDayOff={() => void toggleDayOff(detail.accountId, detail.date)}
-          worklogs={(worklogs ?? []).filter(
+          worklogs={(shown ?? []).filter(
             (w) => w.authorAccountId === detail.accountId && w.date === detail.date,
           )}
           onClose={() => setDetail(null)}

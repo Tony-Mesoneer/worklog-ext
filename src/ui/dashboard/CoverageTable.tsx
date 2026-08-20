@@ -4,7 +4,10 @@ import type { CSSProperties } from 'react'
 import type { CoverageIssueRow, CoverageTable as Data } from '@/core/coverage'
 import { isWeekend } from '@/core/coverage'
 import type { IssueMeta, IssueMetaMap } from '@/core/issue-hierarchy'
-import { groupIssueRowsByParent, mergeCoverageIssueRows } from '@/core/issue-hierarchy'
+import {
+  groupIssueRowsByParent, groupRowsByProject, mergeCoverageIssueRows,
+  UNKNOWN_PROJECT,
+} from '@/core/issue-hierarchy'
 import { StatusBadge } from '@/ui/shared/StatusBadge'
 import { formatDuration } from '@/core/duration'
 import { ProgressBar } from '@/ui/shared/ProgressBar'
@@ -31,11 +34,20 @@ const dayCellStyle = (date: string, off: boolean): CSSProperties => ({
   minWidth: DAY_COL_WIDTH,
 })
 
-// Hai mức thụt của hàng con: nhóm cha thụt như hàng issue cũ, sub-task thụt
-// thêm một bậc. Thụt là thứ duy nhất diễn tả quan hệ trong một cái bảng — không
-// có nó thì cha và con đọc ra ngang hàng, đúng cái khiếu nại ban đầu.
+// Ba mức thụt: dòng project (chỉ có khi member log trên nhiều project), nhóm
+// cha thụt như hàng issue cũ, sub-task thụt thêm một bậc. Thụt là thứ duy nhất
+// diễn tả quan hệ trong một cái bảng — không có nó thì cha và con đọc ra ngang
+// hàng, đúng cái khiếu nại ban đầu.
+//
+// INDENT_GROUP/INDENT_CHILD KHÔNG đổi khi có tầng project: một project duy nhất
+// (trường hợp thường ngày) không sinh dòng project nào, nên bảng phải giống
+// từng pixel với bản trước.
+const INDENT_PROJECT = 14
 const INDENT_GROUP = 30
 const INDENT_CHILD = 46
+
+const projectLabel = (projectKey: string): string =>
+  projectKey === UNKNOWN_PROJECT ? 'Không rõ project' : projectKey
 
 // Một hàng issue trong phần mở rộng của member. Dùng cho cả ba loại hàng —
 // issue không cha, dòng tổng của nhóm cha, sub-task — khác nhau ở thụt lề và độ
@@ -103,6 +115,123 @@ function IssueRow({
       </td>
     </tr>
   )
+}
+
+/**
+ * Dòng tiêu đề của một project: TỔNG theo từng ngày của mọi issue trong project
+ * đó. Chỉ xuất hiện khi member có giờ trên NHIỀU project — quyết định đó nằm ở
+ * core (groupRowsByProject trả null khi chỉ có một project).
+ */
+function ProjectHeaderRow({ row, dates, off, label }: {
+  row: CoverageIssueRow
+  dates: string[]
+  off: Set<string>
+  label: string
+}) {
+  return (
+    <tr className="wl-row--sub">
+      <th
+        scope="row"
+        style={{
+          paddingLeft: INDENT_PROJECT,
+          fontWeight: 600,
+          position: 'sticky', left: 0, background: tableColors.groupRowBg, zIndex: 1,
+        }}
+      >
+        <span style={{ whiteSpace: 'nowrap' }}>{label}</span>
+      </th>
+      {dates.map((d) => (
+        <td
+          key={d}
+          className="wl-table__num"
+          style={{ ...dayCellStyle(d, off.has(d)), fontWeight: 600 }}
+        >
+          {cellLabel(row.perDay[d] ?? 0)}
+        </td>
+      ))}
+      <td className="wl-table__num" style={{ fontWeight: 600, color: colors.text }}>
+        {hoursLabel(row.total)}
+      </td>
+    </tr>
+  )
+}
+
+/**
+ * Các hàng issue của MỘT member, đã gom theo cha. Tách ra hàm riêng vì nó được
+ * gọi hai chỗ: trực tiếp (một project) và bên trong từng nhóm project.
+ */
+function parentGroupRows(
+  issues: readonly CoverageIssueRow[],
+  meta: IssueMetaMap,
+  dates: string[],
+  off: Set<string>,
+  keyPrefix: string,
+) {
+  return groupIssueRowsByParent(issues, meta, (i) => i.issueKey).map((group) => {
+    const rowKey = `${keyPrefix}-${group.key}`
+    if (!group.isParent) {
+      // Issue không có cha: một hàng, y như trước.
+      return (
+        <IssueRow
+          key={rowKey} row={group.own!} dates={dates} off={off}
+          indent={INDENT_GROUP} meta={meta[group.own!.issueKey]}
+        />
+      )
+    }
+    // Dòng cha = TỔNG của các con (và của chính cha nếu cha cũng có giờ). Cha
+    // không có giờ riêng vẫn hiện làm tiêu đề, nếu không thì sub-task lại trông
+    // như issue độc lập.
+    const header = mergeCoverageIssueRows(
+      group.key, group.summary,
+      group.own ? [group.own, ...group.children] : group.children,
+    )
+    return (
+      <Fragment key={rowKey}>
+        <IssueRow
+          row={header} dates={dates} off={off}
+          indent={INDENT_GROUP} meta={meta[group.key]} isGroupHeader
+        />
+        {(group.own ? [group.own, ...group.children] : group.children).map((child) => (
+          <IssueRow
+            key={`${rowKey}-${child.issueKey}`} row={child}
+            dates={dates} off={off} indent={INDENT_CHILD}
+            meta={meta[child.issueKey]} subtask
+            ownOfParent={child.issueKey === group.key}
+          />
+        ))}
+      </Fragment>
+    )
+  })
+}
+
+/**
+ * Phần mở rộng của một member: project → cha → issue.
+ *
+ * Quyết định "có cần tầng project không" là PER MEMBER, không phải per bảng:
+ * mỗi phần mở rộng là một danh sách riêng, và member chỉ log trong một project
+ * (gần như tất cả, theo số đo trên Jira thật) phải đọc ra y như trước — bọc họ
+ * trong một cái nhãn "CAG" chỉ vì đồng nghiệp có một issue lạ là thêm nhiễu cho
+ * người không liên quan.
+ */
+function memberIssueRows(
+  issues: readonly CoverageIssueRow[],
+  meta: IssueMetaMap,
+  dates: string[],
+  off: Set<string>,
+  keyPrefix: string,
+) {
+  const byProject = groupRowsByProject(issues, meta, (i) => i.issueKey)
+  if (byProject === null) return parentGroupRows(issues, meta, dates, off, keyPrefix)
+
+  return byProject.map((pg) => (
+    <Fragment key={`${keyPrefix}-p-${pg.projectKey}`}>
+      <ProjectHeaderRow
+        row={mergeCoverageIssueRows(pg.projectKey, '', pg.rows)}
+        dates={dates} off={off} label={projectLabel(pg.projectKey)}
+      />
+      {parentGroupRows(pg.rows, meta, dates, off, `${keyPrefix}-${pg.projectKey}`)}
+    </Fragment>
+  ))
 }
 
 export function CoverageTable({ data, meta, daysOff, onCellClick, onToggleDayOff }: Props) {
@@ -223,45 +352,12 @@ export function CoverageTable({ data, meta, daysOff, onCellClick, onToggleDayOff
                   </td>
                 </tr>
 
-                {/* Hàng issue được GOM theo cha. Nhóm và thứ tự do core quyết
-                    định (groupIssueRowsByParent), component chỉ vẽ. */}
-                {isOpen && groupIssueRowsByParent(
-                  row.issues, meta, (i) => i.issueKey,
-                ).map((group) => {
-                  const rowKey = `${row.member.accountId}-${group.key}`
-                  if (!group.isParent) {
-                    // Issue không có cha: một hàng, y như trước.
-                    return (
-                      <IssueRow
-                        key={rowKey} row={group.own!} dates={data.dates} off={off}
-                        indent={INDENT_GROUP} meta={meta[group.own!.issueKey]}
-                      />
-                    )
-                  }
-                  // Dòng cha = TỔNG của các con (và của chính cha nếu cha cũng
-                  // có giờ). Cha không có giờ riêng vẫn hiện làm tiêu đề, nếu
-                  // không thì sub-task lại trông như issue độc lập.
-                  const header = mergeCoverageIssueRows(
-                    group.key, group.summary,
-                    group.own ? [group.own, ...group.children] : group.children,
-                  )
-                  return (
-                    <Fragment key={rowKey}>
-                      <IssueRow
-                        row={header} dates={data.dates} off={off}
-                        indent={INDENT_GROUP} meta={meta[group.key]} isGroupHeader
-                      />
-                      {(group.own ? [group.own, ...group.children] : group.children).map((child) => (
-                        <IssueRow
-                          key={`${rowKey}-${child.issueKey}`} row={child}
-                          dates={data.dates} off={off} indent={INDENT_CHILD}
-                          meta={meta[child.issueKey]} subtask
-                          ownOfParent={child.issueKey === group.key}
-                        />
-                      ))}
-                    </Fragment>
-                  )
-                })}
+                {/* Hàng issue được GOM theo project rồi theo cha. Cả hai quyết
+                    định (có cần tầng project không, nhóm cha nào) nằm ở core;
+                    component chỉ vẽ. */}
+                {isOpen && memberIssueRows(
+                  row.issues, meta, data.dates, off, row.member.accountId,
+                )}
               </Fragment>
             )
           })}
