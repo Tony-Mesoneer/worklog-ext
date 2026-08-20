@@ -1,34 +1,72 @@
 // src/ui/sidepanel/EventButtons.tsx
-import type { SprintEvent } from '@/core/config-schema'
+import type { ResolvedSprintEvent } from '@/core/event-resolve'
 import { formatDuration } from '@/core/duration'
 import { Button } from '@/ui/shared/Button'
 import { colors, fontSize, space } from '@/ui/shared/theme'
 
 type Props = {
-  events: SprintEvent[]
-  onPick: (e: SprintEvent) => void
+  events: ResolvedSprintEvent[]
+  loading: boolean
+  onPick: (e: ResolvedSprintEvent) => void
 }
 
-export function EventButtons({ events, onPick }: Props) {
+export function EventButtons({ events, loading, onPick }: Props) {
   if (events.length === 0) {
     return (
       <p style={{ fontSize: fontSize.sm, color: colors.muted, margin: 0 }}>
-        Chưa cấu hình sprint event — thêm trong Options.
+        {loading
+          ? 'Đang tra sub-task ceremony trong sprint…'
+          : 'Chưa cấu hình sprint event — thêm trong Options.'}
       </p>
     )
   }
+
+  // Event không tra được PHẢI nhìn thấy được, không chỉ nằm trong tooltip: một
+  // cảnh báo không ai đọc được thì không phải cảnh báo. Nút bị khoá cho biết
+  // "bấm không được", dòng bên dưới cho biết "vì sao".
+  const blocked = events.filter((e) => e.issueKey === null)
+
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: space.x1 }}>
-      {events.map((e) => (
-        <Button
-          key={e.issueKey + e.name}
-          size="sm"
-          onClick={() => onPick(e)}
-          title={`${e.issueKey} · ${formatDuration(e.defaultMinutes * 60)}`}
+    <div style={{ display: 'grid', gap: space.x2, minWidth: 0 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: space.x1 }}>
+        {events.map((e, i) => (
+          <Button
+            key={`${e.name}#${i}`}
+            size="sm"
+            disabled={e.issueKey === null}
+            onClick={() => onPick(e)}
+            title={
+              e.issueKey === null
+                ? `${e.name} — ${e.reason ?? 'không xác định được issue'}`
+                : `${e.issueKey} · ${formatDuration(e.defaultMinutes * 60)}`
+            }
+          >
+            {e.name}
+          </Button>
+        ))}
+      </div>
+
+      {loading && (
+        <span style={{ fontSize: fontSize.sm, color: colors.muted }}>
+          Đang tra sub-task ceremony trong sprint…
+        </span>
+      )}
+
+      {!loading && blocked.length > 0 && (
+        <ul
+          style={{
+            margin: 0, padding: 0, listStyle: 'none',
+            display: 'grid', gap: 2,
+            fontSize: fontSize.sm, color: colors.warning, lineHeight: 1.45,
+          }}
         >
-          {e.name}
-        </Button>
-      ))}
+          {blocked.map((e, i) => (
+            <li key={`${e.name}#blocked#${i}`}>
+              <strong style={{ fontWeight: 600 }}>{e.name}</strong>: {e.reason}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }

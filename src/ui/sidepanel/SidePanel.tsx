@@ -1,8 +1,11 @@
 // src/ui/sidepanel/SidePanel.tsx
 import { useCallback, useEffect, useState } from 'react'
-import { send, type DayLoadResult, type WorklogAddResult } from '@/sw/messages'
-import type { Config, SprintEvent } from '@/core/config-schema'
+import {
+  send, type DayLoadResult, type EventsResolveResult, type WorklogAddResult,
+} from '@/sw/messages'
+import type { Config } from '@/core/config-schema'
 import type { Worklog } from '@/core/coverage'
+import { resolveSprintEvents, type ResolvedSprintEvent } from '@/core/event-resolve'
 import {
   findOverlaps, nextFreeStart, normalizeBreaks, parseHhMm, segmentsEnd,
   splitAroundBreaks, type DayEntry,
@@ -70,6 +73,9 @@ export function SidePanel() {
   // Nhiều id: một lần bấm Log có thể sinh hai worklog khi yêu cầu đi qua giờ
   // nghỉ. Undo phải xoá HẾT, không thì nó chỉ hoàn tác một nửa.
   const [lastLogged, setLastLogged] = useState<{ ids: string[]; issueKey: string } | null>(null)
+  // Sprint event đã tra issue key theo tên sub-task. null = chưa tra xong.
+  const [resolved, setResolved] = useState<ResolvedSprintEvent[] | null>(null)
+  const [resolving, setResolving] = useState(false)
 
   const loadConfig = useCallback(() => {
     setError(null)
@@ -83,6 +89,28 @@ export function SidePanel() {
   }, [])
 
   useEffect(() => { loadConfig() }, [loadConfig])
+
+  // Tra issue key của ceremony theo TÊN sub-task trong sprint đang mở. Chạy lại
+  // mỗi lần config đổi vì danh sách event có thể đã khác.
+  const resolveEvents = useCallback(async (c: Config, force: boolean) => {
+    if (c.sprintEvents.length === 0) { setResolved([]); return }
+    setResolving(true)
+    try {
+      const res = await send<EventsResolveResult>({ type: 'events/resolve', force })
+      setResolved(res.events)
+    } catch (e) {
+      // KHÔNG im lặng rơi về issueKey đã lưu: đó chính là cách giờ ceremony
+      // chảy vào sprint cũ mà không ai biết. Event tra-theo-tên bị khoá kèm lý
+      // do; event ghim issueKey thủ công vẫn dùng được.
+      setResolved(resolveSprintEvents(c.sprintEvents, [], {
+        unavailable: `không tra được sprint (${toUiError(e).message})`,
+      }))
+    } finally { setResolving(false) }
+  }, [])
+
+  useEffect(() => {
+    if (config) void resolveEvents(config, false)
+  }, [config, resolveEvents])
 
   const reload = useCallback(async (c: Config, d: string) => {
     setLoadingDay(true)
@@ -102,7 +130,10 @@ export function SidePanel() {
     if (config && date) void reload(config, date)
   }, [config, date, reload])
 
-  const pickEvent = (e: SprintEvent) => {
+  const pickEvent = (e: ResolvedSprintEvent) => {
+    // Nút đã bị khoá khi issueKey null; chốt lại ở đây để không có đường nào
+    // ghi giờ vào một issue "không xác định".
+    if (e.issueKey === null) return
     setIssueKey(e.issueKey)
     setDurationInput(e.defaultMinutes >= 60 && e.defaultMinutes % 60 === 0
       ? `${e.defaultMinutes / 60}h` : `${e.defaultMinutes}m`)
@@ -285,7 +316,11 @@ export function SidePanel() {
         <div style={{ display: 'grid', gap: space.x3, minWidth: 0 }}>
           <div className="wl-field">
             <span className="wl-field__label">Sprint event</span>
-            <EventButtons events={config.sprintEvents} onPick={pickEvent} />
+            <EventButtons
+              events={resolved ?? []}
+              loading={resolved === null || resolving}
+              onPick={pickEvent}
+            />
           </div>
 
           <IssuePicker value={issueKey} onChange={setIssueKey} projects={config.projects} />

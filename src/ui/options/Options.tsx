@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from 'react'
 import type { ReactNode } from 'react'
-import { send, type AuthProbeResult } from '@/sw/messages'
+import { send, type AuthProbeResult, type CeremoniesListResult } from '@/sw/messages'
 import type { Config, ConfigMember, SprintEvent } from '@/core/config-schema'
 import { Banner } from '@/ui/shared/Banner'
 import { Button } from '@/ui/shared/Button'
@@ -498,25 +498,116 @@ function MembersSection({ config, save, setError }: SectionProps & {
   )
 }
 
-const EMPTY_EVENT_DRAFT: SprintEvent = { name: '', issueKey: '', defaultMinutes: 15, comment: '' }
+const EMPTY_EVENT_DRAFT: SprintEvent = {
+  name: '', issueKey: '', matchSummary: '', defaultMinutes: 15, comment: '',
+}
+
+const NO_MATCH = '— dùng issue key —'
+
+// Ô issue key của một dòng ĐÃ LƯU. Có draft riêng và chỉ commit khi blur/Enter,
+// vì issueKey là một nửa danh tính của event: lưu ngay mỗi phím gõ thì trạng
+// thái rỗng thoáng qua sẽ bị migrateConfig loại và cả dòng biến mất giữa lúc
+// đang sửa. `canClear` = dòng còn matchSummary làm danh tính nên xoá key được.
+function IssueKeyCell({ value, canClear, label, onCommit }: {
+  value: string
+  canClear: boolean
+  label: string
+  onCommit: (next: string) => void
+}) {
+  const [draft, setDraft] = useState(value)
+  useEffect(() => { setDraft(value) }, [value])
+
+  const commit = () => {
+    const next = draft.trim().toUpperCase()
+    if (next === value) return
+    if (next === '' && !canClear) { setDraft(value); return }
+    onCommit(next)
+  }
+
+  return (
+    <input
+      value={draft} style={{ width: 110 }}
+      placeholder={canClear ? '(không cần)' : 'CAG-123'}
+      aria-label={label}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => { if (e.key === 'Enter') commit() }}
+    />
+  )
+}
+
+function SubtaskSelect({ value, options, label, onChange }: {
+  value: string
+  options: string[]
+  label: string
+  onChange: (next: string) => void
+}) {
+  return (
+    <select
+      value={value} style={{ width: '100%', maxWidth: 240 }}
+      aria-label={label}
+      onChange={(e) => onChange(e.target.value)}
+    >
+      <option value="">{NO_MATCH}</option>
+      {options.map((o) => <option key={o} value={o}>{o}</option>)}
+    </select>
+  )
+}
 
 function EventsSection({ config, save }: SectionProps) {
   // Draft cho dòng mới — chưa lưu, chỉ tồn tại ở local state. Khác với các
   // input khác trong section (vốn ghi thẳng qua `save` mỗi lần đổi), dòng này
-  // không có issueKey nên `migrateConfig` sẽ loại bỏ ngay nếu lưu sớm —
-  // xem giải thích trong task-12-report.md.
+  // chưa có danh tính (issueKey hoặc matchSummary) nên `migrateConfig` sẽ loại
+  // bỏ ngay nếu lưu sớm — xem giải thích trong task-12-report.md.
   const [draft, setDraft] = useState<SprintEvent>(EMPTY_EVENT_DRAFT)
 
+  // Sub-task thật trong sprint đang mở. Người dùng CHỌN từ đây chứ không gõ
+  // tên: một lỗi chính tả nghĩa là nút chết im lặng và chỉ lộ ra rất muộn.
+  const [subtasks, setSubtasks] = useState<CeremoniesListResult>([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    send<CeremoniesListResult>({ type: 'ceremonies/list' })
+      .then((r) => { if (!cancelled) { setSubtasks(r); setLoadError(null) } })
+      .catch((e: unknown) => { if (!cancelled) setLoadError(toUiError(e).message) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [config.projects.join(','), config.primaryBoardId])
+
+  // Tên đã lưu mà không có trong danh sách vẫn phải là một option, không thì
+  // <select> tự nhảy về "dùng issue key" và ghi đè cấu hình đang đúng.
+  const options = [...new Set([
+    ...subtasks.map((t) => t.summary),
+    ...config.sprintEvents.map((e) => e.matchSummary).filter((x) => x !== ''),
+  ])].sort((a, b) => a.localeCompare(b))
+
+  // Danh tính của một event là issueKey HOẶC matchSummary. Patch nào làm mất
+  // cả hai đều bị bỏ: migrateConfig sẽ xoá dòng đó và nó biến mất giữa lúc sửa.
   const update = (index: number, patch: Partial<SprintEvent>) => {
+    const current = config.sprintEvents[index]
+    if (current === undefined) return
+    const next = { ...current, ...patch }
+    if (next.issueKey.trim() === '' && next.matchSummary.trim() === '') return
     void save({
-      sprintEvents: config.sprintEvents.map((ev, i) => (i === index ? { ...ev, ...patch } : ev)),
+      sprintEvents: config.sprintEvents.map((ev, i) => (i === index ? next : ev)),
     })
   }
 
+  const draftIssueKey = draft.issueKey.trim().toUpperCase()
+  const draftMatch = draft.matchSummary.trim()
+  const canAdd = draftIssueKey !== '' || draftMatch !== ''
+
   const add = () => {
-    const issueKey = draft.issueKey.trim()
-    if (issueKey === '') return
-    void save({ sprintEvents: [...config.sprintEvents, { ...draft, issueKey }] })
+    if (!canAdd) return
+    void save({
+      sprintEvents: [
+        ...config.sprintEvents,
+        { ...draft, issueKey: draftIssueKey, matchSummary: draftMatch },
+      ],
+    })
     setDraft(EMPTY_EVENT_DRAFT)
   }
 
@@ -527,57 +618,92 @@ function EventsSection({ config, save }: SectionProps) {
   return (
     <Card title="5. Sprint event">
       <div style={{ display: 'grid', gap: space.x3 }}>
-        <Hint>Mỗi event là một nút một-cú-bấm trong side panel.</Hint>
+        <Hint>
+          Mỗi event là một nút một-cú-bấm trong side panel. Chọn <em>sub-task</em> theo
+          TÊN thì mỗi sprint mới nút tự trỏ sang sub-task mới của sprint đó — không
+          còn ghi giờ vào sprint cũ. Chỉ nhập <em>issue key</em> khi muốn ghim cứng
+          một issue.
+        </Hint>
+
+        {loading && <Hint>Đang tải sub-task của sprint đang mở…</Hint>}
+        {loadError !== null && (
+          <Banner kind="warn">
+            Không tải được danh sách sub-task của sprint ({loadError}). Vẫn chọn được
+            tên đã lưu, hoặc nhập issue key thủ công.
+          </Banner>
+        )}
+        {!loading && loadError === null && subtasks.length === 0 && (
+          <Banner kind="warn">
+            Sprint đang mở không có sub-task nào (hoặc chưa chọn project ở mục 3) —
+            chưa có gì để chọn theo tên.
+          </Banner>
+        )}
+
         <div className="wl-table-scroll">
           <table className="wl-table" style={{ width: '100%' }}>
             <thead>
               <tr>
                 <th scope="col" style={{ textAlign: 'left' }}>Tên</th>
-                <th scope="col" style={{ textAlign: 'left' }}>Issue key</th>
+                <th scope="col" style={{ textAlign: 'left' }}>Sub-task trong sprint</th>
+                <th scope="col" style={{ textAlign: 'left' }}>Issue key (ghim)</th>
                 <th scope="col">Phút mặc định</th>
                 <th scope="col" style={{ textAlign: 'left' }}>Comment mặc định</th>
                 <th scope="col"><span style={{ visibility: 'hidden' }}>Xoá</span></th>
               </tr>
             </thead>
             <tbody>
-              {config.sprintEvents.map((ev, i) => (
-                <tr key={i}>
-                  <td style={{ textAlign: 'left' }}>
-                    <input
-                      value={ev.name} style={{ width: '100%' }}
-                      aria-label={`Tên event ${ev.issueKey}`}
-                      onChange={(e) => update(i, { name: e.target.value })}
-                    />
-                  </td>
-                  {/* Issue key là danh tính của event — không sửa tại chỗ được.
-                      Đổi thì xoá dòng và thêm lại, tránh việc lưu ngay mỗi phím
-                      gõ khiến trạng thái rỗng thoáng qua bị migrateConfig xoá. */}
-                  <th scope="row" style={{ fontWeight: 400 }}>{ev.issueKey}</th>
-                  <td>
-                    <input
-                      type="number" min={0} value={ev.defaultMinutes} style={{ width: 72 }}
-                      aria-label={`Phút mặc định của ${ev.issueKey}`}
-                      onChange={(e) => update(i, { defaultMinutes: Number(e.target.value) })}
-                    />
-                  </td>
-                  <td style={{ textAlign: 'left' }}>
-                    <input
-                      value={ev.comment} style={{ width: '100%' }}
-                      aria-label={`Comment mặc định của ${ev.issueKey}`}
-                      onChange={(e) => update(i, { comment: e.target.value })}
-                    />
-                  </td>
-                  <td>
-                    <Button
-                      variant="danger" size="sm"
-                      aria-label={`Xoá event ${ev.issueKey}`}
-                      onClick={() => remove(i)}
-                    >
-                      Xoá
-                    </Button>
-                  </td>
-                </tr>
-              ))}
+              {config.sprintEvents.map((ev, i) => {
+                const id = ev.matchSummary !== '' ? ev.matchSummary : ev.issueKey
+                return (
+                  <tr key={`${id}#${i}`}>
+                    <th scope="row" style={{ textAlign: 'left', fontWeight: 400 }}>
+                      <input
+                        value={ev.name} style={{ width: '100%' }}
+                        aria-label={`Tên event ${id}`}
+                        onChange={(e) => update(i, { name: e.target.value })}
+                      />
+                    </th>
+                    <td style={{ textAlign: 'left' }}>
+                      <SubtaskSelect
+                        value={ev.matchSummary} options={options}
+                        label={`Sub-task của ${id}`}
+                        onChange={(next) => update(i, { matchSummary: next })}
+                      />
+                    </td>
+                    <td style={{ textAlign: 'left' }}>
+                      <IssueKeyCell
+                        value={ev.issueKey}
+                        canClear={ev.matchSummary !== ''}
+                        label={`Issue key ghim của ${id}`}
+                        onCommit={(next) => update(i, { issueKey: next })}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number" min={0} value={ev.defaultMinutes} style={{ width: 72 }}
+                        aria-label={`Phút mặc định của ${id}`}
+                        onChange={(e) => update(i, { defaultMinutes: Number(e.target.value) })}
+                      />
+                    </td>
+                    <td style={{ textAlign: 'left' }}>
+                      <input
+                        value={ev.comment} style={{ width: '100%' }}
+                        aria-label={`Comment mặc định của ${id}`}
+                        onChange={(e) => update(i, { comment: e.target.value })}
+                      />
+                    </td>
+                    <td>
+                      <Button
+                        variant="danger" size="sm"
+                        aria-label={`Xoá event ${id}`}
+                        onClick={() => remove(i)}
+                      >
+                        Xoá
+                      </Button>
+                    </td>
+                  </tr>
+                )
+              })}
               <tr>
                 <td style={{ textAlign: 'left' }}>
                   <input
@@ -587,9 +713,16 @@ function EventsSection({ config, save }: SectionProps) {
                   />
                 </td>
                 <td style={{ textAlign: 'left' }}>
+                  <SubtaskSelect
+                    value={draft.matchSummary} options={options}
+                    label="Sub-task của event mới"
+                    onChange={(next) => setDraft({ ...draft, matchSummary: next })}
+                  />
+                </td>
+                <td style={{ textAlign: 'left' }}>
                   <input
                     value={draft.issueKey} style={{ width: 110 }}
-                    placeholder="Issue key" aria-label="Issue key của event mới"
+                    placeholder="Issue key" aria-label="Issue key ghim của event mới"
                     onChange={(e) => setDraft({ ...draft, issueKey: e.target.value })}
                   />
                 </td>
@@ -608,7 +741,7 @@ function EventsSection({ config, save }: SectionProps) {
                   />
                 </td>
                 <td>
-                  <Button variant="primary" size="sm" onClick={add} disabled={draft.issueKey.trim() === ''}>
+                  <Button variant="primary" size="sm" onClick={add} disabled={!canAdd}>
                     Thêm
                   </Button>
                 </td>
