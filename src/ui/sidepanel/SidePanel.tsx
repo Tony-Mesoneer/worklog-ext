@@ -1,9 +1,12 @@
 // src/ui/sidepanel/SidePanel.tsx
 import { useCallback, useEffect, useState } from 'react'
-import { send, type DayLoadResult } from '@/sw/messages'
+import { send, type DayLoadResult, type WorklogAddResult } from '@/sw/messages'
 import type { Config, SprintEvent } from '@/core/config-schema'
 import type { Worklog } from '@/core/coverage'
-import { findOverlaps, nextFreeStart, parseHhMm, type DayEntry } from '@/core/timeline'
+import {
+  findOverlaps, nextFreeStart, normalizeBreaks, parseHhMm, segmentsEnd,
+  splitAroundBreaks, type DayEntry,
+} from '@/core/timeline'
 import { parseDuration, formatDuration } from '@/core/duration'
 import { todayInZone, addDays } from '@/core/jiraTime'
 import { Banner } from '@/ui/shared/Banner'
@@ -38,7 +41,9 @@ export function SidePanel() {
   const [busy, setBusy] = useState(false)
   const [loadingDay, setLoadingDay] = useState(false)
   const [error, setError] = useState<UiError | null>(null)
-  const [lastLogged, setLastLogged] = useState<{ id: string; issueKey: string } | null>(null)
+  // Nhiều id: một lần bấm Log có thể sinh hai worklog khi yêu cầu đi qua giờ
+  // nghỉ. Undo phải xoá HẾT, không thì nó chỉ hoàn tác một nửa.
+  const [lastLogged, setLastLogged] = useState<{ ids: string[]; issueKey: string } | null>(null)
 
   const loadConfig = useCallback(() => {
     setError(null)
@@ -59,7 +64,10 @@ export function SidePanel() {
       const res = await send<DayLoadResult>({ type: 'day/load', date: d })
       setWorklogs(res.worklogs)
       // Start time luôn nhảy tới khoảng trống kế tiếp sau khi dữ liệu đổi.
-      setStartMinutes(nextFreeStart(toEntries(res.worklogs), parseHhMm(c.workdayStart), c.slotMinutes))
+      setStartMinutes(nextFreeStart(
+        toEntries(res.worklogs), parseHhMm(c.workdayStart), c.slotMinutes,
+        parseHhMm(c.workdayEnd), normalizeBreaks(c.breaks),
+      ))
       setError(null)
     } catch (e) { setError(toUiError(e)) } finally { setLoadingDay(false) }
   }, [])
@@ -83,12 +91,14 @@ export function SidePanel() {
 
     setBusy(true)
     try {
-      const res = await send<{ id: string }>({
+      // MỘT message cho một lần bấm Log — service worker tự cắt đoạn quanh giờ
+      // nghỉ và tự rollback nếu POST thứ hai lỗi.
+      const res = await send<WorklogAddResult>({
         type: 'worklog/add',
         issueKey: issueKey.trim(), date, startMinutes,
         timeSpentSeconds: seconds, comment,
       })
-      setLastLogged({ id: res.id, issueKey: issueKey.trim() })
+      setLastLogged({ ids: res.ids, issueKey: issueKey.trim() })
       setDurationInput('')
       setComment('')
       await reload(config, date)
@@ -103,19 +113,29 @@ export function SidePanel() {
 
   const undo = async () => {
     if (!lastLogged || !config) return
-    try {
-      await send({ type: 'worklog/delete', issueKey: lastLogged.issueKey, worklogId: lastLogged.id })
-      setLastLogged(null)
-      await reload(config, date)
-    } catch (e) {
-      // Text cho người dùng nói đủ việc cần làm; nguyên nhân gốc vẫn phải vào
-      // console, không thì không debug được gì.
-      console.error('[sidepanel] undo worklog thất bại', e)
+    // Xoá từng cái, KHÔNG dừng ở lỗi đầu tiên: bỏ giữa đường sẽ để lại đúng cái
+    // trạng thái một-nửa mà undo đang cố dọn.
+    const failed: string[] = []
+    for (const id of lastLogged.ids) {
+      try {
+        await send({ type: 'worklog/delete', issueKey: lastLogged.issueKey, worklogId: id })
+      } catch (e) {
+        // Text cho người dùng nói đủ việc cần làm; nguyên nhân gốc vẫn phải vào
+        // console, không thì không debug được gì.
+        console.error('[sidepanel] undo worklog thất bại', lastLogged.issueKey, id, e)
+        failed.push(id)
+      }
+    }
+    setLastLogged(null)
+    if (failed.length > 0) {
       setError({
-        message: `Không xoá được worklog ${lastLogged.id} trên ${lastLogged.issueKey} — xoá tay trong Jira`,
+        message:
+          `Không xoá được worklog ${failed.join(', ')} trên ${lastLogged.issueKey}` +
+          ' — xoá tay trong Jira',
         auth: false,
       })
     }
+    await reload(config, date)
   }
 
   if (!config) {
@@ -144,11 +164,22 @@ export function SidePanel() {
   }
 
   const entries = toEntries(worklogs)
+  const breaks = normalizeBreaks(config.breaks)
+  const dayEndMinutes = parseHhMm(config.workdayEnd)
   const totalSeconds = worklogs.reduce((s, w) => s + w.timeSpentSeconds, 0)
   const selectedMinutes = Math.round((parseDuration(durationInput) ?? 0) / 60)
-  const overlapKeys = selectedMinutes > 0
-    ? findOverlaps(entries, startMinutes, selectedMinutes).map((o) => o.issueKey)
-    : []
+  // Các đoạn SẼ ghi. Mọi thứ hiển thị bên dưới (preview, timeline, cảnh báo
+  // chồng giờ) đọc từ đây, nên panel không thể nói khác với cái sẽ POST.
+  const segments = splitAroundBreaks(startMinutes, selectedMinutes, breaks)
+  const overlapKeys = [
+    ...new Set(
+      segments.flatMap((s) =>
+        findOverlaps(entries, s.startMinutes, s.durationMinutes).map((o) => o.issueKey),
+      ),
+    ),
+  ]
+  const end = segments.length > 0 ? segmentsEnd(segments) : 0
+  const pastEndMinutes = end > dayEndMinutes ? end : null
   const today = todayInZone(config.timeZone, new Date())
   const remaining = TARGET_SECONDS - totalSeconds
 
@@ -201,7 +232,9 @@ export function SidePanel() {
 
       {lastLogged && (
         <Banner kind="success" action={{ label: 'Undo', onClick: () => void undo() }}>
-          Đã log vào {lastLogged.issueKey}
+          {lastLogged.ids.length > 1
+            ? `Đã log ${lastLogged.ids.length} worklog vào ${lastLogged.issueKey} (bỏ qua giờ nghỉ)`
+            : `Đã log vào ${lastLogged.issueKey}`}
         </Banner>
       )}
 
@@ -211,8 +244,9 @@ export function SidePanel() {
           <DayBlocks
             entries={entries}
             workdayStartMinutes={parseHhMm(config.workdayStart)}
-            selectedStart={startMinutes}
-            selectedDuration={selectedMinutes}
+            dayEndMinutes={dayEndMinutes}
+            breaks={breaks}
+            selection={segments}
           />
         </div>
       </Card>
@@ -232,6 +266,10 @@ export function SidePanel() {
             presets={config.durationPresets}
             slotMinutes={config.slotMinutes}
             workdayStartMinutes={parseHhMm(config.workdayStart)}
+            dayEndMinutes={dayEndMinutes}
+            breaks={breaks}
+            segments={segments}
+            pastEndMinutes={pastEndMinutes}
             startMinutes={startMinutes}
             durationInput={durationInput}
             comment={comment}

@@ -73,6 +73,11 @@ export const bannerColors = {
 // hết phân biệt được với chính hàng chứa nó. accentOverlay dùng màu accent
 // pha loãng để tint cuối tuần trong tbody khác hẳn hai màu xám-tím trung tính
 // còn lại (thay vì chỉ khác độ sáng như bản cũ).
+// Sọc chéo mờ = "khoảng thời gian không làm việc" (ngày nghỉ, giờ nghỉ trưa).
+// Khớp với --stripe-non-working trong theme.css — một ý nghĩa, một hình thức.
+export const nonWorkingStripe =
+  'repeating-linear-gradient(135deg, rgba(155,149,168,0.10) 0 4px, transparent 4px 8px)'
+
 export const table = {
   headerBg: colors.surfaceAlt,
   headerWeekendBg: colors.border,
@@ -81,6 +86,5 @@ export const table = {
   footerBg: colors.surfaceAlt,
   footerWeekendBg: colors.border,
   // Ngày nghỉ đã đánh dấu — sọc chéo mờ để phân biệt "nghỉ" với "quên log".
-  dayOffBg:
-    'repeating-linear-gradient(135deg, rgba(155,149,168,0.10) 0 4px, transparent 4px 8px)',
+  dayOffBg: nonWorkingStripe,
 } as const

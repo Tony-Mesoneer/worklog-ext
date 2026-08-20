@@ -19,8 +19,12 @@
 //
 // Thuần là cách BIỂU DIỄN — dữ liệu vẫn là `entries` sẵn có, không thêm request
 // nào, core/timeline.ts không đổi.
+//
+// Bổ sung sau tính năng giờ nghỉ: giờ nghỉ được vẽ thành một DẢI NỀN mờ, không
+// phải một khối dữ liệu. Không có nó thì một tiếng trống lúc 12:00 đọc thành
+// "mình quên log một tiếng" chứ không phải "đó là giờ nghỉ trưa".
 import { useState } from 'react'
-import { DAY_END_MINUTES, findOverlaps, formatMinutes, type DayEntry } from '@/core/timeline'
+import { findOverlaps, formatMinutes, type Break, type DayEntry, type Segment } from '@/core/timeline'
 import { formatDuration } from '@/core/duration'
 import { Button } from '@/ui/shared/Button'
 import { colors, fontSize } from '@/ui/shared/theme'
@@ -28,8 +32,10 @@ import { colors, fontSize } from '@/ui/shared/theme'
 type Props = {
   entries: DayEntry[]
   workdayStartMinutes: number
-  selectedStart: number
-  selectedDuration: number
+  dayEndMinutes: number
+  breaks: Break[]
+  /** Các đoạn SẼ ghi — nhiều hơn một khi yêu cầu đi qua giờ nghỉ. */
+  selection: Segment[]
 }
 
 // px mỗi phút — cố tình nhỏ. Một ngày kín 8h vẫn chỉ ~105px; ba worklog điển
@@ -39,55 +45,82 @@ const MIN_H = 20
 const MAX_H = 56
 const MIN_GAP_H = 12
 const MAX_GAP_H = 22
+// Dải giờ nghỉ cần cao hơn dải trống một chút để chữ "nghỉ 12:00–13:00" không
+// bị cắt — nó là dải duy nhất luôn có nhãn.
+const MIN_BREAK_H = 16
 
 type Block =
   | { kind: 'entry'; id: string; start: number; minutes: number; issueKey: string; hit: boolean }
   | { kind: 'gap'; start: number; minutes: number }
+  | { kind: 'break'; start: number; minutes: number }
   | { kind: 'sel'; start: number; minutes: number }
 
-const heightOf = (b: Block): number =>
-  b.kind === 'gap'
-    ? Math.round(Math.min(MAX_GAP_H, Math.max(MIN_GAP_H, b.minutes * PX_PER_MIN)))
-    : Math.round(Math.min(MAX_H, Math.max(MIN_H, b.minutes * PX_PER_MIN)))
+const heightOf = (b: Block): number => {
+  const px = b.minutes * PX_PER_MIN
+  if (b.kind === 'gap') return Math.round(Math.min(MAX_GAP_H, Math.max(MIN_GAP_H, px)))
+  if (b.kind === 'break') return Math.round(Math.min(MAX_GAP_H, Math.max(MIN_BREAK_H, px)))
+  return Math.round(Math.min(MAX_H, Math.max(MIN_H, px)))
+}
 
 // Dựng danh sách khối theo thứ tự thời gian. `tailFrom` = mốc bắt đầu phần cuối
 // ngày còn trống, để gập lại.
 function buildBlocks(
   entries: DayEntry[],
   dayStart: number,
-  selStart: number,
-  selMinutes: number,
+  dayEnd: number,
+  breaks: Break[],
+  selection: Segment[],
 ): { blocks: Block[]; tailFrom: number } {
   // Worklog bị lựa chọn chồng lên: tô viền accent tại chỗ thay vì chèn thêm một
   // khối riêng — chèn khối chồng giờ sẽ làm trục thời gian sai.
-  const hits = selMinutes > 0
-    ? new Set(findOverlaps(entries, selStart, selMinutes).map((e) => e.id))
-    : new Set<string>()
+  const hits = new Set(
+    selection.flatMap((s) => findOverlaps(entries, s.startMinutes, s.durationMinutes)).map((e) => e.id),
+  )
 
-  type Item = { start: number; minutes: number; entry?: DayEntry }
+  type Item = { start: number; minutes: number; kind: 'entry' | 'sel' | 'break'; entry?: DayEntry }
   const items: Item[] = entries.map((e) => ({
-    start: e.startMinutes, minutes: e.durationMinutes, entry: e,
+    start: e.startMinutes, minutes: e.durationMinutes, kind: 'entry', entry: e,
   }))
-  if (selMinutes > 0 && hits.size === 0) items.push({ start: selStart, minutes: selMinutes })
-  items.sort((a, b) => a.start - b.start)
+  for (const s of selection) {
+    // Đoạn nào chồng worklog cũ thì đã được thể hiện bằng viền accent trên chính
+    // worklog đó; chèn thêm khối nữa là vẽ hai lần một khoảng thời gian.
+    if (findOverlaps(entries, s.startMinutes, s.durationMinutes).length === 0) {
+      items.push({ start: s.startMinutes, minutes: s.durationMinutes, kind: 'sel' })
+    }
+  }
+  for (const b of breaks) {
+    items.push({ start: b.startMinutes, minutes: b.endMinutes - b.startMinutes, kind: 'break' })
+  }
+  // Cùng mốc bắt đầu: worklog trước, rồi lựa chọn, rồi dải giờ nghỉ — dải nền
+  // không bao giờ chen lên trước dữ liệu thật.
+  const weight = { entry: 0, sel: 1, break: 2 } as const
+  items.sort((a, b) => a.start - b.start || weight[a.kind] - weight[b.kind])
 
   const blocks: Block[] = []
   let cursor = dayStart
 
   for (const it of items) {
+    const end = it.start + it.minutes
+    // Giờ nghỉ đã bị worklog phủ kín (có người log qua trưa từ trước tính năng
+    // này) thì bỏ dải đi, giữ trục thời gian đơn điệu.
+    if (it.kind === 'break' && end <= cursor) continue
     if (it.start > cursor) blocks.push({ kind: 'gap', start: cursor, minutes: it.start - cursor })
-    if (it.entry) {
+
+    if (it.kind === 'entry' && it.entry) {
       blocks.push({
         kind: 'entry', id: it.entry.id, start: it.start, minutes: it.minutes,
         issueKey: it.entry.issueKey, hit: hits.has(it.entry.id),
       })
-    } else {
+    } else if (it.kind === 'sel') {
       blocks.push({ kind: 'sel', start: it.start, minutes: it.minutes })
+    } else {
+      const from = Math.max(cursor, it.start)
+      blocks.push({ kind: 'break', start: from, minutes: end - from })
     }
-    cursor = Math.max(cursor, it.start + it.minutes)
+    cursor = Math.max(cursor, end)
   }
 
-  return { blocks, tailFrom: Math.min(cursor, DAY_END_MINUTES) }
+  return { blocks, tailFrom: Math.min(cursor, dayEnd) }
 }
 
 function BlockRow({ block }: { block: Block }) {
@@ -108,6 +141,22 @@ function BlockRow({ block }: { block: Block }) {
     )
   }
 
+  if (block.kind === 'break') {
+    // Dải nền, KHÔNG phải feature: chỉ sọc mờ + nhãn, không thời lượng, không
+    // hành động nào. Nó tồn tại để một tiếng trống lúc 12:00 đọc ra là "nghỉ".
+    return (
+      <div
+        className="wl-blk wl-blk--break"
+        style={{ height: h }}
+        title={`Giờ nghỉ ${formatMinutes(block.start)}–${formatMinutes(block.start + block.minutes)}`}
+      >
+        <span className="wl-blk__dur">
+          nghỉ {formatMinutes(block.start)}–{formatMinutes(block.start + block.minutes)}
+        </span>
+      </div>
+    )
+  }
+
   const cls = block.kind === 'entry'
     ? `wl-blk wl-blk--entry${block.hit ? ' wl-blk--hit' : ''}`
     : 'wl-blk wl-blk--sel'
@@ -124,13 +173,13 @@ function BlockRow({ block }: { block: Block }) {
 }
 
 export function DayBlocks({
-  entries, workdayStartMinutes, selectedStart, selectedDuration,
+  entries, workdayStartMinutes, dayEndMinutes, breaks, selection,
 }: Props) {
   const [showTail, setShowTail] = useState(false)
   const { blocks, tailFrom } = buildBlocks(
-    entries, workdayStartMinutes, selectedStart, selectedDuration,
+    entries, workdayStartMinutes, dayEndMinutes, breaks, selection,
   )
-  const tailMinutes = DAY_END_MINUTES - tailFrom
+  const tailMinutes = dayEndMinutes - tailFrom
 
   return (
     <div style={{ display: 'grid', gap: 2, minWidth: 0 }}>
@@ -155,9 +204,9 @@ export function DayBlocks({
         ) : (
           <Button
             variant="ghost" size="sm" onClick={() => setShowTail(true)}
-            title={`${formatMinutes(tailFrom)} – ${formatMinutes(DAY_END_MINUTES)}`}
+            title={`${formatMinutes(tailFrom)} – ${formatMinutes(dayEndMinutes)}`}
           >
-            {`+ trống ${formatDuration(tailMinutes * 60)} tới ${formatMinutes(DAY_END_MINUTES)}`}
+            {`+ trống ${formatDuration(tailMinutes * 60)} tới ${formatMinutes(dayEndMinutes)}`}
           </Button>
         )
       )}

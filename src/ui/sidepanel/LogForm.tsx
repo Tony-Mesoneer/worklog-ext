@@ -3,7 +3,7 @@ import { useId } from 'react'
 import { parseDuration, formatDuration } from '@/core/duration'
 import {
   buildSlots, occupiedBy, formatMinutes,
-  DAY_END_MINUTES, type DayEntry,
+  type Break, type DayEntry, type Segment,
 } from '@/core/timeline'
 import { Button } from '@/ui/shared/Button'
 import { SegmentedControl } from '@/ui/shared/SegmentedControl'
@@ -14,6 +14,12 @@ type Props = {
   presets: number[]
   slotMinutes: number
   workdayStartMinutes: number
+  dayEndMinutes: number
+  breaks: Break[]
+  /** Các đoạn SẼ ghi, tính ở SidePanel bằng splitAroundBreaks. */
+  segments: Segment[]
+  /** Đuôi vượt quá giờ tan làm — cảnh báo, không chặn. */
+  pastEndMinutes: number | null
   startMinutes: number
   durationInput: string
   comment: string
@@ -30,9 +36,21 @@ type Props = {
 // "60" → "1h", "90" → "90m": text mà parseDuration đọc lại đúng giá trị.
 const presetText = (m: number): string => (m >= 60 && m % 60 === 0 ? `${m / 60}h` : `${m}m`)
 
+const segmentText = (s: Segment): string =>
+  `${formatMinutes(s.startMinutes)}–${formatMinutes(s.startMinutes + s.durationMinutes)}` +
+  ` (${formatDuration(s.durationMinutes * 60)})`
+
+// "A và B", "A, B và C" — liệt kê kiểu tiếng Việt, không phải mảng JSON.
+const joinVi = (parts: string[]): string =>
+  parts.length <= 1
+    ? (parts[0] ?? '')
+    : `${parts.slice(0, -1).join(', ')} và ${parts[parts.length - 1]}`
+
 export function LogForm(p: Props) {
   const seconds = parseDuration(p.durationInput)
-  const slots = buildSlots(p.workdayStartMinutes, DAY_END_MINUTES, p.slotMinutes)
+  // Lưới bỏ hẳn các mốc nằm trong giờ nghỉ: dropdown không được mời người dùng
+  // bắt đầu một worklog vào giữa bữa trưa.
+  const slots = buildSlots(p.workdayStartMinutes, p.dayEndMinutes, p.slotMinutes, p.breaks)
   const startId = useId()
   const freeId = useId()
   const noteId = useId()
@@ -101,6 +119,31 @@ export function LogForm(p: Props) {
       {invalid && (
         <span role="alert" style={{ fontSize: fontSize.sm, color: colors.danger }}>
           Không hiểu "{p.durationInput}" — thử 1h30, 90m, 1.5h
+        </span>
+      )}
+
+      {/* Tạo hai worklog trong khi người dùng tin là tạo một sẽ làm mất lòng
+          tin vào panel. Nói TRƯỚC khi bấm Log, bằng đúng các mốc giờ sẽ POST. */}
+      {p.segments.length > 1 && (
+        <span style={{ fontSize: fontSize.sm, color: colors.accentRing }}>
+          Sẽ ghi {p.segments.length} worklog: {joinVi(p.segments.map(segmentText))}
+        </span>
+      )}
+
+      {/* Mốc bắt đầu rơi vào giờ nghỉ (value cũ, hoặc gõ tay): nói rõ nó bị đẩy
+          sang sau giờ nghỉ chứ không im lặng ghi giờ khác giờ đang hiện. */}
+      {p.segments.length === 1 && p.segments[0]!.startMinutes !== p.startMinutes && (
+        <span style={{ fontSize: fontSize.sm, color: colors.accentRing }}>
+          {formatMinutes(p.startMinutes)} nằm trong giờ nghỉ — sẽ ghi từ{' '}
+          {formatMinutes(p.segments[0]!.startMinutes)}
+        </span>
+      )}
+
+      {p.pastEndMinutes !== null && (
+        // Cảnh báo, KHÔNG chặn: cùng cách xử lý như cảnh báo chồng giờ.
+        <span style={{ fontSize: fontSize.sm, color: colors.warning }}>
+          Kết thúc {formatMinutes(p.pastEndMinutes)}, quá giờ tan làm{' '}
+          {formatMinutes(p.dayEndMinutes)}
         </span>
       )}
 

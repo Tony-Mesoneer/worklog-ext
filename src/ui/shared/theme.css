@@ -39,6 +39,13 @@
   --accent-softer: rgba(150, 125, 214, 0.08);
   --on-accent: #17121F;
 
+  /* Sọc chéo mờ = "khoảng thời gian không làm việc". Dùng cho ngày nghỉ trong
+   * bảng coverage và cho dải giờ nghỉ trong timeline — cùng một ý nghĩa thì
+   * cùng một hình thức, không thêm màu mới. Khớp với `nonWorkingStripe` trong
+   * theme.ts. */
+  --stripe-non-working:
+    repeating-linear-gradient(135deg, rgba(155, 149, 168, 0.10) 0 4px, transparent 4px 8px);
+
   --success: #6FCF8B;
   --warning: #F2A25C;
   --danger: #F0757D;
@@ -535,6 +542,12 @@ button:hover:not(:disabled) {
 .wl-blk--gap {
   border: 1px dashed var(--border);
   color: var(--muted);
+}
+
+.wl-blk--break {
+  background: var(--stripe-non-working);
+  color: var(--muted);
+  justify-content: flex-end;
 }
 
 .wl-blk--sel {
