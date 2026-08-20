@@ -1,11 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import {
   snapshotKey, isStale, snapshotKeysToEvict,
-  SNAPSHOT_TTL_MS, SNAPSHOT_MAX_KEYS,
+  SNAPSHOT_TTL_MS, SNAPSHOT_MAX_KEYS, SNAPSHOT_SCOPE_VERSION,
 } from '@/core/snapshot-key'
 
 const scope = {
-  projects: ['CAG'],
   from: '2026-08-17',
   to: '2026-08-21',
   accountIds: ['u1', 'u2'],
@@ -16,12 +15,21 @@ describe('snapshotKey', () => {
     expect(snapshotKey(scope)).toBe(snapshotKey({ ...scope }))
   })
 
-  it('không phụ thuộc thứ tự project và accountId', () => {
+  it('không phụ thuộc thứ tự accountId', () => {
     // Nếu thứ tự ảnh hưởng key, cache miss vô cớ mỗi lần UI đổi thứ tự chọn.
     expect(snapshotKey({ ...scope, accountIds: ['u2', 'u1'] })).toBe(snapshotKey(scope))
-    // Phải đảo thứ tự THẬT: truyền lại ['CAG'] thì test không quan sát được gì.
-    expect(snapshotKey({ ...scope, projects: ['CAG', 'ZZZ'] }))
-      .toBe(snapshotKey({ ...scope, projects: ['ZZZ', 'CAG'] }))
+  })
+
+  it('mang version hình dạng, nên key CŨ (có project) không bao giờ khớp', () => {
+    // Đây là cái bẫy chính của thay đổi bỏ lọc project: snapshot cũ là dữ liệu
+    // ĐÃ LỌC. Nếu nó khớp key mới, lead thấy số bị lọc dưới nhãn "tất cả
+    // project" mà không có lỗi nào ở đâu. Key phải khác hình dạng hoàn toàn.
+    const key = snapshotKey(scope)
+    expect(key).toContain(`|${SNAPSHOT_SCOPE_VERSION}|`.slice(1, -1))
+    const legacy = `snapshot:CAG|${scope.from}|${scope.to}|${scope.accountIds.join(',')}`
+    expect(key).not.toBe(legacy)
+    // …và vẫn giữ prefix để pruneSnapshots dọn được cả key cũ.
+    expect(legacy.startsWith('snapshot:')).toBe(true)
   })
 
   it('đổi date range → khác key', () => {

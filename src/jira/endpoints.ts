@@ -91,23 +91,30 @@ export const toIssueMetaMap = (items: readonly IssueMeta[]): IssueMetaMap =>
   Object.fromEntries(items.map((m) => [m.key, m]))
 
 // --- worklog search --------------------------------------------------------
+//
+// Phạm vi là TÁC GIẢ + KHOẢNG NGÀY, KHÔNG có `project in (…)`.
+//
+// Trước đây đường coverage truyền `config.projects` vào đây, và một worklog
+// trên issue ngoài các project đó biến mất khỏi dashboard: giờ có thật trong
+// Jira, member có log, mà tổng của lead thiếu và không có cảnh báo nào. Đường
+// `day/load` đã bỏ lọc từ trước; chỗ này giờ khớp lại với nó.
+//
+// Khối lượng vẫn bị chặn bởi ĐÚNG những gì team đã log trong khoảng ngày, không
+// phải bởi kích thước của các project khác — mệnh đề worklogAuthor + worklogDate
+// mới là cái quyết định số issue trả về.
 export async function searchIssuesWithWorklogs(
   c: JiraClient,
-  args: { projects: string[]; accountIds: string[]; from: string; to: string },
+  args: { accountIds: string[]; from: string; to: string },
 ): Promise<IssueMeta[]> {
   // "worklogAuthor in ()" là lỗi cú pháp JQL — chặn trước khi gọi Jira.
   if (args.accountIds.length === 0) return []
 
   const authors = args.accountIds.map((a) => `"${a}"`).join(',')
-  const clauses = [
+  const jql = [
     `worklogDate >= "${args.from}"`,
     `worklogDate <= "${args.to}"`,
     `worklogAuthor in (${authors})`,
-  ]
-  if (args.projects.length > 0) {
-    clauses.push(`project in (${args.projects.map((p) => `"${p}"`).join(',')})`)
-  }
-  const jql = clauses.join(' AND ')
+  ].join(' AND ')
 
   const out: IssueMeta[] = []
   let nextPageToken: string | undefined

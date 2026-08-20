@@ -53,20 +53,22 @@ describe('findStoryPointsFieldId', () => {
 })
 
 describe('searchIssuesWithWorklogs', () => {
-  it('dựng JQL đủ ba điều kiện: ngày, tác giả, project', async () => {
+  it('dựng JQL đúng hai điều kiện: ngày và tác giả', async () => {
     const { client, calls } = fakeClient({
       'POST /rest/api/3/search/jql': { issues: [{ key: 'CAG-1', fields: { summary: 'S1' } }] },
     })
 
     const out = await searchIssuesWithWorklogs(client, {
-      projects: ['CAG'], accountIds: ['u1', 'u2'], from: '2026-08-17', to: '2026-08-21',
+      accountIds: ['u1', 'u2'], from: '2026-08-17', to: '2026-08-21',
     })
 
     const jql = (calls[0]!.body as { jql: string }).jql
     expect(jql).toContain('worklogDate >= "2026-08-17"')
     expect(jql).toContain('worklogDate <= "2026-08-21"')
     expect(jql).toContain('worklogAuthor in ("u1","u2")')
-    expect(jql).toContain('project in ("CAG")')
+    // KHÔNG có mệnh đề project: một worklog trên issue ngoài project vẫn là giờ
+    // thật của member, lọc nó ra là mất dữ liệu im lặng trên dashboard.
+    expect(jql).not.toContain('project in')
     expect(out).toEqual([flatMeta('CAG-1', 'S1')])
     // parent/status/issuetype/project phải nằm trong fields, nếu không thì không
     // có đường nào biết quan hệ cha/con hay project mà không thêm request.
@@ -83,7 +85,7 @@ describe('searchIssuesWithWorklogs', () => {
       },
     })
     const out = await searchIssuesWithWorklogs(client, {
-      projects: [], accountIds: ['u1'], from: '2026-08-17', to: '2026-08-21',
+      accountIds: ['u1'], from: '2026-08-17', to: '2026-08-21',
     })
     expect(out[0]!.projectKey).toBe('CGW')
   })
@@ -103,7 +105,7 @@ describe('searchIssuesWithWorklogs', () => {
       },
     })
     expect(await searchIssuesWithWorklogs(client, {
-      projects: [], accountIds: ['u1'], from: '2026-08-17', to: '2026-08-21',
+      accountIds: ['u1'], from: '2026-08-17', to: '2026-08-21',
     })).toEqual([{
       key: 'CAG-3052',
       summary: 'Implement: queue a user move',
@@ -116,19 +118,11 @@ describe('searchIssuesWithWorklogs', () => {
     }])
   })
 
-  it('bỏ điều kiện project khi không chọn project nào', async () => {
-    const { client, calls } = fakeClient({ 'POST /rest/api/3/search/jql': { issues: [] } })
-    await searchIssuesWithWorklogs(client, {
-      projects: [], accountIds: ['u1'], from: '2026-08-17', to: '2026-08-21',
-    })
-    expect((calls[0]!.body as { jql: string }).jql).not.toContain('project in')
-  })
-
   it('trả rỗng ngay, không gọi Jira, khi không có member nào', async () => {
     // JQL "worklogAuthor in ()" là lỗi cú pháp; chặn ở đây thay vì để Jira 400.
     const { client, calls } = fakeClient({})
     expect(await searchIssuesWithWorklogs(client, {
-      projects: ['CAG'], accountIds: [], from: '2026-08-17', to: '2026-08-21',
+      accountIds: [], from: '2026-08-17', to: '2026-08-21',
     })).toEqual([])
     expect(calls).toHaveLength(0)
   })
@@ -145,7 +139,7 @@ describe('searchIssuesWithWorklogs', () => {
       }),
     }
     const out = await searchIssuesWithWorklogs(client, {
-      projects: ['CAG'], accountIds: ['u1'], from: '2026-08-17', to: '2026-08-21',
+      accountIds: ['u1'], from: '2026-08-17', to: '2026-08-21',
     })
     expect(out.map((i) => i.key)).toEqual(['CAG-1', 'CAG-2'])
   })

@@ -8,6 +8,11 @@ import type { IssueMetaMap } from '@/core/issue-hierarchy'
 // `meta` OPTIONAL có chủ ý: snapshot đã nằm trong storage.local từ trước khi có
 // tính năng cha/con không có field này, và một cache cũ phải đọc được chứ không
 // được làm cả dashboard vỡ. Thiếu = rỗng (xem snapshotMeta).
+//
+// Snapshot ghi trước khi scope bỏ `projects` mang key hình dạng CŨ (xem
+// SNAPSHOT_SCOPE_VERSION), nên nó không bao giờ được đọc lên dưới hình dạng
+// mới — không có đường nào để dữ liệu ĐÃ LỌC theo project bị hiểu là dữ liệu
+// không lọc. Chúng chỉ còn chờ pruneSnapshots dọn.
 export type Snapshot = {
   fetchedAt: number
   worklogs: Worklog[]
@@ -56,7 +61,7 @@ export async function patchSnapshot(
   })
 }
 
-// Dọn snapshot cũ: mỗi (projects, from, to, accountIds) là một key vĩnh viễn,
+// Dọn snapshot cũ: mỗi (from, to, accountIds) là một key vĩnh viễn,
 // không dọn thì storage.local đầy dần tới lúc quota vỡ. Chỉ chạm key có prefix
 // `snapshot:` — `config` không bao giờ bị xoá.
 export async function pruneSnapshots(cap: number = SNAPSHOT_MAX_KEYS): Promise<void> {

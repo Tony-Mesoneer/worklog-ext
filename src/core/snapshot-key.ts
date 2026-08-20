@@ -1,18 +1,34 @@
 export const SNAPSHOT_TTL_MS = 5 * 60 * 1000
 
+/**
+ * Phạm vi của một snapshot coverage: TÁC GIẢ + KHOẢNG NGÀY, không có project.
+ *
+ * `projects` đã bị bỏ khỏi đây cùng lúc với việc bỏ mệnh đề `project in (…)`
+ * khỏi query — hai thứ phải đi cùng nhau. Nếu scope còn mang projects trong khi
+ * query không lọc nữa, một snapshot ĐÃ LỌC cũ và một snapshot KHÔNG LỌC mới sẽ
+ * chung key: lead thấy dữ liệu bị lọc dưới nhãn "tất cả project", thiếu giờ
+ * thật mà không có lỗi nào ở đâu cả.
+ */
 export type Scope = {
-  projects: string[]
   from: string
   to: string
   accountIds: string[]
 }
 
+/**
+ * Phiên bản HÌNH DẠNG của scope, nằm ngay trong key. Snapshot ghi trước thay
+ * đổi này có key kiểu `snapshot:CAG|…` nên không bao giờ khớp `snapshot:v2|…`
+ * — nó đơn giản là KHÔNG TỒN TẠI với readSnapshot, đúng lối "cache cũ = thiếu,
+ * không phải lỗi" mà migrateConfig và `Snapshot.meta` đang dùng. pruneSnapshots
+ * vẫn nhặt chúng theo prefix `snapshot:` nên chúng không nằm lại mãi.
+ */
+export const SNAPSHOT_SCOPE_VERSION = 'v2'
+
 // Sort trước khi ghép: UI có thể trả về thứ tự khác nhau cho cùng một lựa chọn,
 // và ta không muốn cache miss chỉ vì thứ tự.
 export function snapshotKey(scope: Scope): string {
-  const p = [...scope.projects].sort().join(',')
   const a = [...scope.accountIds].sort().join(',')
-  return `snapshot:${p}|${scope.from}|${scope.to}|${a}`
+  return `snapshot:${SNAPSHOT_SCOPE_VERSION}|${scope.from}|${scope.to}|${a}`
 }
 
 export function isStale(fetchedAt: number, now: number, ttlMs: number): boolean {
@@ -21,7 +37,7 @@ export function isStale(fetchedAt: number, now: number, ttlMs: number): boolean 
   return age < 0 || age >= ttlMs
 }
 
-// Trần số snapshot được giữ. Mỗi tuple (projects, from, to, accountIds) sinh
+// Trần số snapshot được giữ. Mỗi tuple (from, to, accountIds) sinh
 // một key mới và không có gì tự xoá, nên không có trần thì storage.local đầy
 // dần cho tới khi quota ~10MB vỡ.
 export const SNAPSHOT_MAX_KEYS = 30

@@ -35,22 +35,24 @@ async function makeClient(config: Config): Promise<JiraClient> {
 // Lấy worklog cho một khoảng ngày: tìm issue có worklog trong khoảng, rồi fetch
 // worklog của từng issue. client tự giới hạn 5 request song song.
 //
-// `projects` là tham số tường minh chứ không lấy từ config, vì hai caller có
-// phạm vi khác nhau: dashboard giới hạn theo project (spec §6), còn side panel
-// phải thấy CẢ NGÀY của người dùng — worklog trên issue ngoài project (rất
-// thường là issue sprint event) mà bị lọc ra sẽ khiến tổng giờ báo thiếu và
-// nextFreeStart trả về giờ đã có việc mà không hề cảnh báo chồng giờ.
-// Trả kèm `meta` (status + parent của từng issue), lấy từ CÙNG một search đã
-// chạy — không thêm request nào. Nó đi cạnh worklogs chứ không nằm trong Worklog:
-// xem src/core/issue-hierarchy.
+// KHÔNG có tham số `projects`: cả hai caller đều cần CẢ NGÀY / CẢ KHOẢNG của
+// người ta, không giới hạn project. Side panel đã bỏ lọc từ trước (worklog trên
+// issue ngoài project — rất thường là issue sprint event — bị lọc ra sẽ khiến
+// tổng giờ báo thiếu và nextFreeStart trả về giờ đã có việc mà không cảnh báo
+// chồng giờ); dashboard bỏ lọc ở lần này, vì cùng một lý do ở quy mô team: giờ
+// log trên project khác vẫn là giờ thật của member. `config.projects` từ giờ chỉ
+// là bộ LỌC TUỲ CHỌN ở UI, không phải cổng chặn dữ liệu.
+//
+// Trả kèm `meta` (status + parent + project của từng issue), lấy từ CÙNG một
+// search đã chạy — không thêm request nào. Nó đi cạnh worklogs chứ không nằm
+// trong Worklog: xem src/core/issue-hierarchy.
 async function fetchWorklogs(
   c: JiraClient,
-  projects: string[],
   accountIds: string[],
   from: string,
   to: string,
 ): Promise<{ worklogs: Worklog[]; meta: IssueMetaMap }> {
-  const issues = await api.searchIssuesWithWorklogs(c, { projects, accountIds, from, to })
+  const issues = await api.searchIssuesWithWorklogs(c, { accountIds, from, to })
   const perIssue = await Promise.all(
     issues.map((i) => api.getIssueWorklogs(c, i.key, i.summary)),
   )
@@ -165,9 +167,8 @@ export async function handle(msg: Message): Promise<unknown> {
         throw new Error('Chưa xác định được tài khoản Jira — mở Options và bấm Kết nối')
       }
       const c = await makeClient(config)
-      // Không truyền projects: side panel cần cả ngày, không giới hạn project.
       const { worklogs, meta } = await fetchWorklogs(
-        c, [], [config.myAccountId], msg.date, msg.date,
+        c, [config.myAccountId], msg.date, msg.date,
       )
       return { worklogs, meta } satisfies DayLoadResult
     }
@@ -366,7 +367,7 @@ export async function handle(msg: Message): Promise<unknown> {
       try {
         const c = await makeClient(config)
         fresh = await fetchWorklogs(
-          c, config.projects, msg.scope.accountIds, msg.scope.from, msg.scope.to,
+          c, msg.scope.accountIds, msg.scope.from, msg.scope.to,
         )
       } catch (e) {
         // Jira lỗi nhưng có snapshot cũ: trả snapshot cũ và đánh dấu stale.

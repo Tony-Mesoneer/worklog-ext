@@ -29,7 +29,6 @@ const makeChrome = () => {
 }
 
 const scope: Scope = {
-  projects: ['CAG'],
   from: '2026-08-17',
   to: '2026-08-21',
   accountIds: ['u1'],
