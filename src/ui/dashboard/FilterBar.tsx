@@ -1,5 +1,9 @@
 // src/ui/dashboard/FilterBar.tsx
+import { useId } from 'react'
 import { addDays } from '@/core/jiraTime'
+import { Button } from '@/ui/shared/Button'
+import { SegmentedControl, type SegmentItem } from '@/ui/shared/SegmentedControl'
+import { colors, fontSize, space } from '@/ui/shared/theme'
 
 export type Preset = 'sprint' | 'thisWeek' | 'lastWeek' | 'thisMonth' | 'custom'
 
@@ -15,6 +19,7 @@ type Props = {
   onRefresh: () => void
   fetchedAt: number | null
   stale: boolean
+  loading: boolean
 }
 
 // Tuần bắt đầu thứ Hai.
@@ -26,6 +31,9 @@ const mondayOf = (date: string): string => {
 
 export function FilterBar(p: Props) {
   const today = p.today
+  const fromId = useId()
+  const toId = useId()
+
   const apply = (preset: Preset) => {
     if (preset === 'sprint' && p.sprintRange) {
       p.onChange(p.sprintRange.from, p.sprintRange.to, 'sprint')
@@ -40,27 +48,58 @@ export function FilterBar(p: Props) {
     }
   }
 
+  // 'custom' không có nút riêng: nó là hệ quả của việc sửa hai ô date, nên khi
+  // preset === 'custom' thì không segment nào được chọn — đúng trạng thái.
+  const items: SegmentItem<Preset>[] = [
+    ...(p.sprintRange ? [{ value: 'sprint' as Preset, label: p.sprintRange.name }] : []),
+    { value: 'thisWeek', label: 'Tuần này', disabled: today === '' },
+    { value: 'lastWeek', label: 'Tuần trước', disabled: today === '' },
+    { value: 'thisMonth', label: 'Tháng này', disabled: today === '' },
+  ]
+
   return (
-    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 13 }}>
-      {p.sprintRange && (
-        <button onClick={() => apply('sprint')} disabled={p.preset === 'sprint'}>
-          {p.sprintRange.name}
-        </button>
-      )}
-      <button onClick={() => apply('thisWeek')} disabled={today === '' || p.preset === 'thisWeek'}>Tuần này</button>
-      <button onClick={() => apply('lastWeek')} disabled={today === '' || p.preset === 'lastWeek'}>Tuần trước</button>
-      <button onClick={() => apply('thisMonth')} disabled={today === '' || p.preset === 'thisMonth'}>Tháng này</button>
+    <div style={{
+      display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end',
+      gap: `${space.x3}px ${space.x4}px`,
+    }}>
+      <div className="wl-field">
+        <span className="wl-field__label">Khoảng thời gian</span>
+        <SegmentedControl
+          label="Khoảng thời gian" items={items} value={p.preset}
+          onChange={(v) => apply(v)}
+        />
+      </div>
 
-      <input type="date" value={p.from} onChange={(e) => p.onChange(e.target.value, p.to, 'custom')} />
-      <input type="date" value={p.to} onChange={(e) => p.onChange(p.from, e.target.value, 'custom')} />
+      <div style={{ display: 'flex', gap: space.x2, alignItems: 'flex-end' }}>
+        <div className="wl-field">
+          <label className="wl-field__label" htmlFor={fromId}>Từ ngày</label>
+          <input
+            id={fromId} type="date" value={p.from}
+            onChange={(e) => p.onChange(e.target.value, p.to, 'custom')}
+          />
+        </div>
+        <div className="wl-field">
+          <label className="wl-field__label" htmlFor={toId}>Đến ngày</label>
+          <input
+            id={toId} type="date" value={p.to}
+            onChange={(e) => p.onChange(p.from, e.target.value, 'custom')}
+          />
+        </div>
+      </div>
 
-      <button onClick={p.onRefresh} style={{ marginLeft: 'auto' }}>Làm mới</button>
-      {p.fetchedAt !== null && (
-        <span style={{ color: p.stale ? '#ef6c00' : '#78909c' }}>
-          {p.stale ? 'dữ liệu cũ lúc ' : 'cập nhật '}
-          {new Date(p.fetchedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-        </span>
-      )}
+      <div style={{ marginLeft: 'auto', display: 'flex', gap: space.x2, alignItems: 'center' }}>
+        {p.fetchedAt !== null && (
+          <span style={{
+            fontSize: fontSize.sm,
+            color: p.stale ? colors.warning : colors.muted,
+            textAlign: 'right',
+          }}>
+            {p.stale ? 'dữ liệu cũ lúc ' : 'cập nhật '}
+            {new Date(p.fetchedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        )}
+        <Button onClick={p.onRefresh} loading={p.loading}>Làm mới</Button>
+      </div>
     </div>
   )
 }

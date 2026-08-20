@@ -1,11 +1,29 @@
-export const CONFIG_VERSION = 1
+import { parseHhMm } from './timeline'
 
+// v1 → v2: workdayStart/workdayEnd/breaks được thêm ở v1 nhưng KHÔNG có UI để
+// sửa, nên bất kỳ giá trị nào đã lưu (nếu có) chỉ có thể là default cũ —
+// migrateConfig ghi đè chúng bằng default mới một lần khi nâng version.
+export const CONFIG_VERSION = 2
+
+// `matchSummary` là TÊN sub-task ceremony trong sprint đang mở ("Daily Scrum").
+// Có nó thì issue key được tra tại runtime, nên sprint mới có sub-task mới là
+// nút tự trỏ đúng chỗ. `issueKey` trở thành override thủ công cho trường hợp
+// muốn ghim cứng một issue. Cả hai là string, '' nghĩa là "không đặt" — giữ
+// đúng lối khoan dung của migrateConfig (sai kiểu → default, không bao giờ
+// throw). Một event PHẢI có ít nhất một trong hai, không thì không biết ghi
+// giờ vào đâu.
 export type SprintEvent = {
   name: string
   issueKey: string
+  matchSummary: string
   defaultMinutes: number
   comment: string
 }
+
+// Một khoảng nghỉ trong ngày, "HH:MM". Cố tình là DANH SÁCH chứ không phải một
+// cặp field "lunchStart/lunchEnd": thêm khoảng nghỉ thứ hai (vd 15:00 tea break)
+// phải là thêm một phần tử, không phải viết lại logic cắt worklog.
+export type BreakInterval = { start: string; end: string }
 
 export type ConfigMember = {
   accountId: string
@@ -27,6 +45,8 @@ export type Config = {
   members: ConfigMember[]
   daysOff: Record<string, string[]>
   workdayStart: string
+  workdayEnd: string
+  breaks: BreakInterval[]
   slotMinutes: number
   durationPresets: number[]
   sprintEvents: SprintEvent[]
@@ -43,7 +63,11 @@ export const defaultConfig: Config = {
   storyPointsFieldId: null,
   members: [],
   daysOff: {},
-  workdayStart: '09:00',
+  // Giờ làm việc và giờ nghỉ trưa là feature ẩn: không có UI trong Options,
+  // chỉ có default ở đây. Không worklog nào được đi qua giờ nghỉ.
+  workdayStart: '08:30',
+  workdayEnd: '18:00',
+  breaks: [{ start: '12:00', end: '13:00' }],
   slotMinutes: 15,
   durationPresets: [15, 30, 60, 240, 360, 480],
   sprintEvents: [],
@@ -61,14 +85,34 @@ const num = (v: unknown, fallback: number): number =>
 const strArray = (v: unknown, fallback: string[]): string[] =>
   Array.isArray(v) && v.every((x) => typeof x === 'string') ? (v as string[]) : fallback
 
+// "HH:MM" trong khoảng hợp lệ. Giờ sai kiểu/sai định dạng mà lọt xuống
+// parseHhMm sẽ thành NaN, rồi thành `started` rác trong POST worklog.
+const HH_MM = /^([01]?\d|2[0-3]):([0-5]\d)$/
+const isHhMm = (v: unknown): v is string => typeof v === 'string' && HH_MM.test(v)
+const hhMm = (v: unknown, fallback: string): string => (isHhMm(v) ? v : fallback)
+
 const numArray = (v: unknown, fallback: number[]): number[] =>
   Array.isArray(v) && v.every((x) => typeof x === 'number') ? (v as number[]) : fallback
+
+// Giờ tan làm phải sau giờ bắt đầu, không thì lưới slot rỗng và dropdown
+// "Bắt đầu" trắng trơn.
+const workdayEndOf = (start: string, raw: unknown): string => {
+  const end = hhMm(raw, defaultConfig.workdayEnd)
+  return parseHhMm(end) > parseHhMm(start) ? end : defaultConfig.workdayEnd
+}
 
 // Migration cố tình khoan dung: dữ liệu lạ bị thay bằng default chứ không làm
 // hỏng toàn bộ config. Mất một field còn hơn người dùng mở extension ra trắng.
 export function migrateConfig(raw: unknown): Config {
   const r = isRecord(raw) ? raw : {}
   const d = defaultConfig
+
+  // version < 2: config này sinh ra trước khi workdayStart/workdayEnd/breaks
+  // có nghĩa thật (chưa từng có UI để người dùng tự sửa ba field này), nên
+  // giá trị đang lưu — nếu có — chắc chắn chỉ là default cũ. Ghi đè, KHÔNG
+  // đọc từ `r` cho ba field đó.
+  const rawVersion = typeof r['version'] === 'number' ? r['version'] : 0
+  const needsWorkdayMigration = rawVersion < 2
 
   const seenAccountIds = new Set<string>()
   const members: ConfigMember[] = (Array.isArray(r['members']) ? r['members'] : [])
@@ -87,15 +131,43 @@ export function migrateConfig(raw: unknown): Config {
       return true
     })
 
+  // Danh tính của một event là issueKey HOẶC matchSummary — mất cả hai thì
+  // entry vô nghĩa và bị loại. Config cũ (chỉ có issueKey) đi qua đây không sứt
+  // sát gì: matchSummary thiếu → '' → hành vi y như trước.
   const sprintEvents: SprintEvent[] = (Array.isArray(r['sprintEvents']) ? r['sprintEvents'] : [])
     .filter(isRecord)
-    .filter((e) => typeof e['issueKey'] === 'string' && e['issueKey'] !== '')
     .map((e) => ({
-      name: str(e['name'], e['issueKey'] as string),
-      issueKey: e['issueKey'] as string,
+      issueKey: str(e['issueKey'], '').trim(),
+      matchSummary: str(e['matchSummary'], '').trim(),
+      rawName: str(e['name'], ''),
       defaultMinutes: num(e['defaultMinutes'], 30),
       comment: str(e['comment'], ''),
     }))
+    .filter((e) => e.issueKey !== '' || e.matchSummary !== '')
+    .map((e) => ({
+      name: e.rawName !== '' ? e.rawName : (e.matchSummary !== '' ? e.matchSummary : e.issueKey),
+      issueKey: e.issueKey,
+      matchSummary: e.matchSummary,
+      defaultMinutes: e.defaultMinutes,
+      comment: e.comment,
+    }))
+
+  // `breaks` sai kiểu → default. Nhưng MẢNG RỖNG được giữ nguyên: đó là lựa
+  // chọn hợp lệ "ngày làm việc không có giờ nghỉ", không phải dữ liệu thiếu.
+  const breaksRaw = r['breaks']
+  const breaks: BreakInterval[] = needsWorkdayMigration
+    ? d.breaks.map((b) => ({ ...b }))
+    : Array.isArray(breaksRaw)
+      ? breaksRaw
+          .filter(isRecord)
+          .filter((b) => isHhMm(b['start']) && isHhMm(b['end']))
+          .map((b) => ({ start: b['start'] as string, end: b['end'] as string }))
+          // end <= start là vô nghĩa; normalizeBreaks cũng bỏ, nhưng bỏ sớm ở đây
+          // để config đọc ra không chứa rác.
+          // So sánh bằng PHÚT, không bằng chuỗi: "9:00" hợp lệ về định dạng
+          // nhưng "9:00" > "12:00" nếu so chuỗi.
+          .filter((b) => parseHhMm(b.end) > parseHhMm(b.start))
+      : d.breaks.map((b) => ({ ...b }))
 
   const daysOffRaw = isRecord(r['daysOff']) ? r['daysOff'] : {}
   const daysOff: Record<string, string[]> = {}
@@ -126,7 +198,11 @@ export function migrateConfig(raw: unknown): Config {
     storyPointsFieldId: typeof spfRaw === 'string' ? spfRaw : null,
     members,
     daysOff,
-    workdayStart: str(r['workdayStart'], d.workdayStart),
+    workdayStart: needsWorkdayMigration ? d.workdayStart : hhMm(r['workdayStart'], d.workdayStart),
+    workdayEnd: needsWorkdayMigration
+      ? d.workdayEnd
+      : workdayEndOf(hhMm(r['workdayStart'], d.workdayStart), r['workdayEnd']),
+    breaks,
     slotMinutes: num(r['slotMinutes'], d.slotMinutes),
     durationPresets: numArray(r['durationPresets'], d.durationPresets),
     sprintEvents,

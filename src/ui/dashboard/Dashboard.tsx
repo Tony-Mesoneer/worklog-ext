@@ -1,21 +1,32 @@
 // src/ui/dashboard/Dashboard.tsx
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import { send, type CoverageLoadResult, type SprintCurrentResult } from '@/sw/messages'
 import type { Config } from '@/core/config-schema'
 import type { Worklog } from '@/core/coverage'
+import type { IssueMetaMap } from '@/core/issue-hierarchy'
 import { buildCoverage, enumerateDates } from '@/core/coverage'
 import { todayInZone, addDays } from '@/core/jiraTime'
 import type { Scope } from '@/core/snapshot-key'
 import { Banner } from '@/ui/shared/Banner'
+import { Button } from '@/ui/shared/Button'
+import { Card } from '@/ui/shared/Card'
+import { SegmentedControl } from '@/ui/shared/SegmentedControl'
 import { ErrorBanner, toUiError, type UiError } from '@/ui/shared/errors'
+import { rangeLabel } from '@/ui/shared/format'
+import { GearIcon } from '@/ui/shared/icons'
+import { colors, fontSize, space } from '@/ui/shared/theme'
 import { FilterBar, type Preset } from './FilterBar'
+import { CoverageSummary } from './CoverageSummary'
 import { CoverageTable } from './CoverageTable'
 import { CellDetail } from './CellDetail'
 import { PointsPanel } from './PointsTable'
 
+type Tab = 'coverage' | 'points'
+
 export function Dashboard() {
   const [config, setConfig] = useState<Config | null>(null)
-  const [tab, setTab] = useState<'coverage' | 'points'>('coverage')
+  const [tab, setTab] = useState<Tab>('coverage')
   const [today, setToday] = useState('')
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
@@ -25,6 +36,9 @@ export function Dashboard() {
   // bắt buộc: nếu load đầu tiên lỗi mà ta vẫn render bảng với [], cả team bị
   // tô đỏ "không log giờ nào" — spec §9/§13 cấm tuyệt đối.
   const [worklogs, setWorklogs] = useState<Worklog[] | null>(null)
+  // Metadata issue đi CẠNH worklogs (xem core/issue-hierarchy). Snapshot cache
+  // từ trước tính năng này trả về map rỗng — bảng khi đó vẽ phẳng như bản cũ.
+  const [issueMeta, setIssueMeta] = useState<IssueMetaMap>({})
   const [fetchedAt, setFetchedAt] = useState<number | null>(null)
   const [stale, setStale] = useState(false)
   const [error, setError] = useState<UiError | null>(null)
@@ -59,6 +73,7 @@ export function Dashboard() {
       const res = await send<CoverageLoadResult>({ type: 'coverage/load', scope, force })
       if (gen !== generation.current) return
       setWorklogs(res.worklogs)
+      setIssueMeta(res.meta ?? {})
       setFetchedAt(res.fetchedAt)
       setStale(res.stale)
       setError(null)
@@ -100,68 +115,129 @@ export function Dashboard() {
     }))
   }
 
-  if (!config) return <div style={{ padding: 16 }}>Đang tải…</div>
+  // Container chung cho mọi trạng thái của trang: max-width + padding, để nội
+  // dung không dính vào cạnh viewport như bản cũ.
+  const page = (children: ReactNode) => (
+    <div style={{
+      maxWidth: 1440, margin: '0 auto',
+      padding: `${space.x5}px ${space.x5}px ${space.x6}px`,
+      display: 'grid', gap: space.x4, minWidth: 0,
+    }}>
+      {children}
+    </div>
+  )
+
+  if (!config) {
+    return page(
+      <>
+        <SettingsHeader />
+        {error
+          ? <ErrorBanner error={error} />
+          : <p style={{ color: colors.muted, margin: 0 }}>Đang tải…</p>}
+      </>,
+    )
+  }
   if (config.members.length === 0) {
-    return (
-      <div style={{ padding: 16 }}>
+    return page(
+      <>
+        <SettingsHeader />
         <Banner kind="info" action={{ label: 'Mở Options', onClick: () => chrome.runtime.openOptionsPage() }}>
           Chưa chọn member nào để theo dõi.
         </Banner>
-      </div>
+      </>,
     )
   }
 
   const dates = enumerateDates(from, to)
   // Chỉ dựng bảng khi đã có dữ liệu thật.
+  // `today` lấy từ state đã tính bằng todayInZone(config.timeZone, …) ở lần
+  // load đầu — cùng một giá trị mà các preset ngày dùng, không tính lần thứ
+  // hai và tuyệt đối không lấy ngày của browser. '' = chưa có config → truyền
+  // undefined để core giữ hành vi "cả khoảng".
   const table = worklogs === null ? null : buildCoverage({
     worklogs,
     members: config.members,
     dates,
     daysOff: config.daysOff,
+    ...(today === '' ? {} : { today }),
   })
 
   const detailMember = detail ? config.members.find((m) => m.accountId === detail.accountId) : null
 
-  return (
-    <div style={{ padding: 16, fontFamily: 'system-ui' }}>
-      <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
-        <button onClick={() => setTab('coverage')} disabled={tab === 'coverage'}>Coverage</button>
-        <button onClick={() => setTab('points')} disabled={tab === 'points'}>Story points vs giờ</button>
-      </div>
+  return page(
+    <>
+      {/* Page header — bản cũ không có tiêu đề nào, chỉ mấy cái nút trần ở góc. */}
+      <header style={{ display: 'flex', flexWrap: 'wrap', gap: space.x3, alignItems: 'flex-end' }}>
+        <div style={{ minWidth: 0 }}>
+          <h1 style={{ margin: 0, fontSize: fontSize.xxl, fontWeight: 700 }}>Worklog team</h1>
+          <p style={{ margin: '2px 0 0', color: colors.muted, fontSize: fontSize.md }}>
+            {sprintRange ? sprintRange.name : 'Khoảng tự chọn'}
+            {rangeLabel(from, to) === '' ? '' : ` · ${rangeLabel(from, to)}`}
+            {` · ${config.members.length} member`}
+          </p>
+        </div>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: space.x3 }}>
+          <SegmentedControl<Tab>
+            label="Tab dashboard"
+            items={[
+              { value: 'coverage', label: 'Coverage' },
+              { value: 'points', label: 'Story points vs giờ' },
+            ]}
+            value={tab}
+            onChange={setTab}
+          />
+          {/* Ghost + icon-only, đặt sau tab switcher: đọc ra là chrome phụ chứ
+              không cạnh tranh với control chính của trang. */}
+          <SettingsButton />
+        </div>
+      </header>
 
       {error && <ErrorBanner error={error} onDismiss={() => setError(null)} />}
 
       {tab === 'coverage' && (
         <>
-          <FilterBar
-            from={from} to={to} preset={preset} sprintRange={sprintRange} today={today}
-            onChange={(f, t, p) => { setFrom(f); setTo(t); setPreset(p) }}
-            onRefresh={() => scope && void load(scope, true)}
-            fetchedAt={fetchedAt} stale={stale}
-          />
+          <Card title="Bộ lọc">
+            <FilterBar
+              from={from} to={to} preset={preset} sprintRange={sprintRange} today={today}
+              onChange={(f, t, p) => { setFrom(f); setTo(t); setPreset(p) }}
+              onRefresh={() => scope && void load(scope, true)}
+              fetchedAt={fetchedAt} stale={stale} loading={loading}
+            />
+          </Card>
+
           {/* stale chỉ có nghĩa khi đã có số để hiện — khi đó những số đó là
               thật, chỉ là cũ. */}
           {stale && table && (
-            <div style={{ margin: '8px 0' }}>
-              <Banner kind="warn">
-                Không lấy được dữ liệu mới từ Jira — đang hiện snapshot cũ.
-              </Banner>
-            </div>
+            <Banner kind="warn">
+              Không lấy được dữ liệu mới từ Jira — đang hiện snapshot cũ.
+            </Banner>
           )}
+
           {table === null ? (
-            <div style={{ marginTop: 12, fontSize: 13, color: '#607d8b' }}>
-              {error
-                ? 'Chưa có dữ liệu nào để hiện — xử lý lỗi ở trên rồi bấm "Làm mới".'
-                : 'Đang tải dữ liệu…'}
-            </div>
+            <Card>
+              <p style={{ margin: 0, color: colors.muted }}>
+                {error
+                  ? 'Chưa có dữ liệu nào để hiện — xử lý lỗi ở trên rồi bấm "Làm mới".'
+                  : 'Đang tải dữ liệu…'}
+              </p>
+            </Card>
           ) : (
-            <div style={{ marginTop: 10, opacity: loading ? 0.6 : 1 }}>
-              <CoverageTable
-                data={table}
-                onCellClick={(accountId, date) => setDetail({ accountId, date })}
-                onToggleDayOff={(a, d) => void toggleDayOff(a, d)}
-              />
-            </div>
+            <>
+              <Card title="Tóm tắt">
+                <CoverageSummary data={table} />
+              </Card>
+              <Card flush>
+                <div style={{ opacity: loading ? 0.6 : 1, transition: 'opacity .12s ease' }}>
+                  <CoverageTable
+                    data={table}
+                    meta={issueMeta}
+                    daysOff={config.daysOff}
+                    onCellClick={(accountId, date) => setDetail({ accountId, date })}
+                    onToggleDayOff={(a, d) => void toggleDayOff(a, d)}
+                  />
+                </div>
+              </Card>
+            </>
           )}
         </>
       )}
@@ -172,12 +248,39 @@ export function Dashboard() {
         <CellDetail
           memberName={detailMember.displayName}
           date={detail.date}
+          dayOff={(config.daysOff[detail.accountId] ?? []).includes(detail.date)}
+          onToggleDayOff={() => void toggleDayOff(detail.accountId, detail.date)}
           worklogs={(worklogs ?? []).filter(
             (w) => w.authorAccountId === detail.accountId && w.date === detail.date,
           )}
           onClose={() => setDetail(null)}
         />
       )}
+    </>,
+  )
+}
+
+// Lối vào Options LUÔN hiện, không phụ thuộc config/lỗi/member rỗng — trước
+// đây chỉ có bên trong banner lỗi và banner "chưa chọn member", nên cả hai
+// biến mất là hết đường quay lại Options. Ghost + icon-only để đọc ra là
+// chrome phụ, không cạnh tranh với "Coverage"/"Story points".
+function SettingsButton() {
+  return (
+    <Button
+      variant="ghost" iconOnly aria-label="Cấu hình" title="Cấu hình"
+      onClick={() => chrome.runtime.openOptionsPage()}
+    >
+      <GearIcon />
+    </Button>
+  )
+}
+
+// Dùng cho các trạng thái chưa có <header> đầy đủ (đang tải / lỗi / chưa
+// chọn member) — đặt riêng một hàng ở góc phải trang.
+function SettingsHeader() {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+      <SettingsButton />
     </div>
   )
 }

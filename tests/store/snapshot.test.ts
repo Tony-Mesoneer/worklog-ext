@@ -68,6 +68,43 @@ describe('store/snapshot', () => {
     expect(res?.stale).toBe(false)
   })
 
+  it('writeSnapshot lưu kèm meta và đọc lại được', async () => {
+    const { writeSnapshot, readSnapshot, snapshotMeta } = await import('@/store/snapshot')
+    await writeSnapshot(scope, [wl('1')], 1000, {
+      'CAG-1': {
+        key: 'CAG-1', summary: 'x', statusName: 'In Testing',
+        statusCategory: 'indeterminate', parentKey: 'CAG-0',
+        parentSummary: 'parent', isSubtask: true,
+      },
+    })
+    const res = await readSnapshot(scope)
+    expect(snapshotMeta(res!.snapshot)['CAG-1']!.parentKey).toBe('CAG-0')
+  })
+
+  it('snapshot cũ KHÔNG có meta đọc được, meta thành rỗng', async () => {
+    // Cache đã nằm trong storage.local từ trước tính năng cha/con. Nó phải đọc
+    // được và cho map rỗng, không được ném lỗi hay làm dashboard trắng.
+    const { readSnapshot, snapshotMeta } = await import('@/store/snapshot')
+    fake.data[snapshotKey(scope)] = { fetchedAt: Date.now(), worklogs: [wl('1')] }
+    const res = await readSnapshot(scope)
+    expect(res!.snapshot.worklogs).toHaveLength(1)
+    expect(snapshotMeta(res!.snapshot)).toEqual({})
+  })
+
+  it('patchSnapshot giữ nguyên meta đã lưu', async () => {
+    const { writeSnapshot, patchSnapshot, readSnapshot, snapshotMeta } =
+      await import('@/store/snapshot')
+    await writeSnapshot(scope, [wl('1')], 1000, {
+      'CAG-1': {
+        key: 'CAG-1', summary: 'x', statusName: 'Open', statusCategory: 'new',
+        parentKey: null, parentSummary: null, isSubtask: false,
+      },
+    })
+    await patchSnapshot(scope, [wl('2')], [])
+    const res = await readSnapshot(scope)
+    expect(Object.keys(snapshotMeta(res!.snapshot))).toEqual(['CAG-1'])
+  })
+
   it('patchSnapshot không làm gì khi chưa có cache', async () => {
     const { patchSnapshot } = await import('@/store/snapshot')
     await patchSnapshot(scope, [wl('1')], [])

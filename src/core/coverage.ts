@@ -29,7 +29,17 @@ export type CoverageRow = {
   member: Member
   perDay: Record<string, number>
   total: number
-  capacitySeconds: number
+  /**
+   * Capacity của những ngày làm việc ĐÃ XẢY RA (tính tới hết `today`). Đây là
+   * mốc duy nhất mà `status` và thanh tiến độ được so vào — hỏi "đã log đủ
+   * phần việc đến giờ chưa", không phải "đã log đủ cả sprint chưa".
+   */
+  capacityToDateSeconds: number
+  /**
+   * Capacity của TOÀN khoảng ngày, kể cả ngày chưa tới. Chỉ để hiển thị bối
+   * cảnh ("… · 276h cả sprint") — không bao giờ dùng để phán ai thiếu giờ.
+   */
+  capacityFullRangeSeconds: number
   status: 'ok' | 'under' | 'empty'
   issues: CoverageIssueRow[]
 }
@@ -39,7 +49,42 @@ export type CoverageTable = {
   rows: CoverageRow[]
   totalPerDay: Record<string, number>
   grandTotal: number
+  /** `today` mà caller truyền vào, hoặc null nếu không cắt theo hôm nay. */
+  today: string | null
+  /** Những ngày trong `dates` đã xảy ra (<= today). Bằng `dates` khi today=null. */
+  datesToDate: string[]
+  /** Tổng `capacityToDateSeconds` của mọi member — mốc của hàng tóm tắt. */
+  capacityToDateSeconds: number
+  /** Tổng `capacityFullRangeSeconds` của mọi member — chỉ để hiển thị. */
+  capacityFullRangeSeconds: number
 }
+
+/**
+ * "Thiếu giờ" theo nghĩa ĐÁNG ĐỂ HÀNH ĐỘNG: hụt hơn MỘT NGÀY LÀM VIỆC của chính
+ * member đó so với capacity tới hôm nay.
+ *
+ * Tại sao có ngưỡng: capacity đếm tới HẾT hôm nay, nên hôm nay luôn được tính
+ * trọn một ngày. Lúc 9h sáng thì mọi người về mặt cấu trúc đều đang hụt gần đủ
+ * một ngày, và cờ "THIẾU GIỜ" đọc ra N/N mỗi buổi sáng — đúng cái kiểu báo động
+ * giả mà lần thay đổi trước vừa dẹp, chỉ là rộng một ngày.
+ *
+ * Tại sao KHÔNG cắt hôm nay ra khỏi capacity thay vì đặt ngưỡng: giờ log của
+ * hôm nay nằm ở TỬ SỐ. Bỏ hôm nay khỏi mẫu số sẽ cho coverage vượt 100% và đọc
+ * ra như một lỗi. Mọi con số hiển thị giữ nguyên, chỉ CỜ đổi nghĩa.
+ *
+ * Ngưỡng là `hoursPerDay` của chính member: người làm nửa ngày có ngưỡng nửa
+ * ngày, không thì họ luôn bị gắn cờ trễ hơn người full-time.
+ *
+ * capacityToDate = 0 (member inactive, hoặc khoảng ngày chưa tới) → hiệu số âm
+ * → không bao giờ bị gắn cờ, không cần trường hợp riêng.
+ */
+export function isShortHours(row: CoverageRow): boolean {
+  return shortBeyondOneDay(row.total, row.capacityToDateSeconds, row.member.hoursPerDay)
+}
+
+const shortBeyondOneDay = (
+  total: number, capacityToDateSeconds: number, hoursPerDay: number,
+): boolean => capacityToDateSeconds - total > hoursPerDay * 3600
 
 export function enumerateDates(from: string, to: string): string[] {
   const out: string[] = []
@@ -63,8 +108,19 @@ export function buildCoverage(args: {
   members: Member[]
   dates: string[]
   daysOff: Record<string, string[]>
+  /**
+   * "YYYY-MM-DD" hôm nay theo timezone của profile Jira. Tuỳ chọn: khi thiếu,
+   * mọi ngày trong khoảng được coi là đã xảy ra — tức hành vi y như trước.
+   * Core KHÔNG tự biết hôm nay là ngày nào (giữ src/core thuần và test được);
+   * ngày là input, và caller phải lấy nó từ timezone Jira chứ không phải của
+   * browser, nếu không lead ở múi giờ khác sẽ thấy số của ngày hôm qua.
+   */
+  today?: string
 }): CoverageTable {
-  const { worklogs, members, dates, daysOff } = args
+  const { worklogs, members, dates, daysOff, today } = args
+  // Chuỗi YYYY-MM-DD so sánh từ điển đúng bằng so sánh thời gian.
+  // today ngoài khoảng vẫn đúng: trước khoảng → rỗng, sau khoảng → cả khoảng.
+  const datesToDate = today === undefined ? dates : dates.filter((d) => d <= today)
   const dateSet = new Set(dates)
   const zeros = (): Record<string, number> =>
     Object.fromEntries(dates.map((d) => [d, 0]))
@@ -102,23 +158,60 @@ export function buildCoverage(args: {
 
     // Member inactive không có capacity: họ đã rời team, báo đỏ là nhiễu.
     const off = new Set(daysOff[m.accountId] ?? [])
-    const workingDays = m.active
-      ? dates.filter((d) => !isWeekend(d) && !off.has(d)).length
+    // Cuối tuần và ngày nghỉ của CHÍNH member đó bị loại trước, rồi mới cắt
+    // theo hôm nay — nên hôm nay là T7/CN hay ngày nghỉ của người này thì nó
+    // đơn giản không nằm trong tập đếm, không cần trường hợp riêng.
+    const workingDay = (d: string): boolean => !isWeekend(d) && !off.has(d)
+    const perDaySeconds = m.hoursPerDay * 3600
+    const capacityFullRangeSeconds = m.active
+      ? dates.filter(workingDay).length * perDaySeconds
       : 0
-    const capacitySeconds = workingDays * m.hoursPerDay * 3600
+    const capacityToDateSeconds = m.active
+      ? datesToDate.filter(workingDay).length * perDaySeconds
+      : 0
 
+    // status so vào capacity TỚI HÔM NAY.
+    //
+    // capacityToDate = 0 (khoảng nằm hoàn toàn ở tương lai, hoặc member
+    // inactive) thì `total < capacity` luôn false → không ai bị 'under'. Đúng
+    // ý: chưa tới ngày nào thì chưa có gì để log, báo thiếu là báo sai.
+    //
+    // Chưa log gì vẫn là 'empty' — kể cả khi capacity = 0. 'empty' là một SỰ
+    // KIỆN ("ô này trống"), không phải một cảnh báo; consumer nào muốn cảnh
+    // báo thì phải tự lọc thêm capacityToDateSeconds > 0. Giữ vậy để hàng
+    // member inactive không đổi nghĩa.
+    //
+    // Log giờ trong khi capacityToDate = 0 (làm vào ngày nghỉ) → 'ok': không
+    // trừ ra số âm, không tạo tỉ lệ > 100% để rồi đọc như lỗi.
+    //
+    // 'under' dùng ngưỡng một ngày làm việc (xem isShortHours): hụt đúng một
+    // ngày KHÔNG bị gắn cờ, hụt hơn một ngày thì có.
     const status: CoverageRow['status'] =
-      total === 0 ? 'empty' : total < capacitySeconds ? 'under' : 'ok'
+      total === 0
+        ? 'empty'
+        : shortBeyondOneDay(total, capacityToDateSeconds, m.hoursPerDay)
+          ? 'under'
+          : 'ok'
 
     return {
       member: m,
       perDay,
       total,
-      capacitySeconds,
+      capacityToDateSeconds,
+      capacityFullRangeSeconds,
       status,
       issues: [...issueMap.values()].sort((a, b) => b.total - a.total),
     }
   })
 
-  return { dates, rows, totalPerDay, grandTotal }
+  return {
+    dates,
+    rows,
+    totalPerDay,
+    grandTotal,
+    today: today ?? null,
+    datesToDate,
+    capacityToDateSeconds: rows.reduce((s, r) => s + r.capacityToDateSeconds, 0),
+    capacityFullRangeSeconds: rows.reduce((s, r) => s + r.capacityFullRangeSeconds, 0),
+  }
 }

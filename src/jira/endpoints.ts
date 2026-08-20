@@ -2,6 +2,8 @@
 import type { JiraClient } from './client'
 import { parseStarted } from '@/core/jiraTime'
 import type { Worklog } from '@/core/coverage'
+import type { IssueMeta, IssueMetaMap } from '@/core/issue-hierarchy'
+import { toStatusCategory } from '@/core/issue-hierarchy'
 import type { SprintIssue } from '@/core/points'
 
 // --- ADF helpers -----------------------------------------------------------
@@ -45,11 +47,49 @@ export async function findStoryPointsFieldId(c: JiraClient): Promise<string | nu
   return null
 }
 
+// --- issue metadata --------------------------------------------------------
+// Ba field này KHÔNG tốn request nào thêm: chúng chỉ được thêm vào `fields` của
+// những search vốn đã chạy.
+//   - `parent`     → { key, fields: { summary } } trên sub-task, thiếu ở issue
+//                    cấp trên. Đây là nguồn duy nhất của quan hệ cha/con.
+//   - `status`     → tên workflow thật + statusCategory.key để chọn màu.
+//   - `issuetype`  → cờ `subtask`.
+export const ISSUE_META_FIELDS = ['summary', 'parent', 'status', 'issuetype'] as const
+
+type IssueFields = {
+  summary?: unknown
+  parent?: { key?: unknown; fields?: { summary?: unknown } } | null
+  status?: { name?: unknown; statusCategory?: { key?: unknown } | null } | null
+  issuetype?: { subtask?: unknown } | null
+}
+
+const str = (v: unknown): string => (typeof v === 'string' ? v : '')
+
+// Một chỗ duy nhất map fields của Jira sang IssueMeta, dùng cho cả ba search.
+// Mọi field đều được coi là CÓ THỂ THIẾU: instance cũ, issue type lạ, hoặc field
+// bị khoá quyền đều làm Jira bỏ field ra khỏi response mà không báo lỗi.
+export function toIssueMeta(key: string, fields: IssueFields | undefined): IssueMeta {
+  const f = fields ?? {}
+  const parentKey = str(f.parent?.key)
+  return {
+    key,
+    summary: str(f.summary),
+    statusName: str(f.status?.name),
+    statusCategory: toStatusCategory(f.status?.statusCategory?.key),
+    parentKey: parentKey === '' ? null : parentKey,
+    parentSummary: parentKey === '' ? null : str(f.parent?.fields?.summary),
+    isSubtask: f.issuetype?.subtask === true,
+  }
+}
+
+export const toIssueMetaMap = (items: readonly IssueMeta[]): IssueMetaMap =>
+  Object.fromEntries(items.map((m) => [m.key, m]))
+
 // --- worklog search --------------------------------------------------------
 export async function searchIssuesWithWorklogs(
   c: JiraClient,
   args: { projects: string[]; accountIds: string[]; from: string; to: string },
-): Promise<{ key: string; summary: string }[]> {
+): Promise<IssueMeta[]> {
   // "worklogAuthor in ()" là lỗi cú pháp JQL — chặn trước khi gọi Jira.
   if (args.accountIds.length === 0) return []
 
@@ -64,23 +104,44 @@ export async function searchIssuesWithWorklogs(
   }
   const jql = clauses.join(' AND ')
 
-  const out: { key: string; summary: string }[] = []
+  const out: IssueMeta[] = []
   let nextPageToken: string | undefined
 
   do {
     const page = await c.call<{
-      issues: { key: string; fields: { summary: string } }[]
+      issues: { key: string; fields: IssueFields }[]
       nextPageToken?: string
     }>({
       method: 'POST',
       path: '/rest/api/3/search/jql',
-      body: { jql, fields: ['summary'], maxResults: 100, nextPageToken },
+      body: { jql, fields: [...ISSUE_META_FIELDS], maxResults: 100, nextPageToken },
     })
-    for (const i of page.issues) out.push({ key: i.key, summary: i.fields.summary })
+    for (const i of page.issues) out.push(toIssueMeta(i.key, i.fields))
     nextPageToken = page.nextPageToken
   } while (nextPageToken)
 
   return out
+}
+
+// Danh sách issue của chính người dùng trong sprint hiện tại, dùng làm lựa
+// chọn mặc định ở side panel (spec §7) thay vì bắt gõ ≥2 ký tự.
+export async function searchMyIssues(
+  c: JiraClient, args: { projects: string[] },
+): Promise<IssueMeta[]> {
+  const clauses = ['assignee = currentUser()', 'sprint in openSprints()']
+  if (args.projects.length > 0) {
+    clauses.push(`project in (${args.projects.map((p) => `"${p}"`).join(',')})`)
+  }
+  const jql = `${clauses.join(' AND ')} ORDER BY updated DESC`
+
+  const res = await c.call<{
+    issues: { key: string; fields: IssueFields }[]
+  }>({
+    method: 'POST',
+    path: '/rest/api/3/search/jql',
+    body: { jql, fields: [...ISSUE_META_FIELDS], maxResults: 50 },
+  })
+  return res.issues.map((i) => toIssueMeta(i.key, i.fields))
 }
 
 export async function getIssueWorklogs(
@@ -189,25 +250,86 @@ export async function getBoards(
   return res.values
 }
 
-export async function getActiveSprint(
+export type Sprint = { id: number; name: string; startDate: string; endDate: string }
+
+// TẤT CẢ sprint đang active, không chỉ cái đầu. Lúc chuyển sprint Jira có thể
+// có hai sprint active cùng lúc — biết cả hai là điều kiện để tie-break
+// ceremony (xem core/event-resolve).
+export async function getActiveSprints(
   c: JiraClient, boardId: number,
-): Promise<{ id: number; name: string; startDate: string; endDate: string } | null> {
+): Promise<Sprint[]> {
   const res = await c.call<{
     values: { id: number; name: string; startDate?: string; endDate?: string }[]
   }>({ method: 'GET', path: `/rest/agile/1.0/board/${boardId}/sprint?state=active` })
 
-  const s = res.values[0]
-  if (!s) return null
-  return {
+  return res.values.map((s) => ({
     id: s.id, name: s.name,
     startDate: s.startDate ?? '', endDate: s.endDate ?? '',
+  }))
+}
+
+export async function getActiveSprint(
+  c: JiraClient, boardId: number,
+): Promise<Sprint | null> {
+  return (await getActiveSprints(c, boardId))[0] ?? null
+}
+
+// --- ceremony sub-task -----------------------------------------------------
+
+// Chuỗi trong JQL: `\` và `"` phải escape, không thì một tên chứa dấu ngoặc kép
+// làm cả query sai cú pháp và Jira trả 400 không đọc được.
+const jqlString = (s: string): string => `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+
+// MỘT request cho TẤT CẢ ceremony: các tên được OR vào cùng một JQL thay vì mỗi
+// event một round-trip. Đổi lại, kết quả là một rổ trộn — `~` của Jira là fuzzy
+// match theo từ nên "Sprint Review" cũng kéo "Sprint Retro" về. Việc đối chiếu
+// tên chính xác nằm ở core/event-resolve, KHÔNG ở đây.
+//
+// `summaries` rỗng → lấy toàn bộ sub-task trong sprint đang mở (dropdown Options).
+export async function searchSprintSubtasks(
+  c: JiraClient, args: { projects: string[]; summaries?: string[] },
+): Promise<{ key: string; summary: string }[]> {
+  const clauses = ['issuetype = Sub-task', 'sprint in openSprints()']
+  if (args.projects.length > 0) {
+    clauses.push(`project in (${args.projects.map((p) => jqlString(p)).join(',')})`)
   }
+  const wanted = (args.summaries ?? []).map((s) => s.trim()).filter((s) => s !== '')
+  if (wanted.length > 0) {
+    clauses.push(`(${wanted.map((s) => `summary ~ ${jqlString(s)}`).join(' OR ')})`)
+  }
+  const jql = `${clauses.join(' AND ')} ORDER BY summary ASC`
+
+  const res = await c.call<{
+    issues: { key: string; fields: { summary: string } }[]
+  }>({
+    method: 'POST',
+    path: '/rest/api/3/search/jql',
+    body: { jql, fields: ['summary'], maxResults: 100 },
+  })
+  return res.issues.map((i) => ({ key: i.key, summary: i.fields.summary }))
+}
+
+// Lọc ra những key thuộc đúng một sprint. Chỉ cần khi có NHIỀU sprint đang mở:
+// lúc đó phải biết ứng viên nào của sprint nào mới tie-break được. Một sprint
+// đang mở (trường hợp thường ngày) thì không tốn request nào.
+export async function filterKeysInSprint(
+  c: JiraClient, keys: string[], sprintId: number,
+): Promise<string[]> {
+  if (keys.length === 0) return []
+  const jql =
+    `sprint = ${sprintId} AND key in (${keys.map((k) => jqlString(k)).join(',')})`
+  const res = await c.call<{ issues: { key: string }[] }>({
+    method: 'POST',
+    path: '/rest/api/3/search/jql',
+    body: { jql, fields: ['summary'], maxResults: 100 },
+  })
+  return res.issues.map((i) => i.key)
 }
 
 export async function getSprintIssues(
   c: JiraClient, sprintId: number, storyPointsFieldId: string | null,
-): Promise<SprintIssue[]> {
-  const fields = ['summary', 'status', 'assignee', 'timespent']
+): Promise<{ issues: SprintIssue[]; meta: IssueMetaMap }> {
+  const fields = [...ISSUE_META_FIELDS, 'assignee', 'timespent']
   if (storyPointsFieldId) fields.push(storyPointsFieldId)
 
   const res = await c.call<{
@@ -217,7 +339,7 @@ export async function getSprintIssues(
     path: `/rest/agile/1.0/sprint/${sprintId}/issue?fields=${fields.join(',')}&maxResults=100`,
   })
 
-  return res.issues.map((i) => {
+  const issues = res.issues.map((i) => {
     const f = i.fields
     const sp = storyPointsFieldId ? f[storyPointsFieldId] : null
     const assignee = f['assignee'] as { displayName?: string } | null
@@ -231,4 +353,11 @@ export async function getSprintIssues(
       timeSpentSeconds: typeof f['timespent'] === 'number' ? f['timespent'] : 0,
     }
   })
+
+  // `SprintIssue` KHÔNG đổi (buildPointsTable ăn nó nguyên vẹn); metadata đi
+  // thành map riêng bên cạnh, đúng như ở đường coverage.
+  const meta = toIssueMetaMap(
+    res.issues.map((i) => toIssueMeta(i.key, i.fields as IssueFields)),
+  )
+  return { issues, meta }
 }

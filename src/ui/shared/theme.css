@@ -1,0 +1,801 @@
+/* src/ui/shared/theme.css
+ *
+ * Stylesheet dùng chung cho cả ba UI surface (options, sidepanel, dashboard).
+ * Trước đây không có file CSS nào — mọi style là inline object hardcode màu
+ * light-theme, nên input/select/date-picker/checkbox/scrollbar luôn hiện theo
+ * skin sáng mặc định của Chrome bất kể div xung quanh tô màu gì. Khai báo
+ * `color-scheme: dark` bên dưới là dòng quan trọng nhất trong file này: nó
+ * khiến Chrome tự vẽ các control gốc (date input, checkbox, scrollbar) theo
+ * theme tối, không cần style tay từng cái.
+ *
+ * File này giữ HAI thứ:
+ *   1. Token (custom property) — palette, thang spacing, thang type, radius.
+ *   2. Class cho primitive dùng chung (.wl-btn, .wl-card, .wl-seg, .wl-meter,
+ *      .wl-table). Style trạng thái (:hover, :focus-visible, :active,
+ *      :disabled) BẮT BUỘC phải ở CSS — inline style không diễn tả được chúng.
+ *      Đó là lý do primitive dùng className thay vì style object.
+ */
+
+:root {
+  color-scheme: dark;
+
+  --bg: #141218;
+  --surface: #1D1A23;
+  --surface-alt: #232030;
+  --border: #2E2A38;
+  --border-strong: #3D3850;
+  --text: #E8E5EE;
+  --muted: #9B95A8;
+
+  /* Accent do người dùng chọn: rgb(150,125,214). Chỉ một hue duy nhất trong cả
+   * sản phẩm — các biến thể dưới đây đều là cùng màu đó ở độ sáng/độ mờ khác.
+   * --on-accent là màu chữ đặt TRÊN nền accent: accent quá sáng để dùng chữ
+   * trắng (tỉ lệ tương phản chỉ 3.4:1), chữ gần-đen cho 5.5:1 — đạt AA. */
+  --accent: #967DD6;
+  --accent-hover: #A891E0;
+  --accent-active: #8570C4;
+  --accent-ring: #BCA8F0;
+  --accent-soft: rgba(150, 125, 214, 0.16);
+  --accent-softer: rgba(150, 125, 214, 0.08);
+  --on-accent: #17121F;
+
+  /* Sọc chéo mờ = "khoảng thời gian không làm việc". Dùng cho ngày nghỉ trong
+   * bảng coverage và cho dải giờ nghỉ trong timeline — cùng một ý nghĩa thì
+   * cùng một hình thức, không thêm màu mới. Khớp với `nonWorkingStripe` trong
+   * theme.ts. */
+  --stripe-non-working:
+    repeating-linear-gradient(135deg, rgba(155, 149, 168, 0.10) 0 4px, transparent 4px 8px);
+
+  --success: #6FCF8B;
+  --warning: #F2A25C;
+  --danger: #F0757D;
+
+  /* Thang spacing 4px. Trước đây mọi khoảng cách là 6/8/10 rời rạc nên không có
+   * nhịp nào phân biệt "trong một nhóm" với "giữa hai nhóm". */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* Thang type. --text-md là cỡ chữ thân. */
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-md: 13px;
+  --text-lg: 15px;
+  --text-xl: 18px;
+  --text-2xl: 22px;
+
+  --radius-panel: 12px;
+  --radius-input: 8px;
+  --radius-chip: 6px;
+  --radius-pill: 999px;
+
+  --shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-pop: -2px 0 16px rgba(0, 0, 0, 0.45);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: var(--text-md);
+  /* Không bao giờ cho body cuộn ngang: bảng rộng tự cuộn trong container của
+   * nó (xem .wl-table-scroll). */
+  overflow-x: hidden;
+}
+
+input,
+select,
+textarea {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-input);
+  font-family: inherit;
+  font-size: inherit;
+  padding: 6px 8px;
+  /* Checkbox / radio / date-picker gốc của Chrome lấy màu từ đây — không có
+   * dòng này thì checkbox hiện xanh mặc định của hệ điều hành. */
+  accent-color: var(--accent);
+}
+
+input:hover:not(:disabled),
+select:hover:not(:disabled),
+textarea:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  border-color: var(--accent);
+}
+
+input[type="checkbox"] {
+  padding: 0;
+  width: 15px;
+  height: 15px;
+}
+
+::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: 2px;
+}
+
+:disabled {
+  cursor: not-allowed;
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.92em;
+  background: var(--surface-alt);
+  border-radius: var(--radius-chip);
+  /* Padding ngang nhỏ: <code> nằm giữa câu, padding 4px làm dấu ngoặc quanh nó
+   * trông như có khoảng trắng thừa. */
+  padding: 0 3px;
+  color: var(--accent-ring);
+}
+
+/* <button> trần vẫn phải theo theme: nếu quên bọc bằng primitive Button thì nó
+ * hiện skin xám mặc định của hệ điều hành, lệch hẳn khỏi bề mặt tối. */
+button {
+  background: var(--surface-alt);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-input);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+/* ── Button ──────────────────────────────────────────────────────────────── */
+
+.wl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-input);
+  font-family: inherit;
+  font-size: var(--text-md);
+  font-weight: 500;
+  line-height: 1.2;
+  padding: 7px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color .12s ease, border-color .12s ease, color .12s ease;
+}
+
+.wl-btn--sm {
+  font-size: var(--text-sm);
+  padding: 4px 8px;
+  border-radius: var(--radius-chip);
+}
+
+.wl-btn--lg {
+  font-size: var(--text-lg);
+  padding: 10px 16px;
+  font-weight: 600;
+}
+
+.wl-btn--block {
+  width: 100%;
+}
+
+/* Icon-only: ô vuông để mũi tên ngày không thành nút dẹt. */
+.wl-btn--icon {
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+}
+
+.wl-btn--primary {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+}
+
+.wl-btn--primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.wl-btn--primary:active:not(:disabled) {
+  background: var(--accent-active);
+  border-color: var(--accent-active);
+}
+
+/* Disabled-primary: vẫn ĐỌC RA là nút chính đang tắt (viền + chữ accent mờ),
+ * không tụt xuống thành một hình chữ nhật xám vô nghĩa. */
+.wl-btn--primary:disabled {
+  background: var(--accent-softer);
+  border-color: var(--accent-soft);
+  color: color-mix(in srgb, var(--accent) 65%, var(--bg));
+}
+
+.wl-btn--secondary {
+  background: var(--surface-alt);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.wl-btn--secondary:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-softer);
+}
+
+.wl-btn--secondary:active:not(:disabled) {
+  background: var(--accent-soft);
+}
+
+.wl-btn--secondary:disabled {
+  color: var(--muted);
+  background: var(--surface);
+  border-color: var(--border);
+  opacity: .65;
+}
+
+.wl-btn--ghost {
+  background: transparent;
+  color: var(--muted);
+  border-color: transparent;
+}
+
+.wl-btn--ghost:hover:not(:disabled) {
+  background: var(--surface-alt);
+  color: var(--text);
+}
+
+.wl-btn--ghost:active:not(:disabled) {
+  background: var(--accent-soft);
+}
+
+.wl-btn--ghost:disabled {
+  opacity: .5;
+}
+
+.wl-btn--danger {
+  background: transparent;
+  color: var(--danger);
+  border-color: var(--border);
+}
+
+.wl-btn--danger:hover:not(:disabled) {
+  background: rgba(240, 117, 125, .14);
+  border-color: var(--danger);
+}
+
+.wl-btn--danger:disabled {
+  opacity: .5;
+}
+
+/* Spinner của trạng thái loading. */
+.wl-spinner {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  animation: wl-spin .7s linear infinite;
+  flex: 0 0 auto;
+}
+
+@keyframes wl-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wl-spinner { animation-duration: 2.4s; }
+  .wl-btn { transition: none; }
+}
+
+/* ── Card / Section ──────────────────────────────────────────────────────── */
+
+.wl-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-panel);
+  /* min-width:0 để card là flex/grid child không đẩy trang rộng ra. */
+  min-width: 0;
+}
+
+.wl-card__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-3) 0;
+}
+
+.wl-card__title {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.wl-card__body {
+  padding: var(--space-3);
+  min-width: 0;
+}
+
+.wl-card--flush > .wl-card__body {
+  padding: 0;
+}
+
+/* Card không padding bọc bảng: cắt góc để bảng không đâm ra ngoài bo góc. */
+.wl-card--flush {
+  overflow: hidden;
+}
+
+/* ── SegmentedControl ────────────────────────────────────────────────────── */
+
+.wl-seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 2px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-input);
+  max-width: 100%;
+}
+
+.wl-seg__item {
+  appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-chip);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  padding: 5px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color .12s ease, color .12s ease;
+}
+
+.wl-seg__item:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--accent-softer);
+}
+
+/* Trạng thái ĐANG CHỌN — không phải `disabled`. Bản cũ dùng
+ * `disabled={tab === current}` nên tab đang xem hiện mờ như thể không dùng
+ * được, đúng ngược lại ý nghĩa cần truyền. */
+.wl-seg__item[aria-selected="true"],
+.wl-seg__item[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+.wl-seg__item[aria-selected="true"]:hover,
+.wl-seg__item[aria-pressed="true"]:hover {
+  background: var(--accent-hover);
+  color: var(--on-accent);
+}
+
+.wl-seg__item:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+/* ── Meter / ProgressBar ─────────────────────────────────────────────────── */
+
+.wl-meter {
+  width: 100%;
+  min-width: 40px;
+  /* Track phải nhìn thấy được: nền surface-alt gần như trùng nền hàng bảng nên
+   * thanh 12% trước đây trông như một vệt lơ lửng, không so sánh được với ai. */
+  background: var(--border);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+.wl-meter__fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  transition: width .18s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wl-meter__fill { transition: none; }
+}
+
+/* ── Table ───────────────────────────────────────────────────────────────── */
+
+.wl-table-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.wl-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 100%;
+  font-size: var(--text-sm);
+}
+
+.wl-table th,
+.wl-table td {
+  border-bottom: 1px solid var(--border);
+  padding: var(--space-1) var(--space-2);
+  text-align: right;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.wl-table th[scope="col"] {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-alt);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: .03em;
+  color: var(--muted);
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-2);
+}
+
+.wl-table th[scope="row"] {
+  text-align: left;
+  font-weight: 600;
+  white-space: normal;
+}
+
+.wl-table__num {
+  font-variant-numeric: tabular-nums;
+}
+
+.wl-table tbody tr:hover td,
+.wl-table tbody tr:hover th {
+  background: var(--accent-softer);
+}
+
+.wl-table tbody tr.wl-row--sub th,
+.wl-table tbody tr.wl-row--sub td {
+  color: var(--muted);
+  background: var(--bg);
+}
+
+.wl-table tfoot td,
+.wl-table tfoot th {
+  background: var(--surface-alt);
+  font-weight: 700;
+  font-size: var(--text-md);
+  border-top: 2px solid var(--border-strong);
+  border-bottom: 0;
+  position: sticky;
+  bottom: 0;
+}
+
+/* Ô trong bảng coverage là <button> thật, không phải <td onClick> — bàn phím
+ * tới được và screen reader đọc ra là control. */
+.wl-cell {
+  appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-chip);
+  color: inherit;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  width: 100%;
+  min-width: 34px;
+  text-align: right;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+
+.wl-cell:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.wl-cell--empty {
+  color: var(--muted);
+}
+
+/* ── Timeline khối (side panel) ──────────────────────────────────────────── */
+
+.wl-blk {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  border-radius: var(--radius-chip);
+  padding: 0 var(--space-2);
+  overflow: hidden;
+}
+
+.wl-blk--entry {
+  background: var(--surface-alt);
+  border-left: 3px solid var(--border-strong);
+}
+
+.wl-blk--entry.wl-blk--hit {
+  border-left-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.wl-blk--gap {
+  border: 1px dashed var(--border);
+  color: var(--muted);
+}
+
+.wl-blk--break {
+  background: var(--stripe-non-working);
+  color: var(--muted);
+  justify-content: flex-end;
+}
+
+.wl-blk--sel {
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-ring);
+}
+
+.wl-blk__key {
+  font-weight: 600;
+  font-size: var(--text-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wl-blk__time,
+.wl-blk__dur {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+}
+
+/* ── Field row ───────────────────────────────────────────────────────────── */
+
+.wl-field {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.wl-field__label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.wl-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 2px;
+}
+
+/* Grid item mặc định có min-width:auto nên KHÔNG co dưới bề rộng nội dung: bỏ
+ * dòng này thì summary issue dài tràn ra ngoài card ở panel hẹp 320px thay vì
+ * bị ellipsis. */
+.wl-list > li {
+  min-width: 0;
+}
+
+/* Nút chọn issue: key đậm + badge trạng thái + summary mờ trên một dòng, cắt
+ * bằng ellipsis để panel hẹp 320px không sinh cuộn ngang. Sub-task có thêm DÒNG
+ * THỨ HAI chỉ ra cha (`↳ CAG-2969 …`) — chỉ khi có cha, nên danh sách issue
+ * thường vẫn cao đúng một dòng như trước. */
+.wl-option {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 1px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-chip);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm);
+  padding: 5px 7px;
+  cursor: pointer;
+}
+
+.wl-option:hover {
+  background: var(--accent-softer);
+  border-color: var(--border-strong);
+}
+
+.wl-option[aria-current="true"] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.wl-option__row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+  /* min-width:0 để dòng con co được, nếu không summary dài đẩy rộng cả nút. */
+  min-width: 0;
+}
+
+.wl-option__key {
+  font-weight: 600;
+  flex: 0 0 auto;
+}
+
+/* Dòng cha của sub-task: nhỏ hơn và mờ hơn dòng chính, vì nó là BỐI CẢNH chứ
+ * không phải thứ người dùng đang chọn. */
+.wl-option__parent {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wl-option__sum {
+  color: var(--muted);
+  /* min-width:0 là dòng bắt buộc: không có nó, flex item không co lại dưới
+   * kích thước nội dung nên summary dài tràn ra ngoài card thay vì ellipsis. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Scrollbar (WebKit/Chromium) ─────────────────────────────────────────
+ * Extension chỉ chạy trong Chrome nên không cần fallback `scrollbar-color`. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--surface);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--radius-chip);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}
+
+/* ── Date popover (side panel) ───────────────────────────────────────────── */
+
+.wl-pop {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  z-index: 20;
+  background: var(--surface-alt);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-panel);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .5);
+  padding: var(--space-3);
+  display: grid;
+  gap: var(--space-2);
+  /* Không bao giờ rộng hơn panel: side panel Chrome hẹp tới 320px. */
+  width: max-content;
+  max-width: min(300px, calc(100vw - 2 * var(--space-3)));
+}
+
+.wl-cal {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.wl-cal__dow {
+  text-align: center;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--muted);
+  padding-bottom: 2px;
+}
+
+.wl-cal__day {
+  appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-chip);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  min-width: 32px;
+  padding: 5px 0;
+  cursor: pointer;
+}
+
+.wl-cal__day:hover:not(:disabled) {
+  background: var(--accent-softer);
+  border-color: var(--border-strong);
+}
+
+/* Ngày ngoài tháng đang xem: mờ nhưng vẫn chọn được. */
+.wl-cal__day--out {
+  color: var(--muted);
+  opacity: .6;
+}
+
+/* Hôm nay và ngày đang chọn phải phân biệt được với nhau VÀ với ngày thường:
+ * hôm nay = viền accent, đang chọn = nền accent. */
+.wl-cal__day[aria-current="date"] {
+  border-color: var(--accent);
+  color: var(--accent-ring);
+  font-weight: 600;
+}
+
+.wl-cal__day[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
+  opacity: 1;
+}
+
+.wl-cal__day:disabled {
+  opacity: .35;
+  cursor: not-allowed;
+}
+
+/* Trigger mở lịch: là chính cái ngày trong header, nên nó phải trông bấm được
+ * mà không thành một cái nút hộp. */
+.wl-datebtn {
+  appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-input);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  padding: 2px var(--space-2) 2px var(--space-1);
+  cursor: pointer;
+  display: grid;
+  gap: 0;
+  min-width: 0;
+  width: 100%;
+}
+
+.wl-datebtn:hover {
+  background: var(--accent-softer);
+  border-color: var(--border-strong);
+}
+
+.wl-datebtn[aria-expanded="true"] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.wl-datebtn:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+}
