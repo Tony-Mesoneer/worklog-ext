@@ -2,24 +2,59 @@ import { useEffect, useState } from 'react'
 import { send, type AuthProbeResult } from '@/sw/messages'
 import type { Config, ConfigMember, SprintEvent } from '@/core/config-schema'
 import { Banner } from '@/ui/shared/Banner'
+import { toUiError } from '@/ui/shared/errors'
+
+// Ở Options thì "mở Options" là vô nghĩa, nên 401/403 có text riêng: nó chỉ
+// người dùng xuống đúng khối token bên dưới.
+const AUTH_HINT =
+  'Jira từ chối request (401/403). Session Jira có thể đã hết hạn, hoặc token sai — thử nhập email + API token ở mục 2.'
 
 export function Options() {
   const [config, setConfig] = useState<Config | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [probe, setProbe] = useState<AuthProbeResult | null>(null)
   const [urlDraft, setUrlDraft] = useState('')
+  // Khối token mở khi probe fail (spec §4: "Nếu fail thì hiện form nhập
+  // token"), và mở được bằng tay cho người đã biết mình cần token.
+  const [showToken, setShowToken] = useState(false)
+
+  const report = (e: unknown) => {
+    const ui = toUiError(e)
+    if (ui.auth) setShowToken(true)
+    setError(ui.auth ? AUTH_HINT : ui.message)
+  }
 
   useEffect(() => {
     send<Config>({ type: 'config/load' })
-      .then((c) => { setConfig(c); setUrlDraft(c.jiraBaseUrl) })
-      .catch((e: Error) => setError(e.message))
+      .then((c) => { setConfig(c); setUrlDraft(c.jiraBaseUrl); if (c.authMode === 'token') setShowToken(true) })
+      .catch(report)
   }, [])
 
   const save = async (patch: Partial<Config>) => {
     try {
       setConfig(await send<Config>({ type: 'config/save', patch }))
       setError(null)
-    } catch (e) { setError((e as Error).message) }
+    } catch (e) { report(e) }
+  }
+
+  // Probe dùng lại sau khi lưu token, để người dùng biết ngay token có chạy hay
+  // không thay vì phải mò ở side panel.
+  const probeAuth = async () => {
+    try {
+      setProbe(await send<AuthProbeResult>({ type: 'auth/probe' }))
+      setError(null)
+      return true
+    } catch (e) {
+      setProbe(null)
+      // Bất kỳ lỗi probe nào (không chỉ 401) đều mở khối token: cookie session
+      // không dùng được thì token là đường còn lại.
+      setShowToken(true)
+      const ui = toUiError(e)
+      setError(ui.auth
+        ? AUTH_HINT
+        : `Không xác thực được với Jira: ${ui.message}. Thử nhập API token ở mục 2.`)
+      return false
+    }
   }
 
   const connect = async () => {
@@ -31,8 +66,8 @@ export function Options() {
       })
       if (!granted) { setError('Bạn đã từ chối quyền truy cập Jira'); return }
       await save({ jiraBaseUrl: url.origin })
-      setProbe(await send<AuthProbeResult>({ type: 'auth/probe' }))
-    } catch (e) { setError((e as Error).message) }
+      await probeAuth()
+    } catch (e) { report(e) }
   }
 
   if (!config) return <div style={{ padding: 16 }}>Đang tải…</div>
@@ -71,6 +106,11 @@ export function Options() {
         )}
       </section>
 
+      <TokenSection
+        config={config} save={save} probeAuth={probeAuth}
+        open={showToken} setOpen={setShowToken}
+      />
+
       {/* Khối 3–6 theo cùng mẫu: đọc từ `config`, ghi bằng `save({...})`.
           Mỗi thay đổi lưu ngay — không có nút Save toàn trang. */}
       <ProjectsSection config={config} save={save} />
@@ -82,6 +122,99 @@ export function Options() {
 }
 
 type SectionProps = { config: Config; save: (p: Partial<Config>) => Promise<void> }
+
+// Đường dự phòng theo spec §4: session Jira hết hạn giữa lúc dùng, người dùng
+// đăng nhập Jira ở profile Chrome khác, hoặc instance bật XSRF khắt khe hơn.
+function TokenSection({ config, save, probeAuth, open, setOpen }: SectionProps & {
+  probeAuth: () => Promise<boolean>
+  open: boolean
+  setOpen: (v: boolean) => void
+}) {
+  const [email, setEmail] = useState('')
+  const [apiToken, setApiToken] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const saved = config.authMode === 'token' && config.token !== undefined
+
+  const submit = async () => {
+    setBusy(true)
+    try {
+      await save({ authMode: 'token', token: { email: email.trim(), apiToken: apiToken.trim() } })
+      // Xoá draft ngay sau khi lưu: token không nằm lại trong DOM.
+      setApiToken('')
+      await probeAuth()
+    } finally { setBusy(false) }
+  }
+
+  const clear = async () => {
+    setBusy(true)
+    try {
+      setApiToken('')
+      await save({ authMode: 'cookie', token: undefined })
+    } finally { setBusy(false) }
+  }
+
+  return (
+    <section>
+      <h2 style={{ fontSize: 15 }}>2. API token (dự phòng)</h2>
+      <p style={{ fontSize: 13, color: '#555', margin: '4px 0' }}>
+        Mặc định extension dùng session Jira đang đăng nhập trong Chrome. Chỉ cần
+        token khi session hết hạn, khi bạn đăng nhập Jira ở profile Chrome khác,
+        hoặc khi Jira chặn request bằng session.
+      </p>
+      {saved && (
+        <p style={{ fontSize: 13, color: '#2e7d32', margin: '4px 0' }}>
+          Đã lưu token cho <code>{config.token?.email}</code> — đang dùng chế độ token.
+        </p>
+      )}
+      {!open ? (
+        <button onClick={() => setOpen(true)}>
+          {saved ? 'Sửa token' : 'Nhập API token'}
+        </button>
+      ) : (
+        <div style={{ display: 'grid', gap: 6, maxWidth: 460 }}>
+          <input
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email Atlassian"
+            autoComplete="off"
+            style={{ padding: 6 }}
+          />
+          {/* KHÔNG bao giờ đổ token đã lưu ra lại input, và không bao giờ log. */}
+          <input
+            type="password"
+            value={apiToken}
+            onChange={(e) => setApiToken(e.target.value)}
+            placeholder={saved ? 'Token mới (để trống nếu không đổi)' : 'API token'}
+            autoComplete="off"
+            style={{ padding: 6 }}
+          />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => void submit()}
+              disabled={busy || email.trim() === '' || apiToken.trim() === ''}
+            >
+              Lưu token và kiểm tra
+            </button>
+            {saved && (
+              <button onClick={() => void clear()} disabled={busy}>
+                Xoá token, quay lại session
+              </button>
+            )}
+            <button onClick={() => { setApiToken(''); setOpen(false) }} disabled={busy}>
+              Đóng
+            </button>
+          </div>
+          <p style={{ fontSize: 12, color: '#777', margin: 0 }}>
+            Tạo token tại <code>id.atlassian.com</code> → Security → API tokens.
+            Token chỉ lưu trong máy này (<code>chrome.storage.local</code>), không
+            đồng bộ lên Google account và không gửi đi đâu ngoài Jira.
+          </p>
+        </div>
+      )}
+    </section>
+  )
+}
 
 function ProjectsSection({ config, save }: SectionProps) {
   const [draft, setDraft] = useState('')
@@ -127,14 +260,22 @@ function ProjectsSection({ config, save }: SectionProps) {
 
 function BoardSection({ config, save }: SectionProps) {
   const [boards, setBoards] = useState<{ id: number; name: string }[]>([])
+  // Fetch fail mà chỉ để list rỗng thì người dùng thấy dropdown trống, không
+  // chọn được gì, rồi sau đó gặp "Chưa chọn board chính" ở tab points mà không
+  // hiểu vì sao. Phải nói ra lỗi tại đây.
+  const [boardsError, setBoardsError] = useState<string | null>(null)
   const projectKey = config.projects[0]
 
   useEffect(() => {
-    if (!projectKey) { setBoards([]); return }
+    if (!projectKey) { setBoards([]); setBoardsError(null); return }
     let cancelled = false
     send<{ id: number; name: string }[]>({ type: 'boards/load', projectKey })
-      .then((bs) => { if (!cancelled) setBoards(bs) })
-      .catch(() => { if (!cancelled) setBoards([]) })
+      .then((bs) => { if (!cancelled) { setBoards(bs); setBoardsError(null) } })
+      .catch((e: unknown) => {
+        if (cancelled) return
+        setBoards([])
+        setBoardsError(toUiError(e).message)
+      })
     return () => { cancelled = true }
   }, [projectKey])
 
@@ -146,6 +287,10 @@ function BoardSection({ config, save }: SectionProps) {
       </p>
       {!projectKey ? (
         <p style={{ fontSize: 13, color: '#888' }}>Thêm một project ở trên trước đã.</p>
+      ) : boardsError !== null ? (
+        <p style={{ fontSize: 13, color: '#c62828' }}>
+          Không lấy được danh sách board của {projectKey}: {boardsError}
+        </p>
       ) : (
         <select
           value={config.primaryBoardId ?? ''}

@@ -3,7 +3,7 @@ import type { CSSProperties } from 'react'
 import { send, type PointsLoadResult } from '@/sw/messages'
 import { buildPointsTable, type PointsTable as Data } from '@/core/points'
 import { hoursLabel } from '@/ui/shared/format'
-import { Banner } from '@/ui/shared/Banner'
+import { ErrorBanner, toUiError, type UiError } from '@/ui/shared/errors'
 
 const td: CSSProperties = {
   borderBottom: '1px solid #eceff1', padding: '4px 8px', fontSize: 12,
@@ -12,15 +12,15 @@ const td: CSSProperties = {
 export function PointsPanel() {
   const [data, setData] = useState<Data | null>(null)
   const [sprintName, setSprintName] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<UiError | null>(null)
 
   useEffect(() => {
     void send<PointsLoadResult>({ type: 'points/load' })
       .then((res) => { setSprintName(res.sprintName); setData(buildPointsTable(res.issues)) })
-      .catch((e: Error) => setError(e.message))
+      .catch((e: unknown) => setError(toUiError(e)))
   }, [])
 
-  if (error) return <Banner kind="error">{error}</Banner>
+  if (error) return <ErrorBanner error={error} />
   if (!data) return <div>Đang tải…</div>
   if (data.rows.length === 0) return <p>Sprint hiện tại không có issue nào.</p>
 

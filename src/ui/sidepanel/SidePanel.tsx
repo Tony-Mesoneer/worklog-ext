@@ -7,6 +7,7 @@ import { nextFreeStart, parseHhMm, type DayEntry } from '@/core/timeline'
 import { parseDuration, formatDuration } from '@/core/duration'
 import { todayInZone, addDays } from '@/core/jiraTime'
 import { Banner } from '@/ui/shared/Banner'
+import { ErrorBanner, toUiError, type UiError } from '@/ui/shared/errors'
 import { DayTimeline } from './DayTimeline'
 import { EventButtons } from './EventButtons'
 import { IssuePicker } from './IssuePicker'
@@ -28,7 +29,7 @@ export function SidePanel() {
   const [durationInput, setDurationInput] = useState('')
   const [comment, setComment] = useState('')
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<UiError | null>(null)
   const [lastLogged, setLastLogged] = useState<{ id: string; issueKey: string } | null>(null)
 
   const loadConfig = useCallback(() => {
@@ -39,7 +40,7 @@ export function SidePanel() {
         setDate(todayInZone(c.timeZone, new Date()))
         setStartMinutes(parseHhMm(c.workdayStart))
       })
-      .catch((e: Error) => setError(e.message))
+      .catch((e: unknown) => setError(toUiError(e)))
   }, [])
 
   useEffect(() => { loadConfig() }, [loadConfig])
@@ -51,7 +52,7 @@ export function SidePanel() {
       // Start time luôn nhảy tới khoảng trống kế tiếp sau khi dữ liệu đổi.
       setStartMinutes(nextFreeStart(toEntries(res.worklogs), parseHhMm(c.workdayStart), c.slotMinutes))
       setError(null)
-    } catch (e) { setError((e as Error).message) }
+    } catch (e) { setError(toUiError(e)) }
   }, [])
 
   useEffect(() => {
@@ -68,8 +69,8 @@ export function SidePanel() {
   const submit = async () => {
     if (!config) return
     const seconds = parseDuration(durationInput)
-    if (seconds === null) { setError('Duration không hợp lệ'); return }
-    if (issueKey.trim() === '') { setError('Chưa chọn issue'); return }
+    if (seconds === null) { setError({ message: 'Duration không hợp lệ', auth: false }); return }
+    if (issueKey.trim() === '') { setError({ message: 'Chưa chọn issue', auth: false }); return }
 
     setBusy(true)
     try {
@@ -85,8 +86,9 @@ export function SidePanel() {
       // Undo hết hiệu lực sau 8 giây.
       setTimeout(() => setLastLogged(null), 8000)
     } catch (e) {
-      // Giữ nguyên form: người dùng không phải nhập lại.
-      setError((e as Error).message)
+      // Giữ nguyên form: người dùng không phải nhập lại. Message của
+      // MessageError đã chứa text gốc từ Jira (xem jiraErrorMessage).
+      setError(toUiError(e))
     } finally { setBusy(false) }
   }
 
@@ -97,7 +99,13 @@ export function SidePanel() {
       setLastLogged(null)
       await reload(config, date)
     } catch (e) {
-      setError(`Không xoá được worklog ${lastLogged.id} trên ${lastLogged.issueKey} — xoá tay trong Jira`)
+      // Text cho người dùng nói đủ việc cần làm; nguyên nhân gốc vẫn phải vào
+      // console, không thì không debug được gì.
+      console.error('[sidepanel] undo worklog thất bại', e)
+      setError({
+        message: `Không xoá được worklog ${lastLogged.id} trên ${lastLogged.issueKey} — xoá tay trong Jira`,
+        auth: false,
+      })
     }
   }
 
@@ -105,11 +113,13 @@ export function SidePanel() {
     return (
       <div style={{ padding: 12 }}>
         {error
-          ? (
-            <Banner kind="error" action={{ label: 'Thử lại', onClick: loadConfig }}>
-              {error}
-            </Banner>
-          )
+          ? error.auth
+            ? <ErrorBanner error={error} />
+            : (
+              <Banner kind="error" action={{ label: 'Thử lại', onClick: loadConfig }}>
+                {error.message}
+              </Banner>
+            )
           : 'Đang tải…'}
       </div>
     )
@@ -139,7 +149,7 @@ export function SidePanel() {
         </span>
       </div>
 
-      {error && <Banner kind="error" action={{ label: 'Ẩn', onClick: () => setError(null) }}>{error}</Banner>}
+      {error && <ErrorBanner error={error} onDismiss={() => setError(null)} />}
 
       {lastLogged && (
         <Banner kind="info" action={{ label: 'Undo', onClick: () => void undo() }}>

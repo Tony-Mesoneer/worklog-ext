@@ -1,5 +1,5 @@
 // src/ui/sidepanel/DayTimeline.tsx
-import { buildSlots, occupiedBy, formatMinutes, type DayEntry } from '@/core/timeline'
+import { buildSlots, occupiedBy, formatMinutes, DAY_END_MINUTES, type DayEntry } from '@/core/timeline'
 
 type Props = {
   entries: DayEntry[]
@@ -9,12 +9,10 @@ type Props = {
   selectedDuration: number
 }
 
-const DAY_END = 20 * 60 // 20:00 — đủ cho một ngày làm việc dài
-
 export function DayTimeline({
   entries, workdayStartMinutes, slotMinutes, selectedStart, selectedDuration,
 }: Props) {
-  const slots = buildSlots(workdayStartMinutes, DAY_END, slotMinutes)
+  const slots = buildSlots(workdayStartMinutes, DAY_END_MINUTES, slotMinutes)
   const selEnd = selectedStart + selectedDuration
 
   return (

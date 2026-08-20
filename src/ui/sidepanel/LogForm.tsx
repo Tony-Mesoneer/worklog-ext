@@ -1,6 +1,9 @@
 // src/ui/sidepanel/LogForm.tsx
 import { parseDuration, formatDuration } from '@/core/duration'
-import { buildSlots, occupiedBy, formatMinutes, findOverlaps, type DayEntry } from '@/core/timeline'
+import {
+  buildSlots, occupiedBy, formatMinutes, findOverlaps,
+  DAY_END_MINUTES, type DayEntry,
+} from '@/core/timeline'
 
 type Props = {
   entries: DayEntry[]
@@ -18,13 +21,11 @@ type Props = {
   onSubmit: () => void
 }
 
-const DAY_END = 20 * 60
-
 export function LogForm(p: Props) {
   const seconds = parseDuration(p.durationInput)
   const minutes = seconds === null ? 0 : Math.round(seconds / 60)
   const overlaps = minutes > 0 ? findOverlaps(p.entries, p.startMinutes, minutes) : []
-  const slots = buildSlots(p.workdayStartMinutes, DAY_END, p.slotMinutes)
+  const slots = buildSlots(p.workdayStartMinutes, DAY_END_MINUTES, p.slotMinutes)
 
   return (
     <div style={{ display: 'grid', gap: 8 }}>
