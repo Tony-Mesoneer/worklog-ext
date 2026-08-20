@@ -1,19 +1,70 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { send, type PointsLoadResult } from '@/sw/messages'
-import { buildPointsTable, type PointsTable as Data } from '@/core/points'
+import { buildPointsTable, type PointsRow, type PointsTable as Data } from '@/core/points'
+import type { IssueMeta, IssueMetaMap } from '@/core/issue-hierarchy'
+import { groupIssueRowsByParent } from '@/core/issue-hierarchy'
 import { Card } from '@/ui/shared/Card'
+import { StatusBadge } from '@/ui/shared/StatusBadge'
 import { hoursLabel } from '@/ui/shared/format'
 import { ErrorBanner, toUiError, type UiError } from '@/ui/shared/errors'
 import { colors, fontSize, space } from '@/ui/shared/theme'
 
+// Thụt lề của sub-task. Ở tab này việc gom nhóm không chỉ để đẹp: story points
+// gần như luôn nằm ở issue CHA còn giờ thì log ở sub-task, nên danh sách phẳng
+// cho ra "cha 5 điểm / 0h" cạnh "con 0 điểm / 14h" và cột h/point vô nghĩa. Xếp
+// con dưới cha là thứ làm cột đó đọc được.
+const CHILD_INDENT = 22
+
+// h/point, trung vị, cờ outlier KHÔNG đổi: buildPointsTable vẫn là nơi duy nhất
+// tính chúng, ở đây chỉ đổi thứ tự vẽ và thụt lề.
+function IssueRow({ row, meta, child }: {
+  row: PointsRow
+  meta: IssueMeta | undefined
+  child: boolean
+}) {
+  const noPoints = row.storyPoints === null || row.storyPoints === 0
+  return (
+    <tr style={{ background: row.isOutlier ? colors.accentSofter : undefined }}>
+      <th scope="row" style={{ fontWeight: 400, paddingLeft: child ? CHILD_INDENT : undefined }}>
+        <strong>{child ? '↳ ' : ''}{row.key}</strong> {row.summary}
+      </th>
+      <td style={{ textAlign: 'left' }}>{row.assigneeName ?? '—'}</td>
+      <td style={{ textAlign: 'left' }}>
+        {meta
+          ? <StatusBadge name={meta.statusName} category={meta.statusCategory} />
+          : row.status}
+      </td>
+      <td className="wl-table__num" style={{ color: noPoints ? colors.danger : undefined }}>
+        {noPoints ? 'chưa có' : row.storyPoints}
+      </td>
+      <td className="wl-table__num">{hoursLabel(row.timeSpentSeconds)}</td>
+      <td
+        className="wl-table__num"
+        style={{
+          fontWeight: row.isOutlier ? 700 : 400,
+          color: row.isOutlier ? colors.accentRing : undefined,
+        }}
+        title={row.isOutlier ? 'Lệch xa trung vị h/point của sprint' : undefined}
+      >
+        {row.hoursPerPoint === null ? '—' : row.hoursPerPoint.toFixed(1)}
+      </td>
+    </tr>
+  )
+}
+
 export function PointsPanel() {
   const [data, setData] = useState<Data | null>(null)
+  const [meta, setMeta] = useState<IssueMetaMap>({})
   const [sprintName, setSprintName] = useState('')
   const [error, setError] = useState<UiError | null>(null)
 
   useEffect(() => {
     void send<PointsLoadResult>({ type: 'points/load' })
-      .then((res) => { setSprintName(res.sprintName); setData(buildPointsTable(res.issues)) })
+      .then((res) => {
+        setSprintName(res.sprintName)
+        setMeta(res.meta ?? {})
+        setData(buildPointsTable(res.issues))
+      })
       .catch((e: unknown) => setError(toUiError(e)))
   }, [])
 
@@ -26,6 +77,9 @@ export function PointsPanel() {
   }
 
   const med = data.medianHoursPerPoint
+  // Gom theo cha SAU khi buildPointsTable đã sort theo h/point: thứ tự trong
+  // nhóm và thứ tự các nhóm vẫn phản ánh sort đó (xem groupIssueRowsByParent).
+  const groups = groupIssueRowsByParent(data.rows, meta, (r) => r.key)
 
   return (
     <>
@@ -58,32 +112,29 @@ export function PointsPanel() {
               </tr>
             </thead>
             <tbody>
-              {data.rows.map((r) => {
-                const noPoints = r.storyPoints === null || r.storyPoints === 0
-                return (
-                  <tr key={r.key} style={{ background: r.isOutlier ? colors.accentSofter : undefined }}>
-                    <th scope="row" style={{ fontWeight: 400 }}>
-                      <strong>{r.key}</strong> {r.summary}
-                    </th>
-                    <td style={{ textAlign: 'left' }}>{r.assigneeName ?? '—'}</td>
-                    <td style={{ textAlign: 'left' }}>{r.status}</td>
-                    <td className="wl-table__num" style={{ color: noPoints ? colors.danger : undefined }}>
-                      {noPoints ? 'chưa có' : r.storyPoints}
-                    </td>
-                    <td className="wl-table__num">{hoursLabel(r.timeSpentSeconds)}</td>
-                    <td
-                      className="wl-table__num"
-                      style={{
-                        fontWeight: r.isOutlier ? 700 : 400,
-                        color: r.isOutlier ? colors.accentRing : undefined,
-                      }}
-                      title={r.isOutlier ? 'Lệch xa trung vị h/point của sprint' : undefined}
-                    >
-                      {r.hoursPerPoint === null ? '—' : r.hoursPerPoint.toFixed(1)}
-                    </td>
-                  </tr>
-                )
-              })}
+              {groups.map((group) => (
+                <Fragment key={group.key}>
+                  {/* Cha không có row trong sprint (nằm ngoài sprint đang mở):
+                      vẫn hiện một dòng tiêu đề, nếu không thì sub-task lại
+                      trông như issue độc lập — đúng cái cần sửa. */}
+                  {group.isParent && group.own === null && (
+                    <tr>
+                      <th scope="row" style={{ fontWeight: 600, color: colors.muted }}>
+                        {group.key} {group.summary}
+                      </th>
+                      <td colSpan={5} style={{ textAlign: 'left', color: colors.muted }}>
+                        không có trong sprint này
+                      </td>
+                    </tr>
+                  )}
+                  {(group.own ? [group.own, ...group.children] : group.children).map((r) => (
+                    <IssueRow
+                      key={r.key} row={r} meta={meta[r.key]}
+                      child={group.isParent && r.key !== group.key}
+                    />
+                  ))}
+                </Fragment>
+              ))}
             </tbody>
           </table>
         </div>
