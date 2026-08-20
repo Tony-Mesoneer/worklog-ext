@@ -144,15 +144,20 @@ function BlockRow({ block }: { block: Block }) {
   if (block.kind === 'break') {
     // Dải nền, KHÔNG phải feature: chỉ sọc mờ + nhãn, không thời lượng, không
     // hành động nào. Nó tồn tại để một tiếng trống lúc 12:00 đọc ra là "nghỉ".
+    //
+    // KHÔNG hiện giờ cụ thể ở đây: dải này có thể đã bị một worklog cũ (log
+    // trước khi có luật "không log qua giờ nghỉ") che mất một phần, nên đoạn
+    // còn hiển thị chỉ là PHẦN CÒN TRỐNG của giờ nghỉ, không phải toàn bộ
+    // khoảng đã cấu hình. Ghi "12:45–13:00" trong tình huống đó là sai — nó
+    // đọc như thể giờ nghỉ chỉ có 15 phút. Nhãn chung "nghỉ trưa" đúng trong
+    // mọi trường hợp mà không cần biết band đã bị cắt bao nhiêu.
     return (
       <div
         className="wl-blk wl-blk--break"
         style={{ height: h }}
-        title={`Giờ nghỉ ${formatMinutes(block.start)}–${formatMinutes(block.start + block.minutes)}`}
+        title="Giờ nghỉ trưa"
       >
-        <span className="wl-blk__dur">
-          nghỉ {formatMinutes(block.start)}–{formatMinutes(block.start + block.minutes)}
-        </span>
+        <span className="wl-blk__dur">nghỉ trưa</span>
       </div>
     )
   }
