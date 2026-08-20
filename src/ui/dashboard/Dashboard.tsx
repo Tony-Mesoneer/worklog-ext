@@ -8,10 +8,12 @@ import { buildCoverage, enumerateDates } from '@/core/coverage'
 import { todayInZone, addDays } from '@/core/jiraTime'
 import type { Scope } from '@/core/snapshot-key'
 import { Banner } from '@/ui/shared/Banner'
+import { Button } from '@/ui/shared/Button'
 import { Card } from '@/ui/shared/Card'
 import { SegmentedControl } from '@/ui/shared/SegmentedControl'
 import { ErrorBanner, toUiError, type UiError } from '@/ui/shared/errors'
 import { rangeLabel } from '@/ui/shared/format'
+import { GearIcon } from '@/ui/shared/icons'
 import { colors, fontSize, space } from '@/ui/shared/theme'
 import { FilterBar, type Preset } from './FilterBar'
 import { CoverageSummary } from './CoverageSummary'
@@ -122,16 +124,22 @@ export function Dashboard() {
 
   if (!config) {
     return page(
-      error
-        ? <ErrorBanner error={error} />
-        : <p style={{ color: colors.muted, margin: 0 }}>Đang tải…</p>,
+      <>
+        <SettingsHeader />
+        {error
+          ? <ErrorBanner error={error} />
+          : <p style={{ color: colors.muted, margin: 0 }}>Đang tải…</p>}
+      </>,
     )
   }
   if (config.members.length === 0) {
     return page(
-      <Banner kind="info" action={{ label: 'Mở Options', onClick: () => chrome.runtime.openOptionsPage() }}>
-        Chưa chọn member nào để theo dõi.
-      </Banner>,
+      <>
+        <SettingsHeader />
+        <Banner kind="info" action={{ label: 'Mở Options', onClick: () => chrome.runtime.openOptionsPage() }}>
+          Chưa chọn member nào để theo dõi.
+        </Banner>
+      </>,
     )
   }
 
@@ -158,7 +166,7 @@ export function Dashboard() {
             {` · ${config.members.length} member`}
           </p>
         </div>
-        <div style={{ marginLeft: 'auto' }}>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: space.x3 }}>
           <SegmentedControl<Tab>
             label="Tab dashboard"
             items={[
@@ -168,6 +176,9 @@ export function Dashboard() {
             value={tab}
             onChange={setTab}
           />
+          {/* Ghost + icon-only, đặt sau tab switcher: đọc ra là chrome phụ chứ
+              không cạnh tranh với control chính của trang. */}
+          <SettingsButton />
         </div>
       </header>
 
@@ -235,5 +246,30 @@ export function Dashboard() {
         />
       )}
     </>,
+  )
+}
+
+// Lối vào Options LUÔN hiện, không phụ thuộc config/lỗi/member rỗng — trước
+// đây chỉ có bên trong banner lỗi và banner "chưa chọn member", nên cả hai
+// biến mất là hết đường quay lại Options. Ghost + icon-only để đọc ra là
+// chrome phụ, không cạnh tranh với "Coverage"/"Story points".
+function SettingsButton() {
+  return (
+    <Button
+      variant="ghost" iconOnly aria-label="Cấu hình" title="Cấu hình"
+      onClick={() => chrome.runtime.openOptionsPage()}
+    >
+      <GearIcon />
+    </Button>
+  )
+}
+
+// Dùng cho các trạng thái chưa có <header> đầy đủ (đang tải / lỗi / chưa
+// chọn member) — đặt riêng một hàng ở góc phải trang.
+function SettingsHeader() {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+      <SettingsButton />
+    </div>
   )
 }

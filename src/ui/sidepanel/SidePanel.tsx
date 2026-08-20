@@ -14,6 +14,7 @@ import { Button } from '@/ui/shared/Button'
 import { Card } from '@/ui/shared/Card'
 import { ProgressBar } from '@/ui/shared/ProgressBar'
 import { ErrorBanner, toUiError, type UiError } from '@/ui/shared/errors'
+import { GearIcon } from '@/ui/shared/icons'
 import { colors, fontSize, space } from '@/ui/shared/theme'
 import { DatePopover } from './DatePopover'
 import { DayBlocks } from './DayBlocks'
@@ -29,6 +30,31 @@ const toEntries = (worklogs: Worklog[]): DayEntry[] =>
   }))
 
 const TARGET_SECONDS = 8 * 3600
+
+// Lối vào Options LUÔN hiện, không phụ thuộc config/lỗi — trước đây banner
+// "Mở Options" chỉ hiện khi jiraBaseUrl rỗng nên biến mất ngay khi cấu hình
+// xong, và người dùng không còn cách nào quay lại Options để sửa. Ghost +
+// icon-only để nó đọc ra là chrome phụ, không cạnh tranh với Log/tab chính.
+function SettingsButton() {
+  return (
+    <Button
+      variant="ghost" iconOnly aria-label="Cấu hình" title="Cấu hình"
+      onClick={() => chrome.runtime.openOptionsPage()}
+    >
+      <GearIcon />
+    </Button>
+  )
+}
+
+// Dùng cho hai trạng thái đầu (đang tải / chưa cấu hình) — chưa có header
+// ngày để gắn gear vào, nên đặt riêng một hàng.
+function SettingsHeader() {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+      <SettingsButton />
+    </div>
+  )
+}
 
 export function SidePanel() {
   const [config, setConfig] = useState<Config | null>(null)
@@ -140,7 +166,8 @@ export function SidePanel() {
 
   if (!config) {
     return (
-      <div style={{ padding: space.x3 }}>
+      <div style={{ padding: space.x3, display: 'grid', gap: space.x3 }}>
+        <SettingsHeader />
         {error
           ? error.auth
             ? <ErrorBanner error={error} />
@@ -155,7 +182,8 @@ export function SidePanel() {
   }
   if (config.jiraBaseUrl === '') {
     return (
-      <div style={{ padding: space.x3 }}>
+      <div style={{ padding: space.x3, display: 'grid', gap: space.x3 }}>
+        <SettingsHeader />
         <Banner kind="info" action={{ label: 'Mở Options', onClick: () => chrome.runtime.openOptionsPage() }}>
           Chưa cấu hình Jira.
         </Banner>
@@ -208,6 +236,7 @@ export function SidePanel() {
             >
               →
             </Button>
+            <SettingsButton />
           </div>
 
           <div style={{ display: 'flex', alignItems: 'baseline', gap: space.x2, flexWrap: 'wrap' }}>
