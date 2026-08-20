@@ -12,6 +12,49 @@ export class JiraError extends Error {
   }
 }
 
+// Jira trả {"errorMessages":[...]} hoặc {"errors":{field:msg}} cho phần lớn lỗi
+// 400 — và những message đó là thứ người dùng cần để sửa input ("issue does not
+// exist", "worklog time must be greater than zero"). Body HTML (proxy, trang
+// login) không mang thông tin gì nên bỏ. Cắt độ dài để banner không thành blob.
+const MAX_DETAIL = 300
+
+export function jiraErrorDetail(body: string): string {
+  const text = body.trim()
+  if (text === '' || text.startsWith('<')) return ''
+  const cap = (s: string) => (s.length > MAX_DETAIL ? `${s.slice(0, MAX_DETAIL)}…` : s)
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    return cap(text)
+  }
+  if (typeof parsed !== 'object' || parsed === null) return cap(text)
+
+  const r = parsed as Record<string, unknown>
+  const parts: string[] = []
+  if (Array.isArray(r['errorMessages'])) {
+    for (const m of r['errorMessages']) if (typeof m === 'string' && m !== '') parts.push(m)
+  }
+  const errors = r['errors']
+  if (typeof errors === 'object' && errors !== null && !Array.isArray(errors)) {
+    for (const [field, msg] of Object.entries(errors as Record<string, unknown>)) {
+      if (typeof msg === 'string' && msg !== '') parts.push(`${field}: ${msg}`)
+    }
+  }
+  if (parts.length === 0 && typeof r['message'] === 'string' && r['message'] !== '') {
+    parts.push(r['message'])
+  }
+  return parts.length === 0 ? cap(text) : cap(parts.join('; '))
+}
+
+// Message phải tự đủ nghĩa: sw chỉ serialize `e.message` qua sendMessage, `body`
+// không bao giờ ra khỏi service worker.
+export function jiraErrorMessage(status: number, body: string): string {
+  const detail = jiraErrorDetail(body)
+  return detail === '' ? `Jira ${status}` : `Jira ${status} — ${detail}`
+}
+
 export type ClientDeps = {
   baseUrl: string
   auth: Auth
@@ -82,7 +125,8 @@ export function createClient(deps: ClientDeps): JiraClient {
 
         if (res.status === 401 || res.status === 403) {
           onUnauthorized?.()
-          throw new JiraError(`Jira ${res.status}`, res.status, await res.text())
+          const body = await res.text()
+          throw new JiraError(jiraErrorMessage(res.status, body), res.status, body)
         }
 
         if (res.status === 429 && attempt < maxRetries) {
@@ -95,7 +139,8 @@ export function createClient(deps: ClientDeps): JiraClient {
         }
 
         if (!res.ok) {
-          throw new JiraError(`Jira ${res.status}`, res.status, await res.text())
+          const body = await res.text()
+          throw new JiraError(jiraErrorMessage(res.status, body), res.status, body)
         }
 
         if (res.status === 204) return null as T

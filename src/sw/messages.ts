@@ -35,11 +35,23 @@ export type CoverageLoadResult = { worklogs: Worklog[]; fetchedAt: number; stale
 export type PointsLoadResult = { sprintName: string; issues: SprintIssue[] }
 export type SprintCurrentResult = { name: string; from: string; to: string } | null
 
-// Helper dùng ở cả ba bề mặt UI. Nó ném Error với message đọc được để
+// Lỗi mang theo HTTP status. Không có nó thì UI không phân biệt được 401/403
+// (cần banner "session hết hạn" + link Options theo spec §13) với lỗi thường.
+export class MessageError extends Error {
+  constructor(
+    message: string,
+    readonly status?: number,
+  ) {
+    super(message)
+    this.name = 'MessageError'
+  }
+}
+
+// Helper dùng ở cả ba bề mặt UI. Nó ném MessageError với message đọc được để
 // component chỉ cần try/catch một chỗ.
 export async function send<T>(message: Message): Promise<T> {
   const reply = (await chrome.runtime.sendMessage(message)) as Reply | undefined
-  if (!reply) throw new Error('Service worker không trả lời')
-  if (!reply.ok) throw new Error(reply.error)
+  if (!reply) throw new MessageError('Service worker không trả lời')
+  if (!reply.ok) throw new MessageError(reply.error, reply.status)
   return reply.data as T
 }

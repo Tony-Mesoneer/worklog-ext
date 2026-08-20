@@ -1,4 +1,7 @@
-import { snapshotKey, isStale, SNAPSHOT_TTL_MS, type Scope } from '@/core/snapshot-key'
+import {
+  snapshotKey, isStale, snapshotKeysToEvict,
+  SNAPSHOT_TTL_MS, SNAPSHOT_MAX_KEYS, type Scope,
+} from '@/core/snapshot-key'
 import type { Worklog } from '@/core/coverage'
 
 export type Snapshot = { fetchedAt: number; worklogs: Worklog[] }
@@ -38,4 +41,22 @@ export async function patchSnapshot(
       fetchedAt: existing.snapshot.fetchedAt, worklogs,
     } satisfies Snapshot,
   })
+}
+
+// Dọn snapshot cũ: mỗi (projects, from, to, accountIds) là một key vĩnh viễn,
+// không dọn thì storage.local đầy dần tới lúc quota vỡ. Chỉ chạm key có prefix
+// `snapshot:` — `config` không bao giờ bị xoá.
+export async function pruneSnapshots(cap: number = SNAPSHOT_MAX_KEYS): Promise<void> {
+  const all = await chrome.storage.local.get(null)
+  const metas = Object.entries(all)
+    .filter(([k]) => k.startsWith('snapshot:'))
+    .map(([key, value]) => ({
+      key,
+      fetchedAt:
+        typeof value === 'object' && value !== null && typeof (value as Snapshot).fetchedAt === 'number'
+          ? (value as Snapshot).fetchedAt
+          : 0,
+    }))
+  const evict = snapshotKeysToEvict(metas, cap)
+  if (evict.length > 0) await chrome.storage.local.remove(evict)
 }

@@ -1,5 +1,5 @@
 import { loadConfig, saveConfig } from '@/store/config'
-import { readSnapshot, writeSnapshot } from '@/store/snapshot'
+import { readSnapshot, writeSnapshot, pruneSnapshots } from '@/store/snapshot'
 import { createClient, type JiraClient } from '@/jira/client'
 import { cookieAuth, tokenAuth } from '@/jira/auth'
 import * as api from '@/jira/endpoints'
@@ -29,12 +29,20 @@ async function makeClient(config: Config): Promise<JiraClient> {
 
 // Lấy worklog cho một khoảng ngày: tìm issue có worklog trong khoảng, rồi fetch
 // worklog của từng issue. client tự giới hạn 5 request song song.
+//
+// `projects` là tham số tường minh chứ không lấy từ config, vì hai caller có
+// phạm vi khác nhau: dashboard giới hạn theo project (spec §6), còn side panel
+// phải thấy CẢ NGÀY của người dùng — worklog trên issue ngoài project (rất
+// thường là issue sprint event) mà bị lọc ra sẽ khiến tổng giờ báo thiếu và
+// nextFreeStart trả về giờ đã có việc mà không hề cảnh báo chồng giờ.
 async function fetchWorklogs(
-  c: JiraClient, config: Config, accountIds: string[], from: string, to: string,
+  c: JiraClient,
+  projects: string[],
+  accountIds: string[],
+  from: string,
+  to: string,
 ): Promise<Worklog[]> {
-  const issues = await api.searchIssuesWithWorklogs(c, {
-    projects: config.projects, accountIds, from, to,
-  })
+  const issues = await api.searchIssuesWithWorklogs(c, { projects, accountIds, from, to })
   const perIssue = await Promise.all(
     issues.map((i) => api.getIssueWorklogs(c, i.key, i.summary)),
   )
@@ -75,10 +83,14 @@ export async function handle(msg: Message): Promise<unknown> {
 
     case 'day/load': {
       const config = await loadConfig()
+      // myAccountId rỗng trước khi probe thành công. Không chặn thì JQL thành
+      // worklogAuthor in ("") và Jira trả 400 không đọc được.
+      if (config.myAccountId === '') {
+        throw new Error('Chưa xác định được tài khoản Jira — mở Options và bấm Kết nối')
+      }
       const c = await makeClient(config)
-      const worklogs = await fetchWorklogs(
-        c, config, [config.myAccountId], msg.date, msg.date,
-      )
+      // Không truyền projects: side panel cần cả ngày, không giới hạn project.
+      const worklogs = await fetchWorklogs(c, [], [config.myAccountId], msg.date, msg.date)
       return { worklogs } satisfies DayLoadResult
     }
 
@@ -143,14 +155,12 @@ export async function handle(msg: Message): Promise<unknown> {
         } satisfies CoverageLoadResult
       }
 
+      let fresh: Worklog[]
       try {
         const c = await makeClient(config)
-        const worklogs = await fetchWorklogs(
-          c, config, msg.scope.accountIds, msg.scope.from, msg.scope.to,
+        fresh = await fetchWorklogs(
+          c, config.projects, msg.scope.accountIds, msg.scope.from, msg.scope.to,
         )
-        const now = Date.now()
-        await writeSnapshot(msg.scope, worklogs, now)
-        return { worklogs, fetchedAt: now, stale: false } satisfies CoverageLoadResult
       } catch (e) {
         // Jira lỗi nhưng có snapshot cũ: trả snapshot cũ và đánh dấu stale.
         // UI hiện timestamp. Không bao giờ trả rỗng như thể team chưa log.
@@ -163,6 +173,18 @@ export async function handle(msg: Message): Promise<unknown> {
         }
         throw e
       }
+
+      // Ghi cache NGOÀI try của Jira: nếu writeSnapshot nằm trong đó, một lỗi
+      // quota storage sẽ bị báo là "Jira lỗi" và dữ liệu vừa fetch bị bỏ đi để
+      // trả về snapshot cũ hơn. Cache lỗi thì cứ trả dữ liệu tươi.
+      const now = Date.now()
+      try {
+        await writeSnapshot(msg.scope, fresh, now)
+        await pruneSnapshots()
+      } catch (e) {
+        console.warn('[sw] không ghi được snapshot', e)
+      }
+      return { worklogs: fresh, fetchedAt: now, stale: false } satisfies CoverageLoadResult
     }
 
     case 'points/load': {
@@ -180,6 +202,13 @@ export async function handle(msg: Message): Promise<unknown> {
     case 'dashboard/open': {
       await chrome.tabs.create({ url: chrome.runtime.getURL('src/ui/dashboard/index.html') })
       return null
+    }
+
+    default: {
+      // Thêm một variant vào Message mà quên handler thì trước đây handle() trả
+      // undefined và UI sập ở chỗ đọc property. Fail to, fail ở đây.
+      const unknown: never = msg
+      throw new Error(`Message type không có handler: ${JSON.stringify(unknown)}`)
     }
   }
 }

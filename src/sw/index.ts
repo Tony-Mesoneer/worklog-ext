@@ -21,6 +21,16 @@ chrome.runtime.onMessage.addListener((msg: Message, _sender, sendResponse) => {
   return true
 })
 
+// WINDOW_ID_CURRENT (-2) là sentinel, không phải window id thật — sidePanel.open
+// cần id cụ thể. Phải resolve window trước, và phải catch: đây là entry point
+// Cmd+Shift+L, lỗi im lặng ở đây là lỗi người dùng gặp đầu tiên.
 chrome.commands.onCommand.addListener((command) => {
-  if (command === 'open-sidepanel') chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT })
+  if (command !== 'open-sidepanel') return
+  chrome.windows
+    .getCurrent()
+    .then((win) => {
+      if (win.id === undefined) throw new Error('không xác định được window hiện tại')
+      return chrome.sidePanel.open({ windowId: win.id })
+    })
+    .catch((e: unknown) => console.error('[sw] sidePanel.open', e))
 })

@@ -1,6 +1,6 @@
 // tests/jira/client.test.ts
 import { describe, it, expect, vi } from 'vitest'
-import { createClient, JiraError } from '@/jira/client'
+import { createClient, JiraError, jiraErrorMessage } from '@/jira/client'
 import { cookieAuth } from '@/jira/auth'
 
 const ok = (data: unknown) =>
@@ -150,5 +150,47 @@ describe('createClient', () => {
     await client.call({ method: 'GET', path: '/rest/api/3/myself' })
 
     expect(fetchImpl.mock.calls[0]![0]).toBe('https://x.atlassian.net/rest/api/3/myself')
+  })
+})
+
+describe('jiraErrorMessage', () => {
+  it('lấy errorMessages — đây là thứ người dùng cần để sửa input', () => {
+    expect(jiraErrorMessage(400, JSON.stringify({
+      errorMessages: ['Issue does not exist or you do not have permission to see it.'],
+      errors: {},
+    }))).toBe('Jira 400 — Issue does not exist or you do not have permission to see it.')
+  })
+
+  it('lấy cả errors theo field', () => {
+    expect(jiraErrorMessage(400, JSON.stringify({
+      errorMessages: [],
+      errors: { timeSpentSeconds: 'Worklog time must be greater than zero.' },
+    }))).toBe('Jira 400 — timeSpentSeconds: Worklog time must be greater than zero.')
+  })
+
+  it('body rỗng hoặc HTML thì chỉ còn status', () => {
+    expect(jiraErrorMessage(500, '')).toBe('Jira 500')
+    expect(jiraErrorMessage(502, '<!DOCTYPE html><html>gateway</html>')).toBe('Jira 502')
+  })
+
+  it('body không phải JSON thì dùng nguyên text', () => {
+    expect(jiraErrorMessage(400, 'nope')).toBe('Jira 400 — nope')
+  })
+
+  it('cắt body dài, không đổ blob vào banner', () => {
+    const msg = jiraErrorMessage(400, JSON.stringify({ errorMessages: ['x'.repeat(1000)] }))
+    expect(msg.length).toBeLessThan(340)
+    expect(msg.endsWith('…')).toBe(true)
+  })
+
+  it('JiraError của client mang message đã có text gốc', async () => {
+    const fetchImpl = vi.fn(async () => new Response(
+      JSON.stringify({ errorMessages: ['boom'] }), { status: 400 },
+    ))
+    const c = createClient({
+      baseUrl: 'https://x.atlassian.net', auth: cookieAuth,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    })
+    await expect(c.call({ method: 'GET', path: '/x' })).rejects.toThrow('Jira 400 — boom')
   })
 })
