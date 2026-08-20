@@ -1,6 +1,11 @@
 // src/ui/dashboard/main.tsx
 import { createRoot } from 'react-dom/client'
 import '@/ui/shared/theme.css'
+import { ErrorBoundary } from '@/ui/shared/ErrorBoundary'
 import { Dashboard } from './Dashboard'
 
-createRoot(document.getElementById('root')!).render(<Dashboard />)
+createRoot(document.getElementById('root')!).render(
+  <ErrorBoundary>
+    <Dashboard />
+  </ErrorBoundary>,
+)
