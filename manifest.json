@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Worklog",
+  "version": "0.1.0",
+  "description": "Log worklog Jira nhanh, theo dõi giờ log của team",
+  "action": { "default_title": "Worklog" },
+  "background": { "service_worker": "src/sw/index.ts", "type": "module" },
+  "side_panel": { "default_path": "src/ui/sidepanel/index.html" },
+  "options_page": "src/ui/options/index.html",
+  "permissions": ["storage", "sidePanel", "tabs"],
+  "optional_host_permissions": ["https://*/*"],
+  "commands": {
+    "open-sidepanel": {
+      "suggested_key": { "default": "Ctrl+Shift+L", "mac": "Command+Shift+L" },
+      "description": "Mở Worklog side panel"
+    }
+  }
+}
