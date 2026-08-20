@@ -2,7 +2,8 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
   findStoryPointsFieldId, searchIssuesWithWorklogs, searchMyIssues, getIssueWorklogs,
-  addWorklog, getSprintIssues, getActiveSprint,
+  addWorklog, getSprintIssues, getActiveSprint, getActiveSprints,
+  searchSprintSubtasks, filterKeysInSprint,
 } from '@/jira/endpoints'
 import type { JiraClient } from '@/jira/client'
 
@@ -266,5 +267,114 @@ describe('getSprintIssues', () => {
       key: 'CAG-1', summary: 'S1', assigneeName: null,
       status: 'Open', storyPoints: null, timeSpentSeconds: 0,
     })
+  })
+})
+
+
+describe('getActiveSprints', () => {
+  it('trả TẤT CẢ sprint đang active — lúc rollover có thể hai cái', async () => {
+    const { client } = fakeClient({
+      'GET /rest/agile/1.0/board/42/sprint': {
+        values: [
+          { id: 34, name: 'S34', startDate: '2026-08-17T02:00:00.000Z', endDate: '2026-08-28T02:00:00.000Z' },
+          { id: 35, name: 'S35', startDate: '2026-08-31T02:00:00.000Z', endDate: '2026-09-11T02:00:00.000Z' },
+        ],
+      },
+    })
+    const out = await getActiveSprints(client, 42)
+    expect(out.map((s) => s.id)).toEqual([34, 35])
+    expect(out[1]!.startDate).toBe('2026-08-31T02:00:00.000Z')
+  })
+
+  it('sprint thiếu startDate/endDate → chuỗi rỗng, không undefined', async () => {
+    const { client } = fakeClient({
+      'GET /rest/agile/1.0/board/42/sprint': { values: [{ id: 34, name: 'S34' }] },
+    })
+    expect((await getActiveSprints(client, 42))[0]).toEqual({
+      id: 34, name: 'S34', startDate: '', endDate: '',
+    })
+  })
+
+  it('không có sprint active → mảng rỗng, getActiveSprint trả null', async () => {
+    const { client } = fakeClient({ 'GET /rest/agile/1.0/board/42/sprint': { values: [] } })
+    expect(await getActiveSprints(client, 42)).toEqual([])
+    const { client: c2 } = fakeClient({ 'GET /rest/agile/1.0/board/42/sprint': { values: [] } })
+    expect(await getActiveSprint(c2, 42)).toBeNull()
+  })
+})
+
+describe('searchSprintSubtasks', () => {
+  const routes = {
+    'POST /rest/api/3/search/jql': {
+      issues: [
+        { key: 'CAG-3065', fields: { summary: 'Daily Scrum' } },
+        { key: 'CAG-3067', fields: { summary: 'Sprint Retro' } },
+      ],
+    },
+  }
+
+  it('MỘT request cho tất cả tên: các summary được OR trong cùng một JQL', async () => {
+    const { client, calls } = fakeClient(routes)
+    await searchSprintSubtasks(client, {
+      projects: ['CAG'], summaries: ['Daily Scrum', 'Sprint Retro', 'Sprint Review'],
+    })
+    expect(calls).toHaveLength(1)
+    const jql = (calls[0]!.body as { jql: string }).jql
+    expect(jql).toContain('issuetype = Sub-task')
+    expect(jql).toContain('sprint in openSprints()')
+    expect(jql).toContain('project in ("CAG")')
+    expect(jql).toContain(
+      '(summary ~ "Daily Scrum" OR summary ~ "Sprint Retro" OR summary ~ "Sprint Review")',
+    )
+  })
+
+  it('không truyền summaries → lấy toàn bộ sub-task của sprint (dropdown Options)', async () => {
+    const { client, calls } = fakeClient(routes)
+    const out = await searchSprintSubtasks(client, { projects: ['CAG'] })
+    const jql = (calls[0]!.body as { jql: string }).jql
+    expect(jql).not.toContain('summary ~')
+    expect(out).toEqual([
+      { key: 'CAG-3065', summary: 'Daily Scrum' },
+      { key: 'CAG-3067', summary: 'Sprint Retro' },
+    ])
+  })
+
+  it('bỏ summary rỗng thay vì sinh `summary ~ ""`', async () => {
+    const { client, calls } = fakeClient(routes)
+    await searchSprintSubtasks(client, { projects: [], summaries: ['', '  ', 'Daily Scrum'] })
+    const jql = (calls[0]!.body as { jql: string }).jql
+    expect(jql).toContain('(summary ~ "Daily Scrum")')
+    expect(jql).not.toContain('""')
+  })
+
+  it('không có project nào → không thêm clause project', async () => {
+    const { client, calls } = fakeClient(routes)
+    await searchSprintSubtasks(client, { projects: [], summaries: ['Daily Scrum'] })
+    expect((calls[0]!.body as { jql: string }).jql).not.toContain('project in')
+  })
+
+  it('escape dấu ngoặc kép trong tên — không làm vỡ cú pháp JQL', async () => {
+    const { client, calls } = fakeClient(routes)
+    await searchSprintSubtasks(client, { projects: [], summaries: ['Daily "Scrum"'] })
+    expect((calls[0]!.body as { jql: string }).jql)
+      .toContain('summary ~ "Daily \\"Scrum\\""')
+  })
+})
+
+describe('filterKeysInSprint', () => {
+  it('hỏi đúng một sprint id và chỉ những key đã tìm được', async () => {
+    const { client, calls } = fakeClient({
+      'POST /rest/api/3/search/jql': { issues: [{ key: 'CAG-3071' }] },
+    })
+    const out = await filterKeysInSprint(client, ['CAG-3065', 'CAG-3071'], 35)
+    const jql = (calls[0]!.body as { jql: string }).jql
+    expect(jql).toBe('sprint = 35 AND key in ("CAG-3065","CAG-3071")')
+    expect(out).toEqual(['CAG-3071'])
+  })
+
+  it('không có key nào → không gọi Jira', async () => {
+    const { client, calls } = fakeClient({})
+    expect(await filterKeysInSprint(client, [], 35)).toEqual([])
+    expect(calls).toHaveLength(0)
   })
 })

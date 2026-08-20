@@ -210,19 +210,80 @@ export async function getBoards(
   return res.values
 }
 
-export async function getActiveSprint(
+export type Sprint = { id: number; name: string; startDate: string; endDate: string }
+
+// TẤT CẢ sprint đang active, không chỉ cái đầu. Lúc chuyển sprint Jira có thể
+// có hai sprint active cùng lúc — biết cả hai là điều kiện để tie-break
+// ceremony (xem core/event-resolve).
+export async function getActiveSprints(
   c: JiraClient, boardId: number,
-): Promise<{ id: number; name: string; startDate: string; endDate: string } | null> {
+): Promise<Sprint[]> {
   const res = await c.call<{
     values: { id: number; name: string; startDate?: string; endDate?: string }[]
   }>({ method: 'GET', path: `/rest/agile/1.0/board/${boardId}/sprint?state=active` })
 
-  const s = res.values[0]
-  if (!s) return null
-  return {
+  return res.values.map((s) => ({
     id: s.id, name: s.name,
     startDate: s.startDate ?? '', endDate: s.endDate ?? '',
+  }))
+}
+
+export async function getActiveSprint(
+  c: JiraClient, boardId: number,
+): Promise<Sprint | null> {
+  return (await getActiveSprints(c, boardId))[0] ?? null
+}
+
+// --- ceremony sub-task -----------------------------------------------------
+
+// Chuỗi trong JQL: `\` và `"` phải escape, không thì một tên chứa dấu ngoặc kép
+// làm cả query sai cú pháp và Jira trả 400 không đọc được.
+const jqlString = (s: string): string => `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+
+// MỘT request cho TẤT CẢ ceremony: các tên được OR vào cùng một JQL thay vì mỗi
+// event một round-trip. Đổi lại, kết quả là một rổ trộn — `~` của Jira là fuzzy
+// match theo từ nên "Sprint Review" cũng kéo "Sprint Retro" về. Việc đối chiếu
+// tên chính xác nằm ở core/event-resolve, KHÔNG ở đây.
+//
+// `summaries` rỗng → lấy toàn bộ sub-task trong sprint đang mở (dropdown Options).
+export async function searchSprintSubtasks(
+  c: JiraClient, args: { projects: string[]; summaries?: string[] },
+): Promise<{ key: string; summary: string }[]> {
+  const clauses = ['issuetype = Sub-task', 'sprint in openSprints()']
+  if (args.projects.length > 0) {
+    clauses.push(`project in (${args.projects.map((p) => jqlString(p)).join(',')})`)
   }
+  const wanted = (args.summaries ?? []).map((s) => s.trim()).filter((s) => s !== '')
+  if (wanted.length > 0) {
+    clauses.push(`(${wanted.map((s) => `summary ~ ${jqlString(s)}`).join(' OR ')})`)
+  }
+  const jql = `${clauses.join(' AND ')} ORDER BY summary ASC`
+
+  const res = await c.call<{
+    issues: { key: string; fields: { summary: string } }[]
+  }>({
+    method: 'POST',
+    path: '/rest/api/3/search/jql',
+    body: { jql, fields: ['summary'], maxResults: 100 },
+  })
+  return res.issues.map((i) => ({ key: i.key, summary: i.fields.summary }))
+}
+
+// Lọc ra những key thuộc đúng một sprint. Chỉ cần khi có NHIỀU sprint đang mở:
+// lúc đó phải biết ứng viên nào của sprint nào mới tie-break được. Một sprint
+// đang mở (trường hợp thường ngày) thì không tốn request nào.
+export async function filterKeysInSprint(
+  c: JiraClient, keys: string[], sprintId: number,
+): Promise<string[]> {
+  if (keys.length === 0) return []
+  const jql =
+    `sprint = ${sprintId} AND key in (${keys.map((k) => jqlString(k)).join(',')})`
+  const res = await c.call<{ issues: { key: string }[] }>({
+    method: 'POST',
+    path: '/rest/api/3/search/jql',
+    body: { jql, fields: ['summary'], maxResults: 100 },
+  })
+  return res.issues.map((i) => i.key)
 }
 
 export async function getSprintIssues(
