@@ -31,7 +31,8 @@ export function SidePanel() {
   const [error, setError] = useState<string | null>(null)
   const [lastLogged, setLastLogged] = useState<{ id: string; issueKey: string } | null>(null)
 
-  useEffect(() => {
+  const loadConfig = useCallback(() => {
+    setError(null)
     void send<Config>({ type: 'config/load' })
       .then((c) => {
         setConfig(c)
@@ -40,6 +41,8 @@ export function SidePanel() {
       })
       .catch((e: Error) => setError(e.message))
   }, [])
+
+  useEffect(() => { loadConfig() }, [loadConfig])
 
   const reload = useCallback(async (c: Config, d: string) => {
     try {
@@ -98,7 +101,19 @@ export function SidePanel() {
     }
   }
 
-  if (!config) return <div style={{ padding: 12 }}>Đang tải…</div>
+  if (!config) {
+    return (
+      <div style={{ padding: 12 }}>
+        {error
+          ? (
+            <Banner kind="error" action={{ label: 'Thử lại', onClick: loadConfig }}>
+              {error}
+            </Banner>
+          )
+          : 'Đang tải…'}
+      </div>
+    )
+  }
   if (config.jiraBaseUrl === '') {
     return (
       <div style={{ padding: 12 }}>
@@ -116,9 +131,9 @@ export function SidePanel() {
   return (
     <div style={{ padding: 10, fontFamily: 'system-ui', display: 'grid', gap: 10 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <button onClick={() => setDate(addDays(date, -1))}>←</button>
+        <button onClick={() => setDate(addDays(date, -1))} disabled={busy}>←</button>
         <strong style={{ fontSize: 13 }}>{date}</strong>
-        <button onClick={() => setDate(addDays(date, 1))}>→</button>
+        <button onClick={() => setDate(addDays(date, 1))} disabled={busy}>→</button>
         <span style={{ marginLeft: 'auto', fontSize: 13, color: totalSeconds >= target ? '#2e7d32' : '#ef6c00' }}>
           {formatDuration(totalSeconds)} / {formatDuration(target)}
         </span>
@@ -151,6 +166,7 @@ export function SidePanel() {
         startMinutes={startMinutes}
         durationInput={durationInput}
         comment={comment}
+        issueKey={issueKey}
         busy={busy}
         onStartChange={setStartMinutes}
         onDurationChange={setDurationInput}

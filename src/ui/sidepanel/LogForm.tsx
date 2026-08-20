@@ -10,6 +10,7 @@ type Props = {
   startMinutes: number
   durationInput: string
   comment: string
+  issueKey: string
   busy: boolean
   onStartChange: (m: number) => void
   onDurationChange: (s: string) => void
@@ -68,7 +69,7 @@ export function LogForm(p: Props) {
         </span>
       )}
 
-      <button onClick={p.onSubmit} disabled={p.busy || seconds === null}
+      <button onClick={p.onSubmit} disabled={p.busy || seconds === null || p.issueKey.trim() === ''}
               style={{ padding: 7, fontWeight: 600 }}>
         {p.busy ? 'Đang ghi…' : `Log ${seconds ? formatDuration(seconds) : ''}`}
       </button>
