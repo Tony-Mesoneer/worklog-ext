@@ -31,6 +31,20 @@ export const dayMonthLabel = (date: string): string =>
 export const longDateLabel = (date: string): string =>
   `${weekdayLabel(date)}, ${dayMonthLabel(date)}`
 
+// Nhãn đầy đủ cho aria-label của ô lịch: "Thứ Năm, 20/08/2026".
+export const fullDateLabel = (date: string): string =>
+  `${weekdayLabel(date)}, ${dayMonthLabel(date)}/${date.slice(0, 4)}`
+
+const MONTH_YEAR = new Intl.DateTimeFormat('vi-VN', {
+  month: 'long', year: 'numeric', timeZone: 'UTC',
+})
+
+// "tháng 8 năm 2026" → hoa hoá chữ đầu cho tiêu đề popover lịch.
+export const monthYearLabel = (date: string): string => {
+  const s = MONTH_YEAR.format(utcDate(date))
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
 // Nhãn khoảng ngày cho header dashboard: "17/08 – 28/08/2026".
 export const rangeLabel = (from: string, to: string): string => {
   if (from === '' || to === '') return ''

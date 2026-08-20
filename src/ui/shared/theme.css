@@ -136,7 +136,10 @@ code {
   font-size: 0.92em;
   background: var(--surface-alt);
   border-radius: var(--radius-chip);
-  padding: 1px 4px;
+  /* Padding ngang nhỏ: <code> nằm giữa câu, padding 4px làm dấu ngoặc quanh nó
+   * trông như có khoảng trắng thừa. */
+  padding: 0 3px;
+  color: var(--accent-ring);
 }
 
 /* <button> trần vẫn phải theo theme: nếu quên bọc bằng primitive Button thì nó
@@ -580,6 +583,13 @@ button:hover:not(:disabled) {
   gap: 2px;
 }
 
+/* Grid item mặc định có min-width:auto nên KHÔNG co dưới bề rộng nội dung: bỏ
+ * dòng này thì summary issue dài tràn ra ngoài card ở panel hẹp 320px thay vì
+ * bị ellipsis. */
+.wl-list > li {
+  min-width: 0;
+}
+
 /* Nút chọn issue: một dòng, key đậm + summary mờ, cắt bằng ellipsis để panel
  * hẹp 320px không sinh cuộn ngang. */
 .wl-option {
@@ -641,4 +651,116 @@ button:hover:not(:disabled) {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--accent);
+}
+
+/* ── Date popover (side panel) ───────────────────────────────────────────── */
+
+.wl-pop {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  z-index: 20;
+  background: var(--surface-alt);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-panel);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .5);
+  padding: var(--space-3);
+  display: grid;
+  gap: var(--space-2);
+  /* Không bao giờ rộng hơn panel: side panel Chrome hẹp tới 320px. */
+  width: max-content;
+  max-width: min(300px, calc(100vw - 2 * var(--space-3)));
+}
+
+.wl-cal {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.wl-cal__dow {
+  text-align: center;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--muted);
+  padding-bottom: 2px;
+}
+
+.wl-cal__day {
+  appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-chip);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  min-width: 32px;
+  padding: 5px 0;
+  cursor: pointer;
+}
+
+.wl-cal__day:hover:not(:disabled) {
+  background: var(--accent-softer);
+  border-color: var(--border-strong);
+}
+
+/* Ngày ngoài tháng đang xem: mờ nhưng vẫn chọn được. */
+.wl-cal__day--out {
+  color: var(--muted);
+  opacity: .6;
+}
+
+/* Hôm nay và ngày đang chọn phải phân biệt được với nhau VÀ với ngày thường:
+ * hôm nay = viền accent, đang chọn = nền accent. */
+.wl-cal__day[aria-current="date"] {
+  border-color: var(--accent);
+  color: var(--accent-ring);
+  font-weight: 600;
+}
+
+.wl-cal__day[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
+  opacity: 1;
+}
+
+.wl-cal__day:disabled {
+  opacity: .35;
+  cursor: not-allowed;
+}
+
+/* Trigger mở lịch: là chính cái ngày trong header, nên nó phải trông bấm được
+ * mà không thành một cái nút hộp. */
+.wl-datebtn {
+  appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-input);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  padding: 2px var(--space-2) 2px var(--space-1);
+  cursor: pointer;
+  display: grid;
+  gap: 0;
+  min-width: 0;
+  width: 100%;
+}
+
+.wl-datebtn:hover {
+  background: var(--accent-softer);
+  border-color: var(--border-strong);
+}
+
+.wl-datebtn[aria-expanded="true"] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.wl-datebtn:disabled {
+  opacity: .6;
+  cursor: not-allowed;
 }

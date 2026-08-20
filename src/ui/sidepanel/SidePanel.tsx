@@ -11,8 +11,8 @@ import { Button } from '@/ui/shared/Button'
 import { Card } from '@/ui/shared/Card'
 import { ProgressBar } from '@/ui/shared/ProgressBar'
 import { ErrorBanner, toUiError, type UiError } from '@/ui/shared/errors'
-import { longDateLabel } from '@/ui/shared/format'
 import { colors, fontSize, space } from '@/ui/shared/theme'
+import { DatePopover } from './DatePopover'
 import { DayBlocks } from './DayBlocks'
 import { EventButtons } from './EventButtons'
 import { IssuePicker } from './IssuePicker'
@@ -164,14 +164,13 @@ export function SidePanel() {
             >
               ←
             </Button>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: fontSize.lg, fontWeight: 600, lineHeight: 1.2 }}>
-                {date === '' ? '' : longDateLabel(date)}
-              </div>
-              <div style={{ fontSize: fontSize.xs, color: colors.muted }}>
-                {date === today ? 'Hôm nay' : date}
-              </div>
-            </div>
+            {/* Ngày là trigger của lịch tháng — mũi tên giữ nguyên cho ±1 ngày.
+                Cả hai đường đều bị khoá khi `busy`: có hai đường đổi ngày giữa
+                lúc submit là mở lại đúng cái race đã sửa trước đây. */}
+            <DatePopover
+              value={date} today={today} disabled={busy}
+              onChange={(d) => setDate(d)}
+            />
             <Button
               variant="ghost" iconOnly aria-label="Ngày sau"
               onClick={() => setDate(addDays(date, 1))} disabled={busy}
@@ -180,7 +179,7 @@ export function SidePanel() {
             </Button>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: space.x2 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: space.x2, flexWrap: 'wrap' }}>
             <strong style={{ fontSize: fontSize.md, fontVariantNumeric: 'tabular-nums' }}>
               {formatDuration(totalSeconds)}
             </strong>

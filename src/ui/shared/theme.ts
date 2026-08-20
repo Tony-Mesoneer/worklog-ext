@@ -64,13 +64,9 @@ export const bannerColors = {
   success: { bg: 'rgba(111,207,139,0.14)', fg: colors.success, border: 'rgba(111,207,139,0.35)' },
 } as const
 
-// Trạng thái coverage của member (CoverageTable) — chỉ áp cho ô Total, xem
-// ràng buộc trong spec.
-export const statusColors = {
-  ok: colors.success,
-  under: colors.warning,
-  empty: colors.danger,
-} as const
+// Không còn `statusColors`: cờ nhị phân ok/under/empty đã bị thay bằng thanh
+// tỉ lệ (ProgressBar + progressTone). `CoverageRow.status` của core vẫn nguyên,
+// chỉ là UI không tô màu theo nó nữa.
 
 // CoverageTable cần ba giá trị PHÂN BIỆT nhau: nền hàng tfoot, tint cuối tuần
 // của tfoot, và tint cuối tuần trong tbody — mất một trong ba thì cuối tuần
