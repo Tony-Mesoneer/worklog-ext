@@ -4,11 +4,12 @@ import { createClient, type JiraClient } from '@/jira/client'
 import { cookieAuth, tokenAuth } from '@/jira/auth'
 import * as api from '@/jira/endpoints'
 import { formatStarted, offsetMinutesForZone } from '@/core/jiraTime'
+import { normalizeBreaks, splitAroundBreaks } from '@/core/timeline'
 import type { Config } from '@/core/config-schema'
 import type { Worklog } from '@/core/coverage'
 import type {
   Message, AuthProbeResult, DayLoadResult, CoverageLoadResult,
-  PointsLoadResult, SprintCurrentResult,
+  PointsLoadResult, SprintCurrentResult, WorklogAddResult,
 } from './messages'
 
 async function makeClient(config: Config): Promise<JiraClient> {
@@ -50,6 +51,23 @@ async function fetchWorklogs(
   return perIssue
     .flat()
     .filter((w) => wanted.has(w.authorAccountId) && w.date >= from && w.date <= to)
+}
+
+// Xoá các worklog vừa tạo, theo thứ tự NGƯỢC. Trả về id của những cái xoá
+// không được — caller phải nêu chúng ra cho người dùng.
+async function rollbackWorklogs(
+  c: JiraClient, issueKey: string, created: { id: string }[],
+): Promise<string[]> {
+  const orphans: string[] = []
+  for (const w of [...created].reverse()) {
+    try {
+      await api.deleteWorklog(c, issueKey, w.id)
+    } catch (e) {
+      console.error('[sw] rollback worklog thất bại', issueKey, w.id, e)
+      orphans.push(w.id)
+    }
+  }
+  return orphans
 }
 
 export async function handle(msg: Message): Promise<unknown> {
@@ -98,13 +116,55 @@ export async function handle(msg: Message): Promise<unknown> {
       const config = await loadConfig()
       const c = await makeClient(config)
       const offset = offsetMinutesForZone(config.timeZone, msg.date)
-      const startedIso = formatStarted(msg.date, msg.startMinutes, offset)
-      return api.addWorklog(c, {
-        issueKey: msg.issueKey,
-        startedIso,
-        timeSpentSeconds: msg.timeSpentSeconds,
-        comment: msg.comment,
-      })
+
+      // Cắt Ở ĐÂY, không ở UI: một `worklog/add` = một lần bấm Log, dù nó sinh
+      // hai POST. Nếu UI tự gửi hai message thì khi POST thứ hai lỗi, không
+      // chỗ nào có đủ thông tin để rollback POST thứ nhất.
+      const segments = splitAroundBreaks(
+        msg.startMinutes,
+        Math.round(msg.timeSpentSeconds / 60),
+        normalizeBreaks(config.breaks),
+      )
+      if (segments.length === 0) throw new Error('Thời lượng phải lớn hơn 0')
+
+      // Chia GIÂY chứ không nhân lại từ phút: đoạn cuối nhận phần dư nên tổng
+      // giây POST lên Jira đúng bằng tổng người dùng yêu cầu, không lệch vì
+      // làm tròn.
+      const secondsPer = segments.map((s, i) =>
+        i === segments.length - 1
+          ? msg.timeSpentSeconds - segments.slice(0, i).reduce((t, x) => t + x.durationMinutes * 60, 0)
+          : s.durationMinutes * 60,
+      )
+
+      const created: { id: string }[] = []
+      for (let i = 0; i < segments.length; i++) {
+        try {
+          const res = await api.addWorklog(c, {
+            issueKey: msg.issueKey,
+            startedIso: formatStarted(msg.date, segments[i]!.startMinutes, offset),
+            timeSpentSeconds: secondsPer[i]!,
+            comment: msg.comment,
+          })
+          created.push(res)
+        } catch (e) {
+          // Một nửa worklog còn tệ hơn không có worklog nào: người dùng tin là
+          // đã ghi đủ giờ. Rollback những cái đã tạo rồi báo lỗi gốc.
+          const orphans = await rollbackWorklogs(c, msg.issueKey, created)
+          const reason = e instanceof Error ? e.message : String(e)
+          if (orphans.length > 0) {
+            // Không xoá được thì PHẢI nêu id + issue key, đó là thông tin duy
+            // nhất giúp người dùng tự dọn trong Jira.
+            throw new Error(
+              `Ghi worklog thất bại: ${reason}. Đã ghi ${orphans.length} worklog trước đó ` +
+              `nhưng KHÔNG xoá lại được — xoá tay trong Jira: ` +
+              orphans.map((id) => `${id} trên ${msg.issueKey}`).join(', '),
+            )
+          }
+          throw new Error(`Ghi worklog thất bại: ${reason}. Đã hoàn tác, không có worklog nào được ghi.`)
+        }
+      }
+
+      return { ids: created.map((w) => w.id) } satisfies WorklogAddResult
     }
 
     case 'worklog/delete': {

@@ -31,6 +31,10 @@ export type AuthProbeResult = {
   timeZone: string
 }
 
+// Một `worklog/add` có thể sinh NHIỀU worklog khi yêu cầu đi qua giờ nghỉ.
+// Trả về mảng id (theo thứ tự thời gian) để undo xoá được hết.
+export type WorklogAddResult = { ids: string[] }
+
 export type DayLoadResult = { worklogs: Worklog[] }
 export type CoverageLoadResult = { worklogs: Worklog[]; fetchedAt: number; stale: boolean }
 export type PointsLoadResult = { sprintName: string; issues: SprintIssue[] }
