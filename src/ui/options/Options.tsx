@@ -15,6 +15,7 @@ import { useUpdate } from '@/ui/shared/useUpdate'
 import { intlLocale, useLocale, useT } from '@/ui/shared/LocaleProvider'
 import { LOCALES, type Locale } from '@/i18n'
 import { isRepoSlug } from '@/core/version'
+import { ext } from '@/platform/ext'
 
 // Dòng giải thích dưới tiêu đề section — cùng một kiểu ở cả sáu khối.
 function Hint({ children }: { children: ReactNode }) {
@@ -882,7 +883,7 @@ function UpdateSection({ config, save }: SectionProps) {
             kind="info"
             action={{
               label: t.options.update.download,
-              onClick: () => void chrome.tabs.create({ url: latest.downloadUrl ?? latest.url }),
+              onClick: () => void ext.tabs.create({ url: latest.downloadUrl ?? latest.url }),
             }}
           >
             {t.options.update.available(

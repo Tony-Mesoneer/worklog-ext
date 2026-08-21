@@ -7,6 +7,7 @@ import { Button } from './Button'
 import { fontSize, space } from './theme'
 import { useUpdate } from './useUpdate'
 import { useT } from './LocaleProvider'
+import { ext } from '@/platform/ext'
 
 export function UpdateBanner() {
   const t = useT()
@@ -22,7 +23,7 @@ export function UpdateBanner() {
       kind="info"
       action={{
         label: t.updateBanner.download,
-        onClick: () => void chrome.tabs.create({ url: href }),
+        onClick: () => void ext.tabs.create({ url: href }),
       }}
     >
       <div style={{ display: 'grid', gap: space.x1 }}>

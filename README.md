@@ -103,6 +103,26 @@ npm run build && npm run pack   # → release/worklog-ext-<version>.zip
 Cần Pillow và font hệ thống macOS. Mỗi cỡ render riêng chứ không scale từ một ảnh
 lớn xuống, vì chữ ở 16px scale xuống là nhoè.
 
+## Firefox
+
+Chưa hỗ trợ. Blocker chính: Firefox không có `sidePanel` API lẫn `side_panel`
+manifest key — nó dùng `sidebar_action`/`sidebarAction`, và [MDN nói rõ hai cái
+không tương thích](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/user_interface/Sidebars).
+Side panel là bề mặt chính của extension này, nên đó là việc port thật sự chứ
+không phải một cờ cấu hình.
+
+Việc đã làm trước: mọi code gọi WebExtension API đi qua `src/platform/ext.ts`
+thay vì `chrome.*` trực tiếp. Lý do làm sớm — trên Firefox `chrome.*` là
+callback-based, nên `await chrome.storage.local.get(k)` trả `undefined` mà
+không throw. Viết `ext.*` từ giờ nghĩa là code mới không tích thêm nợ.
+
+Còn lại khi thực sự port: `sidebar_action` thay `side_panel`,
+`background.scripts` thay `service_worker` (Firefox MV3 chưa có service worker),
+`browser_specific_settings.gecko.id` để sign, và một build target thứ hai
+(`@crxjs/vite-plugin` là Chrome-only). Rủi ro chưa đo được: Total Cookie
+Protection của Firefox có thể chặn session cookie Jira trong fetch từ
+background — nếu vỡ thì rơi về đường API token đã có.
+
 ## Cập nhật extension
 
 Chrome **không tự cập nhật** extension cài bằng "Load unpacked" — không có

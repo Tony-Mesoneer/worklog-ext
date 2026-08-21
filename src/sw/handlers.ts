@@ -19,6 +19,7 @@ import type {
   PointsLoadResult, SprintCurrentResult, WorklogAddResult,
   EventsResolveResult, CeremoniesListResult,
 } from './messages'
+import { ext } from '@/platform/ext'
 
 async function makeClient(config: Config): Promise<JiraClient> {
   if (!config.jiraBaseUrl) throw new Error('Chưa cấu hình Jira URL — mở Options')
@@ -143,7 +144,7 @@ export async function handle(msg: Message): Promise<unknown> {
       return saveConfig(msg.patch)
 
     case 'permission/request':
-      return chrome.permissions.request({ origins: [msg.origin] })
+      return ext.permissions.request({ origins: [msg.origin] })
 
     case 'auth/probe': {
       const config = await loadConfig()
@@ -422,7 +423,7 @@ export async function handle(msg: Message): Promise<unknown> {
     }
 
     case 'dashboard/open': {
-      await chrome.tabs.create({ url: chrome.runtime.getURL('src/ui/dashboard/index.html') })
+      await ext.tabs.create({ url: ext.runtime.getURL('src/ui/dashboard/index.html') })
       return null
     }
 

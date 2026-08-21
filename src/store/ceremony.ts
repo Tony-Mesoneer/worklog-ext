@@ -13,6 +13,7 @@
 import {
   ceremonyCacheKey, ceremonyKeysToDrop, type CeremonyCandidate,
 } from '@/core/event-resolve'
+import { ext } from '@/platform/ext'
 
 export type CeremonyCache = {
   fetchedAt: number
@@ -24,7 +25,7 @@ type Args = { sprintId: number; projects: string[]; matchSummaries: string[] }
 
 export async function readCeremonyCache(args: Args): Promise<CeremonyCache | null> {
   const key = ceremonyCacheKey(args.sprintId, args.projects, args.matchSummaries)
-  const res = await chrome.storage.local.get(key)
+  const res = await ext.storage.local.get(key)
   const hit = res[key] as CeremonyCache | undefined
   // Hình dạng lạ (bản cũ, storage bị sửa tay) → coi như miss, fetch lại.
   if (!hit || !Array.isArray(hit.candidates)) return null
@@ -38,8 +39,8 @@ export async function writeCeremonyCache(
   args: Args, value: CeremonyCache,
 ): Promise<void> {
   const key = ceremonyCacheKey(args.sprintId, args.projects, args.matchSummaries)
-  await chrome.storage.local.set({ [key]: value })
-  const all = await chrome.storage.local.get(null)
+  await ext.storage.local.set({ [key]: value })
+  const all = await ext.storage.local.get(null)
   const drop = ceremonyKeysToDrop(Object.keys(all), key)
-  if (drop.length > 0) await chrome.storage.local.remove(drop)
+  if (drop.length > 0) await ext.storage.local.remove(drop)
 }

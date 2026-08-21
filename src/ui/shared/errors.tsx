@@ -1,6 +1,7 @@
 import { MessageError } from '@/sw/messages'
 import { Banner } from './Banner'
 import { useT } from './LocaleProvider'
+import { ext } from '@/platform/ext'
 
 // Lỗi đã được phân loại cho UI. `auth` tách 401/403 ra khỏi lỗi thường vì spec
 // §13 đòi banner riêng ("session Jira hết hạn") kèm đường về Options, chứ không
@@ -28,7 +29,7 @@ type Props = {
 export function ErrorBanner({ error, onDismiss }: Props) {
   const t = useT()
   const action = error.auth
-    ? { label: t.common.openOptions, onClick: () => chrome.runtime.openOptionsPage() }
+    ? { label: t.common.openOptions, onClick: () => ext.runtime.openOptionsPage() }
     : onDismiss
       ? { label: t.errors.dismiss, onClick: onDismiss }
       : undefined
