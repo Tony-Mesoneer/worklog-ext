@@ -66,6 +66,45 @@ thì phải in ra worklog id và issue key để bạn xoá tay trong Jira.
 - [ ] Click phải một ô để đánh dấu ngày nghỉ → capacity giảm, reload vẫn giữ.
 - [ ] Click một ô → panel chi tiết hiện đúng worklog của member đó ngày đó.
 
+### 5b. Gom nhóm theo project
+
+Phần này KHÔNG có test tự động (thuần hiển thị) — chỉ có typecheck và build che.
+
+- [ ] Lọc project = **Tất cả** và dữ liệu có **nhiều** project → một bảng, mỗi
+      project một dòng header, header ngày chỉ xuất hiện MỘT lần.
+- [ ] Dữ liệu chỉ có **một** project → không có dòng header project nào, bảng
+      giống hệt bản trước và **có** cột capacity/% + cờ thiếu giờ.
+- [ ] Lọc vào **một** project cụ thể → cũng có capacity trở lại.
+- [ ] Khi gom nhóm: cột cuối là "Tổng" (giờ trần), không có thanh tiến độ.
+- [ ] Dòng header của mỗi project = tổng đúng các hàng member trong nhóm đó.
+- [ ] `Tổng cả team` ở tfoot = tổng của MỌI nhóm, kể cả "Không rõ project".
+- [ ] Một member log ở hai project: mở rộng ở nhóm CAG **không** làm mở luôn ở
+      nhóm ABC (khoá mở rộng mang cả project key).
+- [ ] Bấm một ô trong nhóm CAG → panel chi tiết chỉ hiện worklog **CAG** của
+      ngày đó, không phải cả ngày trên mọi project.
+- [ ] Nhóm "Không rõ project" nằm **cuối cùng**, kể cả khi nó nhiều giờ nhất.
+- [ ] Cuộn ngang với khoảng một tháng: cột Member dính bên trái, header ngày
+      dính trên, dòng header project không bị lệch cột.
+
+### 5c. Xoá worklog (side panel)
+
+- [ ] Card "Trong ngày" có danh sách worklog kèm nút Xoá trên từng dòng.
+- [ ] Xoá → banner "Đã xoá … — Undo", và worklog biến khỏi timeline.
+- [ ] Bấm Undo → worklog quay lại (id MỚI, không phải id cũ).
+- [ ] Xoá một worklog **cắt qua giờ nghỉ** rồi Undo → quay lại thành **hai**
+      worklog, tổng giờ đúng. Không phải bug, xem commit.
+- [ ] Xoá xong mở dashboard (không bấm Làm mới) → worklog đã xoá **không** còn
+      hiện, kể cả khi snapshot chưa hết TTL.
+
+### 5d. Ngôn ngữ
+
+- [ ] Options mục 7 đổi sang Tiếng Việt → toàn bộ Options đổi ngay, không reload.
+- [ ] Side panel đang mở sẵn cũng đổi theo (qua `chrome.storage.onChanged`).
+- [ ] Ngày/giờ ở mục 6 đổi định dạng theo ngôn ngữ (`21/08/2026` ↔ `8/21/2026`).
+- [ ] Dropdown ngôn ngữ luôn hiện "English" và "Tiếng Việt" bằng chính ngôn ngữ
+      đó, ở cả hai chế độ.
+- [ ] Side panel và dashboard vẫn tiếng Việt cứng — đúng phạm vi đợt 1, chưa dịch.
+
 ## 6. Accessibility
 
 - [ ] Điều hướng toàn bộ side panel và dashboard chỉ bằng bàn phím.
