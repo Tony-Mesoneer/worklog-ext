@@ -6,6 +6,8 @@ import type { Config } from '@/core/config-schema'
 import type { Worklog } from '@/core/coverage'
 import type { IssueMetaMap } from '@/core/issue-hierarchy'
 import { buildCoverage, enumerateDates } from '@/core/coverage'
+import { buildCoverageByProject } from '@/core/coverage-by-project'
+import { UNKNOWN_PROJECT } from '@/core/issue-hierarchy'
 import { todayInZone, addDays } from '@/core/jiraTime'
 import type { Scope } from '@/core/snapshot-key'
 import { Banner } from '@/ui/shared/Banner'
@@ -48,7 +50,12 @@ export function Dashboard() {
   const [stale, setStale] = useState(false)
   const [error, setError] = useState<UiError | null>(null)
   const [loading, setLoading] = useState(false)
-  const [detail, setDetail] = useState<{ accountId: string; date: string } | null>(null)
+  // `project` của detail: null = mở từ bảng gộp (mọi project), còn lại là card
+  // của đúng project đó — panel phải hiện đúng tập worklog mà ô người dùng vừa
+  // bấm đã cộng ra, không phải cả ngày trên mọi project.
+  const [detail, setDetail] = useState<
+    { accountId: string; date: string; project: string | null } | null
+  >(null)
 
   useEffect(() => {
     void (async () => {
@@ -183,6 +190,18 @@ export function Dashboard() {
     ...(today === '' ? {} : { today }),
   })
 
+  // Tách theo project CHỈ khi bộ lọc để "tất cả": chọn một project rồi thì đã
+  // có đúng một bảng của project đó. `null` = không cần tách (một project, hoặc
+  // chưa có dữ liệu) → vẽ y như trước.
+  const byProject = shown === null || project !== '' ? null : buildCoverageByProject({
+    worklogs: shown,
+    members: config.members,
+    dates,
+    daysOff: config.daysOff,
+    meta: issueMeta,
+    ...(today === '' ? {} : { today }),
+  })
+
   const detailMember = detail ? config.members.find((m) => m.accountId === detail.accountId) : null
 
   return page(
@@ -250,13 +269,35 @@ export function Dashboard() {
               <Card title="Tóm tắt">
                 <CoverageSummary data={table} />
               </Card>
-              <Card flush>
+
+              {/* Một card cho mỗi project, rồi card tổng ở cuối. Card project
+                  KHÔNG có capacity/% — capacity là của member trong khoảng
+                  ngày, không chia được theo project (xem
+                  core/coverage-by-project). */}
+              {byProject?.map((g) => (
+                <Card key={g.projectKey} title={projectCardTitle(g.projectKey)} flush>
+                  <div style={{ opacity: loading ? 0.6 : 1, transition: 'opacity .12s ease' }}>
+                    <CoverageTable
+                      data={g.table}
+                      meta={issueMeta}
+                      daysOff={config.daysOff}
+                      showCapacity={false}
+                      onCellClick={(accountId, date) =>
+                        setDetail({ accountId, date, project: g.projectKey })}
+                      onToggleDayOff={(a, d) => void toggleDayOff(a, d)}
+                    />
+                  </div>
+                </Card>
+              ))}
+
+              <Card title={byProject ? 'Tổng — tất cả project' : undefined} flush>
                 <div style={{ opacity: loading ? 0.6 : 1, transition: 'opacity .12s ease' }}>
                   <CoverageTable
                     data={table}
                     meta={issueMeta}
                     daysOff={config.daysOff}
-                    onCellClick={(accountId, date) => setDetail({ accountId, date })}
+                    onCellClick={(accountId, date) =>
+                      setDetail({ accountId, date, project: null })}
                     onToggleDayOff={(a, d) => void toggleDayOff(a, d)}
                   />
                 </div>
@@ -275,7 +316,10 @@ export function Dashboard() {
           dayOff={(config.daysOff[detail.accountId] ?? []).includes(detail.date)}
           onToggleDayOff={() => void toggleDayOff(detail.accountId, detail.date)}
           worklogs={(shown ?? []).filter(
-            (w) => w.authorAccountId === detail.accountId && w.date === detail.date,
+            (w) => w.authorAccountId === detail.accountId
+              && w.date === detail.date
+              && (detail.project === null
+                || (issueMeta[w.issueKey]?.projectKey ?? UNKNOWN_PROJECT) === detail.project),
           )}
           onClose={() => setDetail(null)}
         />
@@ -308,3 +352,9 @@ function SettingsHeader() {
     </div>
   )
 }
+
+// Nhóm không rõ project là dữ liệu thiếu meta (snapshot cũ, hoặc Jira không trả
+// field), không phải một project — nên nó cần tên riêng chứ không phải một tiêu
+// đề rỗng. Cùng chữ với dòng project bên trong CoverageTable.
+const projectCardTitle = (projectKey: string): string =>
+  projectKey === UNKNOWN_PROJECT ? 'Không rõ project' : projectKey

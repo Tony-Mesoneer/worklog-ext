@@ -22,6 +22,15 @@ type Props = {
   daysOff: Record<string, string[]>
   onCellClick: (accountId: string, date: string) => void
   onToggleDayOff: (accountId: string, date: string) => void
+  /**
+   * Cột cuối là thanh tiến độ so với capacity, hay chỉ là tổng giờ.
+   *
+   * `false` cho bảng của MỘT project: capacity không chia được theo project
+   * (`hoursPerDay` là 8h/ngày cho cả ngày làm việc, không phải 8h cho mỗi
+   * project), nên một thanh tiến độ ở đó chỉ có thể đo vào một mẫu số bịa ra.
+   * Xem core/coverage-by-project.
+   */
+  showCapacity?: boolean
 }
 
 const DAY_COL_WIDTH = 58
@@ -234,7 +243,9 @@ function memberIssueRows(
   ))
 }
 
-export function CoverageTable({ data, meta, daysOff, onCellClick, onToggleDayOff }: Props) {
+export function CoverageTable({
+  data, meta, daysOff, onCellClick, onToggleDayOff, showCapacity = true,
+}: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
   // Khoảng ngày có phần chưa xảy ra → nói rõ thanh đang đo tới hôm nay. Khoảng
@@ -272,7 +283,9 @@ export function CoverageTable({ data, meta, daysOff, onCellClick, onToggleDayOff
               </th>
             ))}
             <th scope="col" style={{ width: TOTAL_COL_WIDTH, minWidth: TOTAL_COL_WIDTH }}>
-              {cutToToday ? 'Tổng / tới hôm nay' : 'Tổng / capacity'}
+              {!showCapacity
+                ? 'Tổng'
+                : cutToToday ? 'Tổng / tới hôm nay' : 'Tổng / capacity'}
             </th>
           </tr>
         </thead>
@@ -336,19 +349,29 @@ export function CoverageTable({ data, meta, daysOff, onCellClick, onToggleDayOff
                       và "chưa log gì" trông y như nhau.
                       Mốc là capacity TỚI HÔM NAY — so với capacity cả kỳ thì
                       giữa sprint thanh nào cũng gần rỗng, cũng mất nghĩa y vậy. */}
-                  <td style={{ width: TOTAL_COL_WIDTH, minWidth: TOTAL_COL_WIDTH }}>
-                    <ProgressBar
-                      value={row.total}
-                      max={row.capacityToDateSeconds}
-                      height={4}
-                      valueText={`${hoursLabel(row.total)} / ${hoursLabel(row.capacityToDateSeconds)}`}
-                      label={
-                        `${row.member.displayName}: đã log ${hoursLabel(row.total)} `
-                        + `trên capacity ${hoursLabel(row.capacityToDateSeconds)}`
-                        + `${cutToToday ? ' tới hôm nay' : ''}`
-                        + `, cả kỳ ${hoursLabel(row.capacityFullRangeSeconds)}`
-                      }
-                    />
+                  <td
+                    className={showCapacity ? undefined : 'wl-table__num'}
+                    style={{
+                      width: TOTAL_COL_WIDTH, minWidth: TOTAL_COL_WIDTH,
+                      ...(showCapacity ? {} : { fontWeight: 600 }),
+                    }}
+                  >
+                    {showCapacity ? (
+                      <ProgressBar
+                        value={row.total}
+                        max={row.capacityToDateSeconds}
+                        height={4}
+                        valueText={`${hoursLabel(row.total)} / ${hoursLabel(row.capacityToDateSeconds)}`}
+                        label={
+                          `${row.member.displayName}: đã log ${hoursLabel(row.total)} `
+                          + `trên capacity ${hoursLabel(row.capacityToDateSeconds)}`
+                          + `${cutToToday ? ' tới hôm nay' : ''}`
+                          + `, cả kỳ ${hoursLabel(row.capacityFullRangeSeconds)}`
+                        }
+                      />
+                    ) : (
+                      hoursLabel(row.total)
+                    )}
                   </td>
                 </tr>
 
