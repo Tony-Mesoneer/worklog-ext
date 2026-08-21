@@ -247,3 +247,19 @@ describe('updateRepo', () => {
     expect(migrateConfig({ updateRepo: 42 }).updateRepo).toBe('Tony-Mesoneer/worklog-ext')
   })
 })
+
+describe('locale', () => {
+  it('thiếu → en', () => {
+    expect(migrateConfig({}).locale).toBe('en')
+  })
+
+  it('giữ locale hợp lệ', () => {
+    expect(migrateConfig({ locale: 'vi' }).locale).toBe('vi')
+  })
+
+  it('locale lạ → en, không throw', () => {
+    for (const junk of ['fr', 'EN', '', 42, null]) {
+      expect(migrateConfig({ locale: junk }).locale, String(junk)).toBe('en')
+    }
+  })
+})

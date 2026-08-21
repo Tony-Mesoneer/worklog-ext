@@ -12,12 +12,9 @@ import { Card } from '@/ui/shared/Card'
 import { toUiError } from '@/ui/shared/errors'
 import { colors, fontSize, radii, space } from '@/ui/shared/theme'
 import { useUpdate } from '@/ui/shared/useUpdate'
+import { intlLocale, useLocale, useT } from '@/ui/shared/LocaleProvider'
+import { LOCALES, type Locale } from '@/i18n'
 import { isRepoSlug } from '@/core/version'
-
-// Ở Options thì "mở Options" là vô nghĩa, nên 401/403 có text riêng: nó chỉ
-// người dùng xuống đúng khối token bên dưới.
-const AUTH_HINT =
-  'Jira từ chối request (401/403). Session Jira có thể đã hết hạn, hoặc token sai — thử nhập email + API token ở mục 2.'
 
 // Dòng giải thích dưới tiêu đề section — cùng một kiểu ở cả sáu khối.
 function Hint({ children }: { children: ReactNode }) {
@@ -29,6 +26,7 @@ function Hint({ children }: { children: ReactNode }) {
 }
 
 export function Options() {
+  const t = useT()
   const [config, setConfig] = useState<Config | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [probe, setProbe] = useState<AuthProbeResult | null>(null)
@@ -41,7 +39,7 @@ export function Options() {
   const report = (e: unknown) => {
     const ui = toUiError(e)
     if (ui.auth) setShowToken(true)
-    setError(ui.auth ? AUTH_HINT : ui.message)
+    setError(ui.auth ? t.options.authHint : ui.message)
   }
 
   useEffect(() => {
@@ -71,8 +69,8 @@ export function Options() {
       setShowToken(true)
       const ui = toUiError(e)
       setError(ui.auth
-        ? AUTH_HINT
-        : `Không xác thực được với Jira: ${ui.message}. Thử nhập API token ở mục 2.`)
+        ? t.options.authHint
+        : t.options.jira.probeFailed(ui.message))
       return false
     }
   }
@@ -106,25 +104,20 @@ export function Options() {
       display: 'grid', gap: space.x4, minWidth: 0,
     }}>
       <header>
-        <h1 style={{ fontSize: fontSize.xxl, margin: 0, fontWeight: 700 }}>Worklog — cấu hình</h1>
-        <p style={{ margin: '2px 0 0', color: colors.muted }}>
-          Mỗi thay đổi lưu ngay, không có nút Save toàn trang.
-        </p>
+        <h1 style={{ fontSize: fontSize.xxl, margin: 0, fontWeight: 700 }}>{t.options.pageTitle}</h1>
+        <p style={{ margin: '2px 0 0', color: colors.muted }}>{t.options.pageSubtitle}</p>
       </header>
 
       {error && <Banner kind="error">{error}</Banner>}
 
       {tzMismatch && (
-        <Banner kind="warn">
-          Timezone Jira (<code>{config.timeZone}</code>) khác timezone máy
-          (<code>{browserTz}</code>). Worklog sẽ ghi theo timezone Jira.
-        </Banner>
+        <Banner kind="warn">{t.options.tzMismatch(config.timeZone, browserTz)}</Banner>
       )}
 
-      <Card title="1. Jira">
+      <Card title={t.options.jira.title}>
         <div style={{ display: 'grid', gap: space.x2 }}>
           <div className="wl-field">
-            <label className="wl-field__label" htmlFor={urlId}>Địa chỉ Jira</label>
+            <label className="wl-field__label" htmlFor={urlId}>{t.options.jira.urlLabel}</label>
             <div style={{ display: 'flex', gap: space.x2, flexWrap: 'wrap' }}>
               <input
                 id={urlId}
@@ -133,12 +126,12 @@ export function Options() {
                 placeholder="https://your-site.atlassian.net"
                 style={{ flex: '1 1 240px', minWidth: 0 }}
               />
-              <Button variant="primary" onClick={connect}>Kết nối</Button>
+              <Button variant="primary" onClick={connect}>{t.common.connect}</Button>
             </div>
           </div>
           {probe && (
             <p style={{ fontSize: fontSize.md, color: colors.success, margin: 0 }}>
-              Đã kết nối: {probe.displayName} · {probe.timeZone} · chế độ {probe.mode}
+              {t.options.jira.connected(probe.displayName, probe.timeZone, probe.mode)}
             </p>
           )}
         </div>
@@ -156,6 +149,7 @@ export function Options() {
       <MembersSection config={config} save={save} setError={setError} />
       <EventsSection config={config} save={save} />
       <UpdateSection config={config} save={save} />
+      <LanguageSection config={config} save={save} />
     </div>
   )
 }
@@ -175,6 +169,7 @@ function TokenSection({ config, save, probeAuth, open, setOpen }: SectionProps &
   open: boolean
   setOpen: (v: boolean) => void
 }) {
+  const t = useT()
   const [email, setEmail] = useState('')
   const [apiToken, setApiToken] = useState('')
   const [busy, setBusy] = useState(false)
@@ -208,46 +203,42 @@ function TokenSection({ config, save, probeAuth, open, setOpen }: SectionProps &
           {/* Email không phải bí mật (khác API token) — hiện được để người dùng
               biết mình đang ở chế độ nào mà không cần mở form. */}
           {saved
-            ? `Đang dùng API token (${config.token?.email}) — sửa hoặc xoá`
-            : 'Cần dùng API token thay vì session? (dự phòng)'}
+            ? t.options.token.toggleSaved(config.token?.email ?? '')
+            : t.options.token.toggleNew}
         </Button>
       </div>
     )
   }
 
   return (
-    <Card title="API token (dự phòng)">
+    <Card title={t.options.token.title}>
       <div style={{ display: 'grid', gap: space.x3 }}>
-        <Hint>
-          Mặc định extension dùng session Jira đang đăng nhập trong Chrome. Chỉ cần
-          token khi session hết hạn, khi bạn đăng nhập Jira ở profile Chrome khác,
-          hoặc khi Jira chặn request bằng session.
-        </Hint>
+        <Hint>{t.options.token.hint}</Hint>
         {saved && (
           <p style={{ fontSize: fontSize.md, color: colors.success, margin: 0 }}>
-            Đã lưu token cho <code>{config.token?.email}</code> — đang dùng chế độ token.
+            {t.options.token.saved(config.token?.email ?? '')}
           </p>
         )}
         <div style={{ display: 'grid', gap: space.x2, maxWidth: 480 }}>
           <div className="wl-field">
-            <label className="wl-field__label" htmlFor={emailId}>Email Atlassian</label>
+            <label className="wl-field__label" htmlFor={emailId}>{t.options.token.emailLabel}</label>
             <input
               id={emailId}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="ten@cong-ty.com"
+              placeholder={t.options.token.emailPlaceholder}
               autoComplete="off"
             />
           </div>
           {/* KHÔNG bao giờ đổ token đã lưu ra lại input, và không bao giờ log. */}
           <div className="wl-field">
-            <label className="wl-field__label" htmlFor={tokenId}>API token</label>
+            <label className="wl-field__label" htmlFor={tokenId}>{t.options.token.tokenLabel}</label>
             <input
               id={tokenId}
               type="password"
               value={apiToken}
               onChange={(e) => setApiToken(e.target.value)}
-              placeholder={saved ? 'Token mới (để trống nếu không đổi)' : 'API token'}
+              placeholder={saved ? t.options.token.tokenPlaceholderReplace : t.options.token.tokenPlaceholder}
               autoComplete="off"
             />
           </div>
@@ -258,22 +249,18 @@ function TokenSection({ config, save, probeAuth, open, setOpen }: SectionProps &
               onClick={() => void submit()}
               disabled={email.trim() === '' || apiToken.trim() === ''}
             >
-              Lưu token và kiểm tra
+              {t.options.token.submit}
             </Button>
             {saved && (
               <Button variant="danger" onClick={() => void clear()} disabled={busy}>
-                Xoá token, quay lại session
+                {t.options.token.clear}
               </Button>
             )}
             <Button variant="ghost" onClick={() => { setApiToken(''); setOpen(false) }} disabled={busy}>
-              Đóng
+              {t.common.close}
             </Button>
           </div>
-          <Hint>
-            Tạo token tại <code>id.atlassian.com</code> → Security → API tokens.
-            Token chỉ lưu trong máy này (<code>chrome.storage.local</code>), không
-            đồng bộ lên Google account và không gửi đi đâu ngoài Jira.
-          </Hint>
+          <Hint>{t.options.token.createHint}</Hint>
         </div>
       </div>
     </Card>
@@ -281,6 +268,7 @@ function TokenSection({ config, save, probeAuth, open, setOpen }: SectionProps &
 }
 
 function ProjectsSection({ config, save }: SectionProps) {
+  const t = useT()
   const [draft, setDraft] = useState('')
   const fieldId = useId()
 
@@ -296,24 +284,24 @@ function ProjectsSection({ config, save }: SectionProps) {
   }
 
   return (
-    <Card title="2. Project">
+    <Card title={t.options.projects.title}>
       <div style={{ display: 'grid', gap: space.x3 }}>
         <div className="wl-field">
-          <label className="wl-field__label" htmlFor={fieldId}>Project key</label>
+          <label className="wl-field__label" htmlFor={fieldId}>{t.options.projects.keyLabel}</label>
           <div style={{ display: 'flex', gap: space.x2, flexWrap: 'wrap' }}>
             <input
               id={fieldId}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') add() }}
-              placeholder="vd. CAG"
+              placeholder={t.options.projects.keyPlaceholder}
               style={{ flex: '1 1 200px', minWidth: 0 }}
             />
-            <Button variant="primary" onClick={add} disabled={draft.trim() === ''}>Thêm</Button>
+            <Button variant="primary" onClick={add} disabled={draft.trim() === ''}>{t.common.add}</Button>
           </div>
         </div>
         {config.projects.length === 0 ? (
-          <Hint>Chưa có project nào.</Hint>
+          <Hint>{t.options.projects.empty}</Hint>
         ) : (
           <div style={{ display: 'flex', gap: space.x2, flexWrap: 'wrap' }}>
             {config.projects.map((p) => (
@@ -325,7 +313,7 @@ function ProjectsSection({ config, save }: SectionProps) {
                 {p}
                 <Button
                   variant="ghost" size="sm" iconOnly
-                  aria-label={`Xoá project ${p}`}
+                  aria-label={t.options.projects.removeAria(p)}
                   onClick={() => remove(p)}
                   style={{ width: 22, height: 22, borderRadius: radii.pill }}
                 >
@@ -341,6 +329,7 @@ function ProjectsSection({ config, save }: SectionProps) {
 }
 
 function BoardSection({ config, save }: SectionProps) {
+  const t = useT()
   const [boards, setBoards] = useState<{ id: number; name: string }[]>([])
   // Fetch fail mà chỉ để list rỗng thì người dùng thấy dropdown trống, không
   // chọn được gì, rồi sau đó gặp "Chưa chọn board chính" ở tab points mà không
@@ -363,24 +352,22 @@ function BoardSection({ config, save }: SectionProps) {
   }, [projectKey])
 
   return (
-    <Card title="3. Board chính">
+    <Card title={t.options.board.title}>
       <div style={{ display: 'grid', gap: space.x3 }}>
-        <Hint>Dùng cho preset "Sprint hiện tại" và tab Story points.</Hint>
+        <Hint>{t.options.board.hint}</Hint>
         {!projectKey ? (
-          <Hint>Thêm một project ở trên trước đã.</Hint>
+          <Hint>{t.options.board.needProject}</Hint>
         ) : boardsError !== null ? (
-          <Banner kind="error">
-            Không lấy được danh sách board của {projectKey}: {boardsError}
-          </Banner>
+          <Banner kind="error">{t.options.board.loadError(projectKey, boardsError)}</Banner>
         ) : (
           <div className="wl-field" style={{ maxWidth: 320 }}>
-            <label className="wl-field__label" htmlFor={selectId}>Board</label>
+            <label className="wl-field__label" htmlFor={selectId}>{t.options.board.label}</label>
             <select
               id={selectId}
               value={config.primaryBoardId ?? ''}
               onChange={(e) => void save({ primaryBoardId: Number(e.target.value) })}
             >
-              <option value="" disabled>— chọn board —</option>
+              <option value="" disabled>{t.options.board.choose}</option>
               {boards.map((b) => (
                 <option key={b.id} value={b.id}>{b.name}</option>
               ))}
@@ -395,6 +382,7 @@ function BoardSection({ config, save }: SectionProps) {
 function MembersSection({ config, save, setError }: SectionProps & {
   setError: (e: string | null) => void
 }) {
+  const t = useT()
   const [query, setQuery] = useState('')
   const [found, setFound] = useState<{ accountId: string; displayName: string }[]>([])
   const [searching, setSearching] = useState(false)
@@ -423,18 +411,18 @@ function MembersSection({ config, save, setError }: SectionProps & {
   }
 
   return (
-    <Card title="4. Member theo dõi">
+    <Card title={t.options.members.title}>
       <div style={{ display: 'grid', gap: space.x3 }}>
         <div className="wl-field">
-          <label className="wl-field__label" htmlFor={fieldId}>Tìm người trong Jira</label>
+          <label className="wl-field__label" htmlFor={fieldId}>{t.options.members.searchLabel}</label>
           <div style={{ display: 'flex', gap: space.x2, flexWrap: 'wrap' }}>
             <input
               id={fieldId} value={query} onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') void search() }}
-              placeholder="Tên hoặc email"
+              placeholder={t.options.members.searchPlaceholder}
               style={{ flex: '1 1 200px', minWidth: 0 }}
             />
-            <Button variant="primary" loading={searching} onClick={() => void search()}>Tìm</Button>
+            <Button variant="primary" loading={searching} onClick={() => void search()}>{t.common.search}</Button>
           </div>
         </div>
 
@@ -446,23 +434,23 @@ function MembersSection({ config, save, setError }: SectionProps & {
                 padding: `${space.x1}px 0`,
               }}>
                 <span style={{ flex: 1, minWidth: 0 }}>{u.displayName}</span>
-                <Button size="sm" onClick={() => add(u)}>Thêm</Button>
+                <Button size="sm" onClick={() => add(u)}>{t.common.add}</Button>
               </li>
             ))}
           </ul>
         )}
 
         {config.members.length === 0 ? (
-          <Hint>Chưa theo dõi member nào — dashboard sẽ trống.</Hint>
+          <Hint>{t.options.members.empty}</Hint>
         ) : (
           <div className="wl-table-scroll">
             <table className="wl-table" style={{ width: '100%' }}>
               <thead>
                 <tr>
-                  <th scope="col" style={{ textAlign: 'left' }}>Member</th>
-                  <th scope="col">Giờ/ngày</th>
-                  <th scope="col">Active</th>
-                  <th scope="col"><span style={{ visibility: 'hidden' }}>Xoá</span></th>
+                  <th scope="col" style={{ textAlign: 'left' }}>{t.options.members.colMember}</th>
+                  <th scope="col">{t.options.members.colHoursPerDay}</th>
+                  <th scope="col">{t.options.members.colActive}</th>
+                  <th scope="col"><span style={{ visibility: 'hidden' }}>{t.common.remove}</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -472,26 +460,26 @@ function MembersSection({ config, save, setError }: SectionProps & {
                     <td>
                       <input
                         type="number" min={0} max={24} value={m.hoursPerDay} style={{ width: 64 }}
-                        aria-label={`Giờ mỗi ngày của ${m.displayName}`}
+                        aria-label={t.options.members.hoursAria(m.displayName)}
                         onChange={(e) => update(m.accountId, { hoursPerDay: Number(e.target.value) })}
                       />
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       <input
                         type="checkbox" checked={m.active}
-                        aria-label={`${m.displayName} đang active`}
+                        aria-label={t.options.members.activeAria(m.displayName)}
                         onChange={(e) => update(m.accountId, { active: e.target.checked })}
                       />
                     </td>
                     <td>
                       <Button
                         variant="danger" size="sm"
-                        aria-label={`Xoá ${m.displayName} khỏi danh sách theo dõi`}
+                        aria-label={t.options.members.removeAria(m.displayName)}
                         onClick={() => void save({
                           members: config.members.filter((x) => x.accountId !== m.accountId),
                         })}
                       >
-                        Xoá
+                        {t.common.remove}
                       </Button>
                     </td>
                   </tr>
@@ -509,8 +497,6 @@ const EMPTY_EVENT_DRAFT: SprintEvent = {
   name: '', issueKey: '', matchSummary: '', defaultMinutes: 15, comment: '',
 }
 
-const NO_MATCH = '— dùng issue key —'
-
 // Ô issue key của một dòng ĐÃ LƯU. Có draft riêng và chỉ commit khi blur/Enter,
 // vì issueKey là một nửa danh tính của event: lưu ngay mỗi phím gõ thì trạng
 // thái rỗng thoáng qua sẽ bị migrateConfig loại và cả dòng biến mất giữa lúc
@@ -521,6 +507,7 @@ function IssueKeyCell({ value, canClear, label, onCommit }: {
   label: string
   onCommit: (next: string) => void
 }) {
+  const t = useT()
   const [draft, setDraft] = useState(value)
   useEffect(() => { setDraft(value) }, [value])
 
@@ -534,7 +521,7 @@ function IssueKeyCell({ value, canClear, label, onCommit }: {
   return (
     <input
       value={draft} style={{ width: 110 }}
-      placeholder={canClear ? '(không cần)' : 'CAG-123'}
+      placeholder={canClear ? t.options.events.issueKeyPlaceholderOptional : t.options.events.issueKeyPlaceholder}
       aria-label={label}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={commit}
@@ -542,13 +529,6 @@ function IssueKeyCell({ value, canClear, label, onCommit }: {
     />
   )
 }
-
-// Dấu hiệu "không chọn được" đứng NGAY SAU tên, trước tên cha: option bị cắt
-// theo bề rộng dropdown, và phần bị cắt phải là tên cha (thông tin phụ) chứ
-// không phải lý do bị khoá.
-const dupLabel = (o: CeremonyOption) =>
-  `${o.value} · trùng tên (${o.duplicateCount} sub-task), không chọn được` +
-  (o.parentLabel === null ? '' : ` — ${o.parentLabel}`)
 
 // Dòng chọn hiện TÊN + CHA, vì trong sprint thật có nhiều sub-task trùng tên
 // ("Security Review" mỗi story một cái) và tên cha là thứ duy nhất phân biệt.
@@ -562,6 +542,7 @@ function SubtaskSelect({ value, options, label, onChange }: {
   label: string
   onChange: (next: string) => void
 }) {
+  const t = useT()
   // Tên ĐANG LƯU mà không có option dùng được nào mang giá trị đó vẫn phải là
   // một option, không thì <select> tự nhảy về "dùng issue key" và ghi đè cấu
   // hình đang có. Nói rõ nó đang ở tình trạng nào thay vì hiện tên trơ trọi.
@@ -569,8 +550,8 @@ function SubtaskSelect({ value, options, label, onChange }: {
   const usableMatch = options.some((o) => o.usable && o.value === saved)
   const dupMatch = options.find((o) => !o.usable && o.value === saved)
   const savedNote = dupMatch !== undefined
-    ? `${saved} — đang lưu, trùng tên trong sprint`
-    : `${saved} — đang lưu, không có trong sprint đang mở`
+    ? t.options.events.savedDuplicate(saved)
+    : t.options.events.savedMissing(saved)
 
   return (
     <select
@@ -578,13 +559,15 @@ function SubtaskSelect({ value, options, label, onChange }: {
       aria-label={label}
       onChange={(e) => onChange(e.target.value)}
     >
-      <option value="">{NO_MATCH}</option>
+      <option value="">{t.options.events.noMatch}</option>
       {saved !== '' && !usableMatch && (
         <option value={saved}>{savedNote}</option>
       )}
       {options.map((o) => (
         <option key={o.issueKey} value={o.value} disabled={!o.usable}>
-          {o.usable ? o.label : dupLabel(o)}
+          {o.usable
+            ? o.label
+            : t.options.events.dupLabel(o.value, o.duplicateCount, o.parentLabel)}
         </option>
       ))}
     </select>
@@ -595,6 +578,7 @@ function SubtaskSelect({ value, options, label, onChange }: {
 // nói lý do nút bị khoá, nhưng Options là nơi SỬA được, nên nó phải nói ở đây
 // nữa — không thì người dùng chỉ biết có chuyện khi bấm nút và thấy nút xám.
 function AmbiguousNote({ summary, count }: { summary: string; count: number }) {
+  const t = useT()
   return (
     <p
       // maxWidth khớp với <select> ở trên, và whiteSpace ghi đè `nowrap` của
@@ -605,14 +589,13 @@ function AmbiguousNote({ summary, count }: { summary: string; count: number }) {
         fontSize: fontSize.sm, color: colors.warning, lineHeight: 1.45,
       }}
     >
-      Có {count} sub-task tên “{summary}” trong sprint đang mở — extension không
-      phân biệt được cái nào, nên nút trong side panel bị khoá. Nhập issue key ở
-      cột bên cạnh để ghim đúng một issue.
+      {t.options.events.ambiguous(count, summary)}
     </p>
   )
 }
 
 function EventsSection({ config, save }: SectionProps) {
+  const t = useT()
   // Draft cho dòng mới — chưa lưu, chỉ tồn tại ở local state. Khác với các
   // input khác trong section (vốn ghi thẳng qua `save` mỗi lần đổi), dòng này
   // chưa có danh tính (issueKey hoặc matchSummary) nên `migrateConfig` sẽ loại
@@ -672,45 +655,29 @@ function EventsSection({ config, save }: SectionProps) {
   }
 
   return (
-    <Card title="5. Sprint event">
+    <Card title={t.options.events.title}>
       <div style={{ display: 'grid', gap: space.x3 }}>
-        <Hint>
-          Mỗi event là một nút một-cú-bấm trong side panel. Chọn <em>sub-task</em> theo
-          TÊN thì mỗi sprint mới nút tự trỏ sang sub-task mới của sprint đó — không
-          còn ghi giờ vào sprint cũ. Chỉ nhập <em>issue key</em> khi muốn ghim cứng
-          một issue.
-        </Hint>
-        <Hint>
-          Mỗi dòng trong danh sách hiện <em>tên sub-task — task cha</em> để phân biệt
-          các sub-task trùng tên. Tên nào bị <em>nhiều</em> sub-task dùng trong cùng
-          sprint thì bị khoá: extension khớp theo tên chính xác nên không thể biết
-          chọn cái nào. Muốn dùng đúng một trong số đó thì nhập <em>issue key</em>.
-        </Hint>
+        <Hint>{t.options.events.hint1}</Hint>
+        <Hint>{t.options.events.hint2}</Hint>
 
-        {loading && <Hint>Đang tải sub-task của sprint đang mở…</Hint>}
+        {loading && <Hint>{t.options.events.loadingSubtasks}</Hint>}
         {loadError !== null && (
-          <Banner kind="warn">
-            Không tải được danh sách sub-task của sprint ({loadError}). Vẫn chọn được
-            tên đã lưu, hoặc nhập issue key thủ công.
-          </Banner>
+          <Banner kind="warn">{t.options.events.loadError(loadError)}</Banner>
         )}
         {!loading && loadError === null && subtasks.length === 0 && (
-          <Banner kind="warn">
-            Sprint đang mở không có sub-task nào (hoặc chưa chọn project ở mục 3) —
-            chưa có gì để chọn theo tên.
-          </Banner>
+          <Banner kind="warn">{t.options.events.noSubtasks}</Banner>
         )}
 
         <div className="wl-table-scroll">
           <table className="wl-table" style={{ width: '100%' }}>
             <thead>
               <tr>
-                <th scope="col" style={{ textAlign: 'left' }}>Tên</th>
-                <th scope="col" style={{ textAlign: 'left' }}>Sub-task trong sprint</th>
-                <th scope="col" style={{ textAlign: 'left' }}>Issue key (ghim)</th>
-                <th scope="col">Phút mặc định</th>
-                <th scope="col" style={{ textAlign: 'left' }}>Comment mặc định</th>
-                <th scope="col"><span style={{ visibility: 'hidden' }}>Xoá</span></th>
+                <th scope="col" style={{ textAlign: 'left' }}>{t.options.events.colName}</th>
+                <th scope="col" style={{ textAlign: 'left' }}>{t.options.events.colSubtask}</th>
+                <th scope="col" style={{ textAlign: 'left' }}>{t.options.events.colIssueKey}</th>
+                <th scope="col">{t.options.events.colMinutes}</th>
+                <th scope="col" style={{ textAlign: 'left' }}>{t.options.events.colComment}</th>
+                <th scope="col"><span style={{ visibility: 'hidden' }}>{t.common.remove}</span></th>
               </tr>
             </thead>
             <tbody>
@@ -724,14 +691,14 @@ function EventsSection({ config, save }: SectionProps) {
                     <th scope="row" style={{ textAlign: 'left', fontWeight: 400 }}>
                       <input
                         value={ev.name} style={{ width: '100%' }}
-                        aria-label={`Tên event ${id}`}
+                        aria-label={t.options.events.nameAria(id)}
                         onChange={(e) => update(i, { name: e.target.value })}
                       />
                     </th>
                     <td style={{ textAlign: 'left' }}>
                       <SubtaskSelect
                         value={ev.matchSummary} options={options}
-                        label={`Sub-task của ${id}`}
+                        label={t.options.events.subtaskAria(id)}
                         onChange={(next) => update(i, { matchSummary: next })}
                       />
                       {ambiguousCount > 1 && (
@@ -742,31 +709,31 @@ function EventsSection({ config, save }: SectionProps) {
                       <IssueKeyCell
                         value={ev.issueKey}
                         canClear={ev.matchSummary !== ''}
-                        label={`Issue key ghim của ${id}`}
+                        label={t.options.events.issueKeyAria(id)}
                         onCommit={(next) => update(i, { issueKey: next })}
                       />
                     </td>
                     <td>
                       <input
                         type="number" min={0} value={ev.defaultMinutes} style={{ width: 72 }}
-                        aria-label={`Phút mặc định của ${id}`}
+                        aria-label={t.options.events.minutesAria(id)}
                         onChange={(e) => update(i, { defaultMinutes: Number(e.target.value) })}
                       />
                     </td>
                     <td style={{ textAlign: 'left' }}>
                       <input
                         value={ev.comment} style={{ width: '100%' }}
-                        aria-label={`Comment mặc định của ${id}`}
+                        aria-label={t.options.events.commentAria(id)}
                         onChange={(e) => update(i, { comment: e.target.value })}
                       />
                     </td>
                     <td>
                       <Button
                         variant="danger" size="sm"
-                        aria-label={`Xoá event ${id}`}
+                        aria-label={t.options.events.removeAria(id)}
                         onClick={() => remove(i)}
                       >
-                        Xoá
+                        {t.common.remove}
                       </Button>
                     </td>
                   </tr>
@@ -776,41 +743,44 @@ function EventsSection({ config, save }: SectionProps) {
                 <td style={{ textAlign: 'left' }}>
                   <input
                     value={draft.name} style={{ width: '100%' }}
-                    placeholder="Tên" aria-label="Tên event mới"
+                    placeholder={t.options.events.newNamePlaceholder}
+                    aria-label={t.options.events.newNameAria}
                     onChange={(e) => setDraft({ ...draft, name: e.target.value })}
                   />
                 </td>
                 <td style={{ textAlign: 'left' }}>
                   <SubtaskSelect
                     value={draft.matchSummary} options={options}
-                    label="Sub-task của event mới"
+                    label={t.options.events.newSubtaskAria}
                     onChange={(next) => setDraft({ ...draft, matchSummary: next })}
                   />
                 </td>
                 <td style={{ textAlign: 'left' }}>
                   <input
                     value={draft.issueKey} style={{ width: 110 }}
-                    placeholder="Issue key" aria-label="Issue key ghim của event mới"
+                    placeholder={t.options.events.newIssueKeyPlaceholder}
+                    aria-label={t.options.events.newIssueKeyAria}
                     onChange={(e) => setDraft({ ...draft, issueKey: e.target.value })}
                   />
                 </td>
                 <td>
                   <input
                     type="number" min={0} value={draft.defaultMinutes} style={{ width: 72 }}
-                    aria-label="Phút mặc định của event mới"
+                    aria-label={t.options.events.newMinutesAria}
                     onChange={(e) => setDraft({ ...draft, defaultMinutes: Number(e.target.value) })}
                   />
                 </td>
                 <td style={{ textAlign: 'left' }}>
                   <input
                     value={draft.comment} style={{ width: '100%' }}
-                    placeholder="Comment" aria-label="Comment mặc định của event mới"
+                    placeholder={t.options.events.newCommentPlaceholder}
+                    aria-label={t.options.events.newCommentAria}
                     onChange={(e) => setDraft({ ...draft, comment: e.target.value })}
                   />
                 </td>
                 <td>
                   <Button variant="primary" size="sm" onClick={add} disabled={!canAdd}>
-                    Thêm
+                    {t.common.add}
                   </Button>
                 </td>
               </tr>
@@ -831,6 +801,10 @@ function EventsSection({ config, save }: SectionProps) {
 // từ Web Store). Nên tính năng này chỉ làm được đúng một việc — nói cho người
 // dùng biết có bản mới và đưa họ tới file zip.
 function UpdateSection({ config, save }: SectionProps) {
+  const t = useT()
+  // Ngày/giờ phải theo ngôn ngữ đang chọn, không theo locale của browser: một
+  // UI tiếng Anh mà hiện "21/08/2026" đọc ra như lỗi.
+  const locale = useLocale()
   const { status, checking, error, check } = useUpdate()
   const [draft, setDraft] = useState(config.updateRepo)
   const fieldId = useId()
@@ -841,27 +815,23 @@ function UpdateSection({ config, save }: SectionProps) {
 
   const latest = status?.latest ?? null
   const checkedAt = status && status.lastCheckedAt > 0
-    ? new Date(status.lastCheckedAt).toLocaleString()
+    ? new Date(status.lastCheckedAt).toLocaleString(intlLocale(locale))
     : null
 
   return (
-    <Card title="6. Cập nhật">
+    <Card title={t.options.update.title}>
       <div style={{ display: 'grid', gap: space.x3 }}>
-        <Hint>
-          Extension cài bằng "Load unpacked" nên Chrome không tự cập nhật. Ở đây
-          chỉ kiểm tra xem repo đã có release mới hơn chưa; tải zip, giải nén thay
-          thư mục đang dùng, rồi bấm Reload ở <code>chrome://extensions</code>.
-        </Hint>
+        <Hint>{t.options.update.hint}</Hint>
 
         <div className="wl-field">
-          <label className="wl-field__label" htmlFor={fieldId}>Repo GitHub</label>
+          <label className="wl-field__label" htmlFor={fieldId}>{t.options.update.repoLabel}</label>
           <div style={{ display: 'flex', gap: space.x2, flexWrap: 'wrap' }}>
             <input
               id={fieldId}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && dirty && !invalid) void save({ updateRepo: trimmed }) }}
-              placeholder="owner/worklog-ext"
+              placeholder={t.options.update.repoPlaceholder}
               style={{ flex: '1 1 240px', minWidth: 0 }}
             />
             <Button
@@ -869,12 +839,12 @@ function UpdateSection({ config, save }: SectionProps) {
               onClick={() => void save({ updateRepo: trimmed })}
               disabled={!dirty || invalid}
             >
-              Lưu
+              {t.common.save}
             </Button>
           </div>
           {invalid && (
             <p style={{ margin: 0, fontSize: fontSize.md, color: colors.danger }}>
-              Phải là dạng <code>owner/tên</code>, không phải URL.
+              {t.options.update.repoInvalid}
             </p>
           )}
         </div>
@@ -883,18 +853,18 @@ function UpdateSection({ config, save }: SectionProps) {
           display: 'flex', gap: space.x3, alignItems: 'center', flexWrap: 'wrap',
         }}>
           <span style={{ fontSize: fontSize.md }}>
-            Đang dùng <strong>{status?.currentVersion ?? '—'}</strong>
+            {t.options.update.current(status?.currentVersion ?? '—')}
           </span>
           <Button
             variant="secondary" size="sm"
             onClick={() => void check()}
             disabled={checking || config.updateRepo === ''}
           >
-            {checking ? 'Đang kiểm tra…' : 'Kiểm tra ngay'}
+            {checking ? t.options.update.checking : t.options.update.check}
           </Button>
           {checkedAt && (
             <span style={{ fontSize: fontSize.xs, color: colors.muted }}>
-              Kiểm tra lần cuối: {checkedAt}
+              {t.options.update.lastChecked(checkedAt)}
             </span>
           )}
         </div>
@@ -902,7 +872,7 @@ function UpdateSection({ config, save }: SectionProps) {
         {error && <Banner kind="error">{error}</Banner>}
 
         {status?.state === 'current' && (
-          <Banner kind="success">Đang ở bản mới nhất ({status.currentVersion}).</Banner>
+          <Banner kind="success">{t.options.update.upToDate(status.currentVersion)}</Banner>
         )}
 
         {/* `dismissed` vẫn hiện Ở ĐÂY: người dùng bấm "Để sau" ở side panel là
@@ -911,18 +881,56 @@ function UpdateSection({ config, save }: SectionProps) {
           <Banner
             kind="info"
             action={{
-              label: 'Tải bản mới',
+              label: t.options.update.download,
               onClick: () => void chrome.tabs.create({ url: latest.downloadUrl ?? latest.url }),
             }}
           >
-            Có bản <strong>{latest.version}</strong>
-            {latest.publishedAt !== '' && ` (${new Date(latest.publishedAt).toLocaleDateString()})`}.
+            {t.options.update.available(
+              latest.version,
+              latest.publishedAt === ''
+                ? ''
+                : new Date(latest.publishedAt).toLocaleDateString(intlLocale(locale)),
+            )}
           </Banner>
         )}
 
         {status?.state === 'unknown' && status.lastError !== null && (
-          <Banner kind="warn">Chưa kiểm tra được: {status.lastError}</Banner>
+          <Banner kind="warn">{t.options.update.failed(status.lastError)}</Banner>
         )}
+      </div>
+    </Card>
+  )
+}
+
+// Card ngôn ngữ. Đứng cuối vì nó không thuộc luồng cấu hình Jira — nhưng vẫn
+// trong cùng trang, không phải một trang riêng cho đúng một field.
+//
+// Vì sao là config chứ không phải chrome.i18n: `chrome.i18n.getMessage` luôn đọc
+// theo ngôn ngữ của BROWSER và không có API override nào, nên một cài đặt ngôn
+// ngữ trong app không thể làm bằng nó. Xem src/i18n/index.ts.
+function LanguageSection({ config, save }: SectionProps) {
+  const t = useT()
+  const fieldId = useId()
+
+  return (
+    <Card title={t.language.title}>
+      <div style={{ display: 'grid', gap: space.x3 }}>
+        <Hint>{t.language.hint}</Hint>
+        <div className="wl-field" style={{ maxWidth: 320 }}>
+          <label className="wl-field__label" htmlFor={fieldId}>{t.language.label}</label>
+          <select
+            id={fieldId}
+            value={config.locale}
+            onChange={(e) => void save({ locale: e.target.value as Locale })}
+          >
+            {/* Tên ngôn ngữ hiện bằng CHÍNH ngôn ngữ đó, không dịch theo UI đang
+                dùng: người đang mắc kẹt trong một ngôn ngữ họ không đọc được
+                vẫn phải nhận ra được tên của ngôn ngữ mình muốn. */}
+            {LOCALES.map((l) => (
+              <option key={l} value={l}>{t.language[l]}</option>
+            ))}
+          </select>
+        </div>
       </div>
     </Card>
   )

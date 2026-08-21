@@ -1,4 +1,5 @@
 import { parseHhMm } from './timeline'
+import { DEFAULT_LOCALE, isLocale, type Locale } from '@/i18n'
 
 // v1 → v2: workdayStart/workdayEnd/breaks được thêm ở v1 nhưng KHÔNG có UI để
 // sửa, nên bất kỳ giá trị nào đã lưu (nếu có) chỉ có thể là default cũ —
@@ -55,6 +56,12 @@ export type Config = {
   // thể được fork/đổi chỗ host, và không có gì trong extension biết nó được
   // build từ repo nào.
   updateRepo: string
+  /**
+   * Ngôn ngữ UI. Cố tình KHÔNG có giá trị 'auto': `chrome.i18n` không cho
+   * override locale tại runtime, nên nếu muốn "theo browser" thì phải tự đọc
+   * navigator.language — thêm một trạng thái mà không ai yêu cầu.
+   */
+  locale: Locale
 }
 
 export const defaultConfig: Config = {
@@ -79,6 +86,7 @@ export const defaultConfig: Config = {
   // Mặc định trỏ về repo gốc. Vẫn sửa được ở Options: bản fork phải đổi chỗ
   // này, không thì nó đi hỏi update của một repo không phải của mình.
   updateRepo: 'Tony-Mesoneer/worklog-ext',
+  locale: DEFAULT_LOCALE,
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>
@@ -215,6 +223,8 @@ export function migrateConfig(raw: unknown): Config {
     durationPresets: numArray(r['durationPresets'], d.durationPresets),
     sprintEvents,
     updateRepo: str(r['updateRepo'], d.updateRepo).trim(),
+    // Locale lạ (config sửa tay, hoặc bản cũ chưa có field) → default.
+    locale: isLocale(r['locale']) ? r['locale'] : d.locale,
   }
   if (token) config.token = token
   return config
