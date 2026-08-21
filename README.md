@@ -99,7 +99,7 @@ npm run build && npm run pack   # → release/worklog-ext-<version>.zip
 ## Icon
 
 `python3 scripts/generate-icons.py` sinh lại `public/icons/icon{16,32,48,128}.png`
-— nền `rgb(18,18,18)`, chữ trắng SF Pro Heavy, `M.` ở cỡ nhỏ và `Meso.` ở cỡ lớn.
+— nền `#1a162a`, chữ trắng SF Pro Heavy, `M.` ở cỡ nhỏ và `Meso.` ở cỡ lớn.
 Cần Pillow và font hệ thống macOS. Mỗi cỡ render riêng chứ không scale từ một ảnh
 lớn xuống, vì chữ ở 16px scale xuống là nhoè.
 

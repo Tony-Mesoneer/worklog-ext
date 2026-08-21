@@ -23,7 +23,7 @@ OUT = ROOT / 'public' / 'icons'
 FONT_PATH = '/System/Library/Fonts/SFNS.ttf'
 FONT_VARIATION = 'Heavy'
 
-BG = (18, 18, 18, 255)
+BG = (0x1A, 0x16, 0x2A, 255)  # #1a162a
 FG = (255, 255, 255, 255)
 
 # 16 và 32 chỉ dùng "M.": "Meso." ở 16px là ~3px mỗi ký tự, thành vệt mờ.
