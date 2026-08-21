@@ -270,34 +270,20 @@ export function Dashboard() {
                 <CoverageSummary data={table} />
               </Card>
 
-              {/* Một card cho mỗi project, rồi card tổng ở cuối. Card project
-                  KHÔNG có capacity/% — capacity là của member trong khoảng
-                  ngày, không chia được theo project (xem
-                  core/coverage-by-project). */}
-              {byProject?.map((g) => (
-                <Card key={g.projectKey} title={projectCardTitle(g.projectKey)} flush>
-                  <div style={{ opacity: loading ? 0.6 : 1, transition: 'opacity .12s ease' }}>
-                    <CoverageTable
-                      data={g.table}
-                      meta={issueMeta}
-                      daysOff={config.daysOff}
-                      showCapacity={false}
-                      onCellClick={(accountId, date) =>
-                        setDetail({ accountId, date, project: g.projectKey })}
-                      onToggleDayOff={(a, d) => void toggleDayOff(a, d)}
-                    />
-                  </div>
-                </Card>
-              ))}
-
-              <Card title={byProject ? 'Tổng — tất cả project' : undefined} flush>
+              {/* MỘT bảng, một hàng header ngày. `groups` có giá trị thì bảng
+                  tự chia thành từng nhóm project và tự tắt cột capacity —
+                  capacity của member là của cả ngày làm việc, không chia được
+                  theo project (xem core/coverage-by-project). tfoot vẫn là tổng
+                  của MỌI project vì nó lấy từ `table`, không phải từ nhóm. */}
+              <Card flush>
                 <div style={{ opacity: loading ? 0.6 : 1, transition: 'opacity .12s ease' }}>
                   <CoverageTable
                     data={table}
                     meta={issueMeta}
                     daysOff={config.daysOff}
-                    onCellClick={(accountId, date) =>
-                      setDetail({ accountId, date, project: null })}
+                    {...(byProject === null ? {} : { groups: byProject })}
+                    onCellClick={(accountId, date, project) =>
+                      setDetail({ accountId, date, project })}
                     onToggleDayOff={(a, d) => void toggleDayOff(a, d)}
                   />
                 </div>
@@ -352,9 +338,3 @@ function SettingsHeader() {
     </div>
   )
 }
-
-// Nhóm không rõ project là dữ liệu thiếu meta (snapshot cũ, hoặc Jira không trả
-// field), không phải một project — nên nó cần tên riêng chứ không phải một tiêu
-// đề rỗng. Cùng chữ với dòng project bên trong CoverageTable.
-const projectCardTitle = (projectKey: string): string =>
-  projectKey === UNKNOWN_PROJECT ? 'Không rõ project' : projectKey

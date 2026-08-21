@@ -1,7 +1,7 @@
 // src/ui/dashboard/CoverageTable.tsx
 import { Fragment, useState } from 'react'
 import type { CSSProperties } from 'react'
-import type { CoverageIssueRow, CoverageTable as Data } from '@/core/coverage'
+import type { CoverageIssueRow, CoverageRow, CoverageTable as Data } from '@/core/coverage'
 import { isWeekend } from '@/core/coverage'
 import type { IssueMeta, IssueMetaMap } from '@/core/issue-hierarchy'
 import {
@@ -11,6 +11,7 @@ import {
 import { StatusBadge } from '@/ui/shared/StatusBadge'
 import { formatDuration } from '@/core/duration'
 import { ProgressBar } from '@/ui/shared/ProgressBar'
+import type { ProjectCoverage } from '@/core/coverage-by-project'
 import { cellLabel, dayMonthLabel, hoursLabel } from '@/ui/shared/format'
 import { colors, table as tableColors } from '@/ui/shared/theme'
 
@@ -20,8 +21,23 @@ type Props = {
   meta: IssueMetaMap
   /** accountId → ngày đã đánh dấu nghỉ. Chỉ để VẼ; capacity đã tính ở core. */
   daysOff: Record<string, string[]>
-  onCellClick: (accountId: string, date: string) => void
+  /**
+   * `projectKey` = nhóm project mà ô vừa bấm thuộc về, null khi bảng không gom
+   * nhóm. Caller cần nó để panel chi tiết chỉ hiện worklog của project đó —
+   * đúng tập số mà ô vừa cộng ra.
+   */
+  onCellClick: (accountId: string, date: string, projectKey: string | null) => void
   onToggleDayOff: (accountId: string, date: string) => void
+  /**
+   * Gom thành từng nhóm project trong CÙNG một bảng: một hàng header cho mỗi
+   * project, hàng member của project đó bên dưới, và tfoot vẫn là tổng của MỌI
+   * project (lấy từ `data`).
+   *
+   * Có `groups` thì cột capacity tự tắt, không cần caller nhớ: hàng member ở
+   * đây chỉ mang giờ của MỘT project, mà capacity của member là của cả ngày làm
+   * việc — xem core/coverage-by-project.
+   */
+  groups?: ProjectCoverage[]
   /**
    * Cột cuối là thanh tiến độ so với capacity, hay chỉ là tổng giờ.
    *
@@ -243,19 +259,173 @@ function memberIssueRows(
   ))
 }
 
+/**
+ * Hàng header của một NHÓM project ở tầng ngoài cùng — khác `ProjectHeaderRow`
+ * (tầng project BÊN TRONG phần mở rộng của một member, có thụt lề). Cái này
+ * không thụt và dùng nền của tfoot, để đọc ra là một dải phân cách chứ không
+ * phải một hàng dữ liệu ngang hàng với member.
+ */
+function ProjectGroupRow({ label, table, dates }: {
+  label: string
+  table: Data
+  dates: string[]
+}) {
+  return (
+    <tr>
+      <th
+        scope="row"
+        style={{
+          position: 'sticky', left: 0, zIndex: 1,
+          background: tableColors.footerBg,
+          fontWeight: 700, letterSpacing: '.02em',
+        }}
+      >
+        {label}
+      </th>
+      {dates.map((d) => (
+        <td
+          key={d}
+          className="wl-table__num"
+          style={{
+            background: isWeekend(d) ? tableColors.footerWeekendBg : tableColors.footerBg,
+            fontWeight: 700,
+            minWidth: DAY_COL_WIDTH,
+          }}
+        >
+          {cellLabel(table.totalPerDay[d] ?? 0)}
+        </td>
+      ))}
+      <td
+        className="wl-table__num"
+        style={{
+          background: tableColors.footerBg, fontWeight: 700,
+          width: TOTAL_COL_WIDTH, minWidth: TOTAL_COL_WIDTH,
+        }}
+      >
+        {hoursLabel(table.grandTotal)}
+      </td>
+    </tr>
+  )
+}
+
 export function CoverageTable({
-  data, meta, daysOff, onCellClick, onToggleDayOff, showCapacity = true,
+  data, meta, daysOff, onCellClick, onToggleDayOff, showCapacity = true, groups,
 }: Props) {
+  // Khoá mở rộng phải mang cả project: cùng một member xuất hiện trong nhiều
+  // nhóm, khoá chỉ theo accountId sẽ mở/đóng đồng thời ở mọi nhóm.
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+
+  // Gom nhóm thì hàng member chỉ mang giờ của MỘT project — capacity không chia
+  // được theo project, nên tắt ở đây thay vì tin caller nhớ truyền showCapacity.
+  const withCapacity = showCapacity && groups === undefined
 
   // Khoảng ngày có phần chưa xảy ra → nói rõ thanh đang đo tới hôm nay. Khoảng
   // nằm hoàn toàn trong quá khứ thì hai con số bằng nhau, thêm chữ chỉ gây nhiễu.
   const cutToToday = data.capacityToDateSeconds !== data.capacityFullRangeSeconds
 
-  const toggle = (accountId: string) => {
+  const toggle = (key: string) => {
     const next = new Set(expanded)
-    next.has(accountId) ? next.delete(accountId) : next.add(accountId)
+    next.has(key) ? next.delete(key) : next.add(key)
     setExpanded(next)
+  }
+
+  const memberRow = (row: CoverageRow, projectKey: string | null) => {
+    const off = new Set(daysOff[row.member.accountId] ?? [])
+    // Khoá mang cả project: cùng một member có mặt ở nhiều nhóm.
+    const rowKey = projectKey === null
+      ? row.member.accountId
+      : `${projectKey}#${row.member.accountId}`
+    const isOpen = expanded.has(rowKey)
+    return (
+      <Fragment key={rowKey}>
+        <tr>
+          <th scope="row" style={{ position: 'sticky', left: 0, background: tableColors.groupRowBg, zIndex: 1 }}>
+            <button
+              type="button"
+              className="wl-btn wl-btn--ghost wl-btn--sm"
+              onClick={() => toggle(rowKey)}
+              aria-expanded={isOpen}
+              aria-label={`${isOpen ? 'Thu gọn' : 'Mở rộng'} issue của ${row.member.displayName}`}
+              style={{ marginRight: 4, padding: '0 4px' }}
+            >
+              {isOpen ? '▾' : '▸'}
+            </button>
+            {row.member.displayName}
+            {!row.member.active && <span style={{ color: colors.muted }}> (inactive)</span>}
+          </th>
+
+          {data.dates.map((d) => {
+            const seconds = row.perDay[d] ?? 0
+            const isOff = off.has(d)
+            return (
+              <td key={d} style={dayCellStyle(d, isOff)}>
+                {/* <button> thật, không phải <td onClick>: bàn phím tới
+                    được và screen reader đọc ra là control. Click phải
+                    vẫn là lối tắt đánh dấu nghỉ, nhưng đường bàn phím
+                    tương đương nằm trong panel chi tiết. */}
+                <button
+                  type="button"
+                  className={seconds === 0 ? 'wl-cell wl-cell--empty' : 'wl-cell'}
+                  onClick={() => onCellClick(row.member.accountId, d, projectKey)}
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    onToggleDayOff(row.member.accountId, d)
+                  }}
+                  aria-label={
+                    `${row.member.displayName}, ${dayMonthLabel(d)}: `
+                    + `${seconds === 0 ? 'chưa log giờ' : formatDuration(seconds)}`
+                    + `${isOff ? ', đã đánh dấu nghỉ' : ''}`
+                  }
+                  title={
+                    `${isOff ? 'Ngày nghỉ · ' : ''}Bấm: xem chi tiết `
+                    + '· Bấm phải: đánh dấu nghỉ'
+                  }
+                >
+                  {isOff && seconds === 0 ? 'off' : cellLabel(seconds)}
+                </button>
+              </td>
+            )
+          })}
+
+          {/* Tín hiệu TỈ LỆ, không phải cờ nhị phân. Bản cũ tô cam cả bốn
+              member vì giữa sprint ai cũng dưới capacity, nên "hơi chậm"
+              và "chưa log gì" trông y như nhau.
+              Mốc là capacity TỚI HÔM NAY — so với capacity cả kỳ thì
+              giữa sprint thanh nào cũng gần rỗng, cũng mất nghĩa y vậy. */}
+          <td
+            className={withCapacity ? undefined : 'wl-table__num'}
+            style={{
+              width: TOTAL_COL_WIDTH, minWidth: TOTAL_COL_WIDTH,
+              ...(withCapacity ? {} : { fontWeight: 600 }),
+            }}
+          >
+            {withCapacity ? (
+              <ProgressBar
+                value={row.total}
+                max={row.capacityToDateSeconds}
+                height={4}
+                valueText={`${hoursLabel(row.total)} / ${hoursLabel(row.capacityToDateSeconds)}`}
+                label={
+                  `${row.member.displayName}: đã log ${hoursLabel(row.total)} `
+                  + `trên capacity ${hoursLabel(row.capacityToDateSeconds)}`
+                  + `${cutToToday ? ' tới hôm nay' : ''}`
+                  + `, cả kỳ ${hoursLabel(row.capacityFullRangeSeconds)}`
+                }
+              />
+            ) : (
+              hoursLabel(row.total)
+            )}
+          </td>
+        </tr>
+
+        {/* Hàng issue được GOM theo project rồi theo cha. Cả hai quyết
+            định (có cần tầng project không, nhóm cha nào) nằm ở core;
+            component chỉ vẽ. */}
+        {isOpen && memberIssueRows(
+          row.issues, meta, data.dates, off, rowKey,
+        )}
+      </Fragment>
+    )
   }
 
   return (
@@ -283,107 +453,27 @@ export function CoverageTable({
               </th>
             ))}
             <th scope="col" style={{ width: TOTAL_COL_WIDTH, minWidth: TOTAL_COL_WIDTH }}>
-              {!showCapacity
+              {!withCapacity
                 ? 'Tổng'
                 : cutToToday ? 'Tổng / tới hôm nay' : 'Tổng / capacity'}
             </th>
           </tr>
         </thead>
         <tbody>
-          {data.rows.map((row) => {
-            const off = new Set(daysOff[row.member.accountId] ?? [])
-            const isOpen = expanded.has(row.member.accountId)
-            return (
-              <Fragment key={row.member.accountId}>
-                <tr>
-                  <th scope="row" style={{ position: 'sticky', left: 0, background: tableColors.groupRowBg, zIndex: 1 }}>
-                    <button
-                      type="button"
-                      className="wl-btn wl-btn--ghost wl-btn--sm"
-                      onClick={() => toggle(row.member.accountId)}
-                      aria-expanded={isOpen}
-                      aria-label={`${isOpen ? 'Thu gọn' : 'Mở rộng'} issue của ${row.member.displayName}`}
-                      style={{ marginRight: 4, padding: '0 4px' }}
-                    >
-                      {isOpen ? '▾' : '▸'}
-                    </button>
-                    {row.member.displayName}
-                    {!row.member.active && <span style={{ color: colors.muted }}> (inactive)</span>}
-                  </th>
-
-                  {data.dates.map((d) => {
-                    const seconds = row.perDay[d] ?? 0
-                    const isOff = off.has(d)
-                    return (
-                      <td key={d} style={dayCellStyle(d, isOff)}>
-                        {/* <button> thật, không phải <td onClick>: bàn phím tới
-                            được và screen reader đọc ra là control. Click phải
-                            vẫn là lối tắt đánh dấu nghỉ, nhưng đường bàn phím
-                            tương đương nằm trong panel chi tiết. */}
-                        <button
-                          type="button"
-                          className={seconds === 0 ? 'wl-cell wl-cell--empty' : 'wl-cell'}
-                          onClick={() => onCellClick(row.member.accountId, d)}
-                          onContextMenu={(e) => {
-                            e.preventDefault()
-                            onToggleDayOff(row.member.accountId, d)
-                          }}
-                          aria-label={
-                            `${row.member.displayName}, ${dayMonthLabel(d)}: `
-                            + `${seconds === 0 ? 'chưa log giờ' : formatDuration(seconds)}`
-                            + `${isOff ? ', đã đánh dấu nghỉ' : ''}`
-                          }
-                          title={
-                            `${isOff ? 'Ngày nghỉ · ' : ''}Bấm: xem chi tiết `
-                            + '· Bấm phải: đánh dấu nghỉ'
-                          }
-                        >
-                          {isOff && seconds === 0 ? 'off' : cellLabel(seconds)}
-                        </button>
-                      </td>
-                    )
-                  })}
-
-                  {/* Tín hiệu TỈ LỆ, không phải cờ nhị phân. Bản cũ tô cam cả bốn
-                      member vì giữa sprint ai cũng dưới capacity, nên "hơi chậm"
-                      và "chưa log gì" trông y như nhau.
-                      Mốc là capacity TỚI HÔM NAY — so với capacity cả kỳ thì
-                      giữa sprint thanh nào cũng gần rỗng, cũng mất nghĩa y vậy. */}
-                  <td
-                    className={showCapacity ? undefined : 'wl-table__num'}
-                    style={{
-                      width: TOTAL_COL_WIDTH, minWidth: TOTAL_COL_WIDTH,
-                      ...(showCapacity ? {} : { fontWeight: 600 }),
-                    }}
-                  >
-                    {showCapacity ? (
-                      <ProgressBar
-                        value={row.total}
-                        max={row.capacityToDateSeconds}
-                        height={4}
-                        valueText={`${hoursLabel(row.total)} / ${hoursLabel(row.capacityToDateSeconds)}`}
-                        label={
-                          `${row.member.displayName}: đã log ${hoursLabel(row.total)} `
-                          + `trên capacity ${hoursLabel(row.capacityToDateSeconds)}`
-                          + `${cutToToday ? ' tới hôm nay' : ''}`
-                          + `, cả kỳ ${hoursLabel(row.capacityFullRangeSeconds)}`
-                        }
-                      />
-                    ) : (
-                      hoursLabel(row.total)
-                    )}
-                  </td>
-                </tr>
-
-                {/* Hàng issue được GOM theo project rồi theo cha. Cả hai quyết
-                    định (có cần tầng project không, nhóm cha nào) nằm ở core;
-                    component chỉ vẽ. */}
-                {isOpen && memberIssueRows(
-                  row.issues, meta, data.dates, off, row.member.accountId,
-                )}
-              </Fragment>
-            )
-          })}
+          {/* Hai chế độ, MỘT hàm render hàng member: gom nhóm project chỉ đổi
+              tập hàng và khoá mở rộng, không đổi cách vẽ một hàng. */}
+          {groups === undefined
+            ? data.rows.map((row) => memberRow(row, null))
+            : groups.map((g) => (
+                <Fragment key={`g-${g.projectKey}`}>
+                  <ProjectGroupRow
+                    label={projectLabel(g.projectKey)}
+                    table={g.table}
+                    dates={data.dates}
+                  />
+                  {g.table.rows.map((row) => memberRow(row, g.projectKey))}
+                </Fragment>
+              ))}
         </tbody>
         <tfoot>
           <tr>
