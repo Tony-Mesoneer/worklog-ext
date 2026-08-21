@@ -49,7 +49,7 @@ Hai đường, quyết định bằng probe lúc setup:
 
 **Đường 1 — cookie session (mặc định, đã xác minh).** Fetch với
 `credentials: 'include'`, dùng session Jira đang đăng nhập. Không setup gì.
-Spike ngày 2026-08-19 trên `mesoneerag.atlassian.net` xác nhận **cả đọc và ghi
+Spike ngày 2026-08-19 trên `your-site.atlassian.net` xác nhận **cả đọc và ghi
 worklog đều chạy** bằng cookie session — kết luận `cookie-write-ok`. Đây là
 đường mặc định; người dùng không phải tạo API token.
 

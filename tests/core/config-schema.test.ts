@@ -13,11 +13,11 @@ describe('migrateConfig', () => {
   it('giữ giá trị người dùng đã set', () => {
     const c = migrateConfig({
       version: CONFIG_VERSION,
-      jiraBaseUrl: 'https://mesoneerag.atlassian.net',
+      jiraBaseUrl: 'https://your-site.atlassian.net',
       projects: ['CAG'],
       workdayStart: '07:45',
     })
-    expect(c.jiraBaseUrl).toBe('https://mesoneerag.atlassian.net')
+    expect(c.jiraBaseUrl).toBe('https://your-site.atlassian.net')
     expect(c.projects).toEqual(['CAG'])
     // Không dùng '08:30' ở đây nữa: nó đã là default, nên test sẽ pass kể cả
     // khi migrate bỏ mất field.

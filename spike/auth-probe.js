@@ -2,7 +2,7 @@
  * Spike: cookie-session có ghi được worklog vào Jira Cloud không?
  *
  * CÁCH CHẠY
- *   1. Mở tab https://mesoneerag.atlassian.net (đang đăng nhập)
+ *   1. Mở tab https://your-site.atlassian.net (đang đăng nhập)
  *   2. DevTools (Cmd+Opt+I) → Console
  *   3. Paste toàn bộ file này → Enter
  *   4. Copy output gửi lại

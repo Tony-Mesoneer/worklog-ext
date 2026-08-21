@@ -1473,11 +1473,11 @@ describe('migrateConfig', () => {
   it('giữ giá trị người dùng đã set', () => {
     const c = migrateConfig({
       version: CONFIG_VERSION,
-      jiraBaseUrl: 'https://mesoneerag.atlassian.net',
+      jiraBaseUrl: 'https://your-site.atlassian.net',
       projects: ['CAG'],
       workdayStart: '08:30',
     })
-    expect(c.jiraBaseUrl).toBe('https://mesoneerag.atlassian.net')
+    expect(c.jiraBaseUrl).toBe('https://your-site.atlassian.net')
     expect(c.projects).toEqual(['CAG'])
     expect(c.workdayStart).toBe('08:30')
   })
@@ -3378,7 +3378,7 @@ createRoot(document.getElementById('root')!).render(<Options />)
 Run: `npm run build`, reload extension, mở Options.
 
 Checklist:
-- Nhập `https://mesoneerag.atlassian.net` → Kết nối → Chrome hỏi quyền → cho phép → hiện "Đã kết nối: Thanh Hoang · Asia/Jakarta · chế độ cookie".
+- Nhập `https://your-site.atlassian.net` → Kết nối → Chrome hỏi quyền → cho phép → hiện "Đã kết nối: Thanh Hoang · Asia/Jakarta · chế độ cookie".
 - Nếu timezone máy khác `Asia/Jakarta` → banner vàng xuất hiện.
 - Thêm project `CAG` → chọn board → dropdown có board của CAG.
 - Tìm member theo tên → thêm → đổi giờ/ngày → **reload trang** → giá trị vẫn còn (đã lưu ngay).
