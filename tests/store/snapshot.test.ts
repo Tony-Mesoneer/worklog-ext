@@ -144,3 +144,91 @@ describe('store/snapshot', () => {
     expect(fake.api.storage.local.remove).not.toHaveBeenCalled()
   })
 })
+
+describe('removeWorklogsFromSnapshots', () => {
+  let fake: ReturnType<typeof makeChrome>
+
+  beforeEach(() => {
+    fake = makeChrome()
+    vi.stubGlobal('chrome', fake.api)
+    vi.resetModules()
+  })
+
+  const key = (from: string, to: string, ids: string[]) =>
+    snapshotKey({ from, to, accountIds: ids })
+
+  const snap = (worklogs: Array<{ id: string; authorAccountId: string; date: string }>) => ({
+    fetchedAt: 1000,
+    worklogs: worklogs.map((w) => ({
+      ...w, issueKey: 'CAG-1', issueSummary: 'S', startMinutes: 540,
+      timeSpentSeconds: 3600, comment: '',
+    })),
+    meta: {},
+  })
+
+  const ids = (k: string): string[] =>
+    (fake.data[k] as { worklogs: Array<{ id: string }> }).worklogs.map((w) => w.id)
+
+  it('bỏ worklog khỏi mọi snapshot PHỦ nó', async () => {
+    const wide = key('2026-08-01', '2026-08-31', ['a', 'b'])
+    const narrow = key('2026-08-10', '2026-08-16', ['a'])
+    fake.data[wide] = snap([
+      { id: '1', authorAccountId: 'a', date: '2026-08-15' },
+      { id: '2', authorAccountId: 'b', date: '2026-08-15' },
+    ])
+    fake.data[narrow] = snap([{ id: '1', authorAccountId: 'a', date: '2026-08-15' }])
+
+    const { removeWorklogsFromSnapshots } = await import('@/store/snapshot')
+    await removeWorklogsFromSnapshots(['1'])
+
+    expect(ids(wide)).toEqual(['2'])
+    expect(ids(narrow)).toEqual([])
+  })
+
+  it('không chạm snapshot không chứa id nào bị xoá', async () => {
+    const other = key('2026-07-01', '2026-07-31', ['a'])
+    const notMine = key('2026-08-01', '2026-08-31', ['b'])
+    fake.data[other] = snap([{ id: '9', authorAccountId: 'a', date: '2026-07-15' }])
+    fake.data[notMine] = snap([{ id: '8', authorAccountId: 'b', date: '2026-08-15' }])
+
+    const { removeWorklogsFromSnapshots } = await import('@/store/snapshot')
+    await removeWorklogsFromSnapshots(['7'])
+
+    expect(ids(other)).toEqual(['9'])
+    expect(ids(notMine)).toEqual(['8'])
+  })
+
+  it('giữ nguyên fetchedAt và meta: patch không phải một lần fetch mới', async () => {
+    const k = key('2026-08-01', '2026-08-31', ['a'])
+    fake.data[k] = {
+      ...snap([{ id: '1', authorAccountId: 'a', date: '2026-08-15' }]),
+      meta: { 'CAG-1': { key: 'CAG-1' } },
+    }
+
+    const { removeWorklogsFromSnapshots } = await import('@/store/snapshot')
+    await removeWorklogsFromSnapshots(['1'])
+
+    const after = fake.data[k] as { fetchedAt: number; meta: Record<string, unknown> }
+    expect(after.fetchedAt).toBe(1000)
+    expect(after.meta).toEqual({ 'CAG-1': { key: 'CAG-1' } })
+  })
+
+  it('bỏ qua key lạ và key scope version cũ, không throw', async () => {
+    const legacy = 'snapshot:CAG|2026-08-01|2026-08-31|a'
+    fake.data['config'] = { jiraBaseUrl: 'x' }
+    fake.data[legacy] = snap([{ id: '1', authorAccountId: 'a', date: '2026-08-15' }])
+
+    const { removeWorklogsFromSnapshots } = await import('@/store/snapshot')
+    await removeWorklogsFromSnapshots(['1'])
+
+    expect(fake.data['config']).toEqual({ jiraBaseUrl: 'x' })
+    // Key version cũ không bao giờ được đọc lên, nên cũng không cần sửa.
+    expect(ids(legacy)).toEqual(['1'])
+  })
+
+  it('không có snapshot nào thì không ghi gì', async () => {
+    const { removeWorklogsFromSnapshots } = await import('@/store/snapshot')
+    await removeWorklogsFromSnapshots(['1'])
+    expect(fake.api.storage.local.set).not.toHaveBeenCalled()
+  })
+})

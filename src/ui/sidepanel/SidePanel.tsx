@@ -25,6 +25,7 @@ import { GearIcon } from '@/ui/shared/icons'
 import { colors, fontSize, space } from '@/ui/shared/theme'
 import { DatePopover } from './DatePopover'
 import { DayBlocks } from './DayBlocks'
+import { DayWorklogList } from './DayWorklogList'
 import { EventButtons } from './EventButtons'
 import { IssuePicker } from './IssuePicker'
 import { LogForm } from './LogForm'
@@ -75,9 +76,18 @@ export function SidePanel() {
   const [busy, setBusy] = useState(false)
   const [loadingDay, setLoadingDay] = useState(false)
   const [error, setError] = useState<UiError | null>(null)
-  // Nhiều id: một lần bấm Log có thể sinh hai worklog khi yêu cầu đi qua giờ
-  // nghỉ. Undo phải xoá HẾT, không thì nó chỉ hoàn tác một nửa.
-  const [lastLogged, setLastLogged] = useState<{ ids: string[]; issueKey: string } | null>(null)
+  // Hành động hoàn tác được gần nhất — MỘT state cho cả log và xoá, vì chúng
+  // loại trừ nhau: hai state nullable riêng thì sớm muộn cả hai cùng non-null
+  // và panel hiện hai banner Undo chồng nhau.
+  //
+  // 'logged' mang nhiều id: một lần bấm Log có thể sinh hai worklog khi yêu cầu
+  // đi qua giờ nghỉ, và undo phải xoá HẾT, không thì nó chỉ hoàn tác một nửa.
+  // 'deleted' mang cả worklog: undo là ghi LẠI, nên cần đủ start/duration/comment.
+  const [lastAction, setLastAction] = useState<
+    | { kind: 'logged'; ids: string[]; issueKey: string }
+    | { kind: 'deleted'; worklog: Worklog }
+    | null
+  >(null)
   // Sprint event đã tra issue key theo tên sub-task. null = chưa tra xong.
   const [resolved, setResolved] = useState<ResolvedSprintEvent[] | null>(null)
   const [resolving, setResolving] = useState(false)
@@ -161,12 +171,12 @@ export function SidePanel() {
         issueKey: issueKey.trim(), date, startMinutes,
         timeSpentSeconds: seconds, comment,
       })
-      setLastLogged({ ids: res.ids, issueKey: issueKey.trim() })
+      setLastAction({ kind: 'logged', ids: res.ids, issueKey: issueKey.trim() })
       setDurationInput('')
       setComment('')
       await reload(config, date)
       // Undo hết hiệu lực sau 8 giây.
-      setTimeout(() => setLastLogged(null), 8000)
+      setTimeout(() => setLastAction(null), 8000)
     } catch (e) {
       // Giữ nguyên form: người dùng không phải nhập lại. Message của
       // MessageError đã chứa text gốc từ Jira (xem jiraErrorMessage).
@@ -174,26 +184,70 @@ export function SidePanel() {
     } finally { setBusy(false) }
   }
 
+  // Xoá một worklog đã ghi. Không có bước xác nhận: banner Undo bên dưới là
+  // đường lùi, cùng lối với việc log.
+  const remove = async (worklog: Worklog) => {
+    if (!config) return
+    setBusy(true)
+    try {
+      await send({
+        type: 'worklog/delete', issueKey: worklog.issueKey, worklogId: worklog.id,
+      })
+      setLastAction({ kind: 'deleted', worklog })
+      await reload(config, date)
+      setTimeout(() => setLastAction(null), 8000)
+    } catch (e) {
+      setError(toUiError(e))
+    } finally { setBusy(false) }
+  }
+
   const undo = async () => {
-    if (!lastLogged || !config) return
+    if (!lastAction || !config) return
+
+    if (lastAction.kind === 'deleted') {
+      const w = lastAction.worklog
+      setLastAction(null)
+      setBusy(true)
+      try {
+        // Ghi LẠI qua đúng đường mà việc log đi. Hai hệ quả phải biết:
+        // worklog cắt qua giờ nghỉ quay lại thành HAI worklog (tổng giờ đúng,
+        // id mới), và worklog nằm trọn trong giờ nghỉ thì `worklog/add` ném
+        // 'Thời lượng phải lớn hơn 0' — lỗi hiện lên rõ, không mất im lặng.
+        await send<WorklogAddResult>({
+          type: 'worklog/add',
+          issueKey: w.issueKey, date: w.date, startMinutes: w.startMinutes,
+          timeSpentSeconds: w.timeSpentSeconds, comment: w.comment,
+        })
+      } catch (e) {
+        const ui = toUiError(e)
+        setError({
+          message: `Không ghi lại được worklog trên ${w.issueKey}: ${ui.message}`,
+          auth: ui.auth,
+        })
+      } finally { setBusy(false) }
+      await reload(config, date)
+      return
+    }
+
     // Xoá từng cái, KHÔNG dừng ở lỗi đầu tiên: bỏ giữa đường sẽ để lại đúng cái
     // trạng thái một-nửa mà undo đang cố dọn.
     const failed: string[] = []
-    for (const id of lastLogged.ids) {
+    for (const id of lastAction.ids) {
       try {
-        await send({ type: 'worklog/delete', issueKey: lastLogged.issueKey, worklogId: id })
+        await send({ type: 'worklog/delete', issueKey: lastAction.issueKey, worklogId: id })
       } catch (e) {
         // Text cho người dùng nói đủ việc cần làm; nguyên nhân gốc vẫn phải vào
         // console, không thì không debug được gì.
-        console.error('[sidepanel] undo worklog thất bại', lastLogged.issueKey, id, e)
+        console.error('[sidepanel] undo worklog thất bại', lastAction.issueKey, id, e)
         failed.push(id)
       }
     }
-    setLastLogged(null)
+    const issueKeyOfAction = lastAction.issueKey
+    setLastAction(null)
     if (failed.length > 0) {
       setError({
         message:
-          `Không xoá được worklog ${failed.join(', ')} trên ${lastLogged.issueKey}` +
+          `Không xoá được worklog ${failed.join(', ')} trên ${issueKeyOfAction}` +
           ' — xoá tay trong Jira',
         auth: false,
       })
@@ -356,11 +410,13 @@ export function SidePanel() {
 
       {error && <ErrorBanner error={error} onDismiss={() => setError(null)} />}
 
-      {lastLogged && (
+      {lastAction && (
         <Banner kind="success" action={{ label: 'Undo', onClick: () => void undo() }}>
-          {lastLogged.ids.length > 1
-            ? `Đã log ${lastLogged.ids.length} worklog vào ${lastLogged.issueKey} (bỏ qua giờ nghỉ)`
-            : `Đã log vào ${lastLogged.issueKey}`}
+          {lastAction.kind === 'deleted'
+            ? `Đã xoá worklog trên ${lastAction.worklog.issueKey}`
+            : lastAction.ids.length > 1
+              ? `Đã log ${lastAction.ids.length} worklog vào ${lastAction.issueKey} (bỏ qua giờ nghỉ)`
+              : `Đã log vào ${lastAction.issueKey}`}
         </Banner>
       )}
 
@@ -375,6 +431,16 @@ export function SidePanel() {
             selection={segments}
             meta={issueMeta}
           />
+          {/* Timeline để ĐỌC, danh sách để SỬA. Khối 15 phút trong timeline dày
+              vài pixel nên không đặt nổi nút xoá vào đó. */}
+          <div style={{ marginTop: space.x2 }}>
+            <DayWorklogList
+              worklogs={worklogs}
+              meta={issueMeta}
+              busy={busy}
+              onDelete={(w) => void remove(w)}
+            />
+          </div>
         </div>
       </Card>
 

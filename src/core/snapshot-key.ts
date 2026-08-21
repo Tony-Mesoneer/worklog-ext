@@ -31,6 +31,26 @@ export function snapshotKey(scope: Scope): string {
   return `snapshot:${SNAPSHOT_SCOPE_VERSION}|${scope.from}|${scope.to}|${a}`
 }
 
+/**
+ * Đọc ngược `snapshotKey`. Cần nó để biết một snapshot đang cache khoảng ngày
+ * nào của những ai — sau khi xoá một worklog, mọi snapshot PHỦ worklog đó phải
+ * bỏ nó ra, không thì dashboard còn hiện giờ đã xoá cho tới khi hết TTL.
+ *
+ * `null` cho mọi key không đúng hình dạng hiện tại: scope version cũ, thiếu
+ * phần, hay không phải key snapshot. Cùng lối "cache cũ = thiếu, không phải
+ * lỗi" — không đoán bừa scope của một key ta không hiểu, vì đoán sai nghĩa là
+ * sửa một cache không liên quan.
+ */
+export function parseSnapshotKey(key: string): Scope | null {
+  const parts = key.split('|')
+  if (parts.length !== 4) return null
+  const [head, from, to, ids] = parts as [string, string, string, string]
+  if (head !== `snapshot:${SNAPSHOT_SCOPE_VERSION}`) return null
+  if (from === '' || to === '') return null
+  // ''.split(',') cho [''] — một accountId rỗng không tồn tại, nên lọc ra.
+  return { from, to, accountIds: ids.split(',').filter((x) => x !== '') }
+}
+
 export function isStale(fetchedAt: number, now: number, ttlMs: number): boolean {
   const age = now - fetchedAt
   // age < 0 nghĩa là đồng hồ nhảy về quá khứ; coi là stale để fetch lại cho chắc.

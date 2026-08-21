@@ -1,6 +1,9 @@
 import { loadConfig, saveConfig } from '@/store/config'
 import { checkForUpdate, dismissUpdate, updateStatus } from './update'
-import { readSnapshot, writeSnapshot, pruneSnapshots, snapshotMeta } from '@/store/snapshot'
+import {
+  readSnapshot, writeSnapshot, pruneSnapshots, snapshotMeta,
+  removeWorklogsFromSnapshots,
+} from '@/store/snapshot'
 import { readCeremonyCache, writeCeremonyCache } from '@/store/ceremony'
 import { createClient, type JiraClient } from '@/jira/client'
 import { cookieAuth, tokenAuth } from '@/jira/auth'
@@ -233,6 +236,9 @@ export async function handle(msg: Message): Promise<unknown> {
       const config = await loadConfig()
       const c = await makeClient(config)
       await api.deleteWorklog(c, msg.issueKey, msg.worklogId)
+      // SAU khi Jira xác nhận, không trước: xoá thất bại thì worklog vẫn còn
+      // trong Jira, bỏ nó khỏi snapshot chỉ là nói dối theo hướng ngược lại.
+      await removeWorklogsFromSnapshots([msg.worklogId])
       return null
     }
 

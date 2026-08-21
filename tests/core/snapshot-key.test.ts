@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  snapshotKey, isStale, snapshotKeysToEvict,
+  snapshotKey, isStale, snapshotKeysToEvict, parseSnapshotKey,
   SNAPSHOT_TTL_MS, SNAPSHOT_MAX_KEYS, SNAPSHOT_SCOPE_VERSION,
 } from '@/core/snapshot-key'
 
@@ -84,5 +84,31 @@ describe('snapshotKeysToEvict', () => {
   it('cap mặc định là SNAPSHOT_MAX_KEYS', () => {
     const metas = Array.from({ length: SNAPSHOT_MAX_KEYS + 2 }, (_, i) => meta(`k${i}`, i))
     expect(snapshotKeysToEvict(metas)).toEqual(['k0', 'k1'])
+  })
+})
+
+describe('parseSnapshotKey', () => {
+  it('vòng tròn: snapshotKey rồi parse lại ra đúng scope', () => {
+    const scope = { from: '2026-08-01', to: '2026-08-31', accountIds: ['b', 'a'] }
+    // accountIds được sort trong key, nên parse ra bản đã sort — đó là cùng một
+    // scope, và snapshotKey của nó bằng nhau.
+    const parsed = parseSnapshotKey(snapshotKey(scope))
+    expect(parsed).toEqual({ from: '2026-08-01', to: '2026-08-31', accountIds: ['a', 'b'] })
+    expect(snapshotKey(parsed!)).toBe(snapshotKey(scope))
+  })
+
+  it('key của scope version cũ → null, không đoán bừa', () => {
+    expect(parseSnapshotKey('snapshot:CAG|2026-08-01|2026-08-31|a')).toBeNull()
+    expect(parseSnapshotKey('snapshot:v1|2026-08-01|2026-08-31|a')).toBeNull()
+  })
+
+  it('key không phải snapshot, hoặc thiếu phần → null', () => {
+    for (const bad of ['config', 'snapshot:v2|2026-08-01', 'snapshot:v2', '', 'snapshot:v2|a|b|c|d']) {
+      expect(parseSnapshotKey(bad), bad).toBeNull()
+    }
+  })
+
+  it('accountIds rỗng đọc ra mảng rỗng, không phải một phần tử rỗng', () => {
+    expect(parseSnapshotKey('snapshot:v2|2026-08-01|2026-08-31|')?.accountIds).toEqual([])
   })
 })
