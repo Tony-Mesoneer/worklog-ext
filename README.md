@@ -105,23 +105,51 @@ lớn xuống, vì chữ ở 16px scale xuống là nhoè.
 
 ## Firefox
 
-Chưa hỗ trợ. Blocker chính: Firefox không có `sidePanel` API lẫn `side_panel`
-manifest key — nó dùng `sidebar_action`/`sidebarAction`, và [MDN nói rõ hai cái
-không tương thích](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/user_interface/Sidebars).
-Side panel là bề mặt chính của extension này, nên đó là việc port thật sự chứ
-không phải một cờ cấu hình.
+Build được, **chưa test trên Firefox thật**. Xem phần "chưa xác nhận" bên dưới
+trước khi tin nó chạy.
 
-Việc đã làm trước: mọi code gọi WebExtension API đi qua `src/platform/ext.ts`
-thay vì `chrome.*` trực tiếp. Lý do làm sớm — trên Firefox `chrome.*` là
-callback-based, nên `await chrome.storage.local.get(k)` trả `undefined` mà
-không throw. Viết `ext.*` từ giờ nghĩa là code mới không tích thêm nợ.
+```bash
+npm run build:firefox      # → dist-firefox/
+npm run pack:firefox       # → release/worklog-ext-<version>-firefox.zip
+```
 
-Còn lại khi thực sự port: `sidebar_action` thay `side_panel`,
-`background.scripts` thay `service_worker` (Firefox MV3 chưa có service worker),
-`browser_specific_settings.gecko.id` để sign, và một build target thứ hai
-(`@crxjs/vite-plugin` là Chrome-only). Rủi ro chưa đo được: Total Cookie
-Protection của Firefox có thể chặn session cookie Jira trong fetch từ
-background — nếu vỡ thì rơi về đường API token đã có.
+Load: `about:debugging#/runtime/this-firefox` → "Load Temporary Add-on" → chọn
+`dist-firefox/manifest.json`. Add-on tạm mất khi đóng Firefox; muốn cài lâu dài
+thì phải sign qua AMO.
+
+**Khác biệt so với bản Chrome** — một `manifest.json` gốc, biến đổi theo target
+trong [`manifest.config.ts`](manifest.config.ts):
+
+| Chrome | Firefox |
+| --- | --- |
+| `background.service_worker` | `background.scripts` (Firefox MV3 không có service worker) |
+| `side_panel` + `sidePanel` API | `sidebar_action` + `sidebarAction` API |
+| permission `sidePanel` | bỏ (Firefox không biết key này) |
+| — | `browser_specific_settings.gecko.id` để sign |
+| `dist/` | `dist-firefox/` |
+
+`dist/` giữ nguyên cho Chrome có chủ ý: đổi đường dẫn sẽ buộc mọi người đang
+dùng phải trỏ lại "Load unpacked".
+
+Code không hỏi "đang chạy browser nào" mà hỏi "API này có không":
+[`src/platform/ext.ts`](src/platform/ext.ts) chọn `browser` hoặc `chrome`, và
+[`src/platform/sidepanel.ts`](src/platform/sidepanel.ts) chọn `sidebarAction`
+hoặc `sidePanel`. Trên Firefox `chrome.*` tồn tại nhưng là callback-based, nên
+`await chrome.storage.local.get(k)` trả `undefined` mà không throw — đó là lý do
+không chỗ nào trong `src/` gọi `chrome.*` trực tiếp nữa.
+
+**Chưa xác nhận, sẽ chỉ biết khi chạy trên Firefox thật:**
+
+- `sidebarAction.open()` đòi user gesture. Handler của `commands`
+  (`Cmd+Shift+L`) *nên* tính là gesture, nhưng chưa kiểm.
+- Total Cookie Protection có thể chặn session cookie Jira trong fetch từ
+  background. Nếu vỡ thì rơi về đường API token đã có (Options → mục 2), tức
+  UX Firefox có thể là "bắt buộc nhập token".
+- `strict_min_version` đặt `128.0` (ESR hiện hành) vì không xác nhận được phiên
+  bản tối thiểu thật cho `optional_host_permissions`. Hạ xuống sau khi test —
+  đặt số thấp mà không kiểm thì người dùng cài được rồi mới gặp lỗi.
+- Chưa có bước sign AMO trong CI. Release chỉ ra zip; muốn tự cập nhật thật thì
+  cần `web-ext sign` + `gecko.update_url`.
 
 ## Cập nhật extension
 

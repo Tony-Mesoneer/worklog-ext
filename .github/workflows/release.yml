@@ -45,17 +45,24 @@ jobs:
       - name: Test
         run: npm test
 
-      - name: Build
+      - name: Build Chrome
         run: npx vite build
+
+      - name: Build Firefox
+        run: npx vite build
+        env:
+          TARGET: firefox
 
       - name: Đóng gói zip
         id: pack
-        run: node scripts/pack.mjs --github-output
+        run: |
+          node scripts/pack.mjs --github-output
+          node scripts/pack.mjs --target firefox
 
       - uses: actions/upload-artifact@v7
         with:
-          name: ${{ steps.pack.outputs.name }}
-          path: ${{ steps.pack.outputs.zip }}
+          name: worklog-ext-${{ inputs.tag || github.ref_name }}
+          path: release/*.zip
           if-no-files-found: error
 
       - name: GitHub Release
@@ -64,4 +71,8 @@ jobs:
           tag_name: ${{ inputs.tag || github.ref_name }}
           name: ${{ inputs.tag || github.ref_name }}
           generate_release_notes: true
-          files: ${{ steps.pack.outputs.zip }}
+          # Thứ tự có ý nghĩa: pickZip trong core/version lấy asset .zip ĐẦU TIÊN
+          # có url, nên zip Chrome phải đứng trước — số đông dùng Chrome.
+          files: |
+            ${{ steps.pack.outputs.zip }}
+            release/worklog-ext-${{ steps.pack.outputs.version }}-firefox.zip

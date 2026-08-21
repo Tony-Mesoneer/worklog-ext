@@ -6,9 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:firefox": "tsc --noEmit && TARGET=firefox vite build",
+    "build:all": "npm run build && npm run build:firefox",
     "test": "vitest run",
     "test:watch": "vitest",
     "pack": "node scripts/pack.mjs",
+    "pack:firefox": "node scripts/pack.mjs --target firefox",
     "bump": "node scripts/bump-version.mjs",
     "check:version": "node scripts/check-version-sync.mjs",
     "next:version": "node scripts/next-version.mjs"
