@@ -51,17 +51,25 @@ describe('bộ ngôn ngữ', () => {
   })
 
   it('mỗi chuỗi tiếng Việt phải KHÁC bản tiếng Anh, trừ danh sách miễn trừ', () => {
-    // Từ giống nhau ở cả hai ngôn ngữ (thuật ngữ Jira, placeholder, tên riêng)
-    // được miễn — nhưng phải liệt kê từng cái, không thì một bản dịch bị bỏ quên
-    // sẽ lẫn vào đây mà không ai thấy.
+    // Hai loại được miễn, liệt kê từng key chứ không miễn theo pattern — một
+    // bản dịch bị bỏ quên phải fail chứ không lẫn vào đây được:
+    //   1. Thuật ngữ Jira mà UI tiếng Việt vẫn giữ nguyên tiếng Anh
+    //      ("Coverage", "Assignee", "Points"…) — dịch chúng làm người dùng khó
+    //      đối chiếu với chính Jira.
+    //   2. Hàm CHỈ định dạng, không chứa từ nào để dịch. `listJoin` với một
+    //      phần tử trả về đúng phần tử đó; nó chỉ khác nhau từ hai phần tử trở
+    //      lên ("and" vs "và"), mà walker chỉ gọi với một tham số.
     const same = new Set([
-      'language.en', 'language.vi', 'options.jira.title', 'options.token.title',
-      'options.token.tokenLabel', 'options.token.tokenPlaceholder',
-      'options.projects.title', 'options.projects.keyLabel',
-      'options.board.label', 'options.members.colMember', 'options.members.colActive',
-      'options.events.newIssueKeyPlaceholder', 'options.events.issueKeyPlaceholder',
-      'options.events.newCommentPlaceholder', 'options.update.repoPlaceholder',
-      'options.pageTitle', 'options.token.emailPlaceholder',
+      'language.en', 'language.vi',
+      'options.jira.title', 'options.token.tokenLabel', 'options.token.tokenPlaceholder',
+      'options.projects.title', 'options.projects.keyLabel', 'options.board.label',
+      'options.members.colMember', 'options.members.colActive',
+      'options.events.newIssueKeyPlaceholder', 'options.events.newCommentPlaceholder',
+      'options.events.issueKeyPlaceholder', 'options.update.repoPlaceholder',
+      'dashboard.tabCoverage', 'dashboard.coverage', 'dashboard.memberIssue',
+      'dashboard.dayOffShort', 'dashboard.colIssue', 'dashboard.colAssignee',
+      'dashboard.colStatus', 'dashboard.colPoints',
+      'sidepanel.logButton', 'sidepanel.listJoin', 'sidepanel.eventDisabled',
     ])
     const enMap = new Map(enEntries)
     for (const [path, value] of viEntries) {

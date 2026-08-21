@@ -10,6 +10,7 @@ import { isShortHours } from '@/core/coverage'
 import { ProgressBar } from '@/ui/shared/ProgressBar'
 import { hoursLabel, percentLabel } from '@/ui/shared/format'
 import { colors, fontSize, space } from '@/ui/shared/theme'
+import { useT } from '@/ui/shared/LocaleProvider'
 
 type Props = { data: CoverageTable }
 
@@ -37,6 +38,7 @@ function Stat(
 }
 
 export function CoverageSummary({ data }: Props) {
+  const t = useT()
   // Mốc để ĐÁNH GIÁ là capacity tới hôm nay; capacity cả kỳ chỉ là bối cảnh.
   // Bản cũ lấy cả kỳ nên giữa sprint luôn ra 12% và 4/4 thiếu giờ — số đúng về
   // số học nhưng vô dụng, vì nó chỉ nói "sprint chưa diễn ra xong".
@@ -57,25 +59,25 @@ export function CoverageSummary({ data }: Props) {
       gap: `${space.x3}px ${space.x5}px`,
     }}>
       <Stat
-        label="Đã log / capacity"
+        label={t.dashboard.loggedVsCapacity}
         value={`${hoursLabel(data.grandTotal)} / ${hoursLabel(capacity)}`}
         // Khoảng đã xảy ra hết (ví dụ preset "Tuần trước") → hai con số bằng
         // nhau, không thêm dòng phụ: trang đọc y như trước khi có thay đổi này.
-        {...(cut ? { note: `tới hôm nay · ${hoursLabel(capacityFull)} cả kỳ` } : {})}
+        {...(cut ? { note: t.dashboard.toDateNote(hoursLabel(capacityFull)) } : {})}
       />
       <Stat
-        label="Coverage"
+        label={t.dashboard.coverage}
         value={percentLabel(data.grandTotal, capacity)}
         tone={colors.accentRing}
       />
       <Stat
-        label="Thiếu giờ"
+        label={t.dashboard.shortHours}
         value={`${short.length}/${data.rows.length}`}
         tone={short.length === 0 ? colors.success : undefined}
       />
       {noneLogged.length > 0 && (
         <Stat
-          label="Chưa log gì"
+          label={t.dashboard.nothingLogged}
           value={String(noneLogged.length)}
           tone={colors.danger}
         />
@@ -85,11 +87,12 @@ export function CoverageSummary({ data }: Props) {
           value={data.grandTotal}
           max={capacity}
           height={8}
-          label={
-            `Cả team đã log ${hoursLabel(data.grandTotal)} trên capacity `
-            + `${hoursLabel(capacity)}${cut ? ' tới hôm nay' : ''}`
-            + `, cả kỳ ${hoursLabel(capacityFull)}`
-          }
+          label={t.dashboard.teamProgress(
+            hoursLabel(data.grandTotal),
+            hoursLabel(capacity),
+            cut ? t.dashboard.toDateSuffix : '',
+            hoursLabel(capacityFull),
+          )}
         />
       </div>
     </div>

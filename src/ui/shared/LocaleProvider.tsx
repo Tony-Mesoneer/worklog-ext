@@ -12,7 +12,9 @@
 // KHÁC. Không có nó thì đổi ngôn ngữ ở Options không ảnh hưởng side panel đang
 // mở, và người dùng thấy hai nửa app nói hai ngôn ngữ.
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import { DEFAULT_LOCALE, isLocale, messagesFor, type Locale, type Messages } from '@/i18n'
+import {
+  DEFAULT_LOCALE, isLocale, messagesFor, rememberLocale, type Locale, type Messages,
+} from '@/i18n'
 import { loadConfig } from '@/store/config'
 
 const LocaleContext = createContext<{ locale: Locale; t: Messages }>({
@@ -28,7 +30,7 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     // Lỗi đọc config KHÔNG được làm trắng UI: giữ DEFAULT_LOCALE và để component
     // bên trong báo lỗi config theo cách của nó.
     void loadConfig()
-      .then((c) => { if (alive) setLocale(c.locale) })
+      .then((c) => { if (alive) { setLocale(c.locale); rememberLocale(c.locale) } })
       .catch(() => {})
 
     const onChanged = (
@@ -40,7 +42,7 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
       // Kiểm qua isLocale thay vì tin newValue: đây là dữ liệu THÔ từ storage,
       // không phải Config đã qua migrateConfig. Giá trị lạ → giữ nguyên locale
       // đang dùng, không nhảy về default giữa phiên.
-      if (isLocale(next?.locale)) setLocale(next.locale)
+      if (isLocale(next?.locale)) { setLocale(next.locale); rememberLocale(next.locale) }
     }
     chrome.storage.onChanged.addListener(onChanged)
     return () => {
@@ -62,6 +64,6 @@ export const useT = (): Messages => useContext(LocaleContext).t
 /** Locale hiện tại, cho `toLocaleString` và bạn bè. */
 export const useLocale = (): Locale => useContext(LocaleContext).locale
 
-/** Tag cho Intl: `toLocaleDateString(intlLocale(locale))`. */
-export const intlLocale = (locale: Locale): string =>
-  locale === 'vi' ? 'vi-VN' : 'en-US'
+// intlLocale sống ở @/i18n/locale (module thuần, format.ts cũng dùng). Re-export
+// để component chỉ cần import một chỗ.
+export { intlLocale } from '@/i18n/locale'

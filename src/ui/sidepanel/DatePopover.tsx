@@ -16,6 +16,7 @@ import { monthGrid, shiftMonth } from '@/core/month'
 import { Button } from '@/ui/shared/Button'
 import { fullDateLabel, longDateLabel, monthYearLabel } from '@/ui/shared/format'
 import { colors, fontSize, space } from '@/ui/shared/theme'
+import { useLocale, useT } from '@/ui/shared/LocaleProvider'
 
 type Props = {
   /** Ngày đang chọn, "YYYY-MM-DD". */
@@ -31,6 +32,8 @@ type Props = {
 const DOW = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
 
 export function DatePopover({ value, today, disabled, onChange }: Props) {
+  const t = useT()
+  const locale = useLocale()
   const [open, setOpen] = useState(false)
   // Ô đang được focus trong lưới. Tháng đang xem suy ra từ đây, nên mũi tên đi
   // qua biên tháng là tự động sang tháng kế.
@@ -107,10 +110,10 @@ export function DatePopover({ value, today, disabled, onChange }: Props) {
         }}
       >
         <span style={{ fontSize: fontSize.lg, fontWeight: 600, lineHeight: 1.2 }}>
-          {value === '' ? '' : longDateLabel(value)}
+          {value === '' ? '' : longDateLabel(locale, value)}
         </span>
         <span style={{ fontSize: fontSize.xs, color: colors.muted }}>
-          {value === today ? 'Hôm nay · mở lịch' : `${value} · mở lịch`}
+          {value === today ? t.sidepanel.todayOpenCalendar : t.sidepanel.dateOpenCalendar(value)}
         </span>
       </button>
 
@@ -118,21 +121,21 @@ export function DatePopover({ value, today, disabled, onChange }: Props) {
         <div
           className="wl-pop"
           role="dialog"
-          aria-label="Chọn ngày"
+          aria-label={t.sidepanel.pickDate}
           onKeyDown={onKeyDown}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: space.x1 }}>
             <Button
-              variant="ghost" size="sm" iconOnly aria-label="Tháng trước"
+              variant="ghost" size="sm" iconOnly aria-label={t.sidepanel.prevMonth}
               onClick={() => setCursor(shiftMonth(cursor, -1))}
             >
               ‹
             </Button>
             <strong style={{ flex: 1, textAlign: 'center', fontSize: fontSize.md }}>
-              {monthYearLabel(cursor)}
+              {monthYearLabel(locale, cursor)}
             </strong>
             <Button
-              variant="ghost" size="sm" iconOnly aria-label="Tháng sau"
+              variant="ghost" size="sm" iconOnly aria-label={t.sidepanel.nextMonth}
               onClick={() => setCursor(shiftMonth(cursor, 1))}
             >
               ›
@@ -150,7 +153,7 @@ export function DatePopover({ value, today, disabled, onChange }: Props) {
                 data-date={cell.date}
                 className={cell.inMonth ? 'wl-cal__day' : 'wl-cal__day wl-cal__day--out'}
                 disabled={disabled}
-                aria-label={fullDateLabel(cell.date)}
+                aria-label={fullDateLabel(locale, cell.date)}
                 aria-pressed={cell.date === value}
                 aria-current={cell.date === today ? 'date' : undefined}
                 tabIndex={cell.date === cursor ? 0 : -1}
@@ -163,9 +166,9 @@ export function DatePopover({ value, today, disabled, onChange }: Props) {
 
           <div style={{ display: 'flex', gap: space.x2 }}>
             <Button variant="secondary" size="sm" disabled={disabled} onClick={() => pick(today)}>
-              Hôm nay
+              {t.sidepanel.today}
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => close(true)}>Đóng</Button>
+            <Button variant="ghost" size="sm" onClick={() => close(true)}>{t.common.close}</Button>
           </div>
         </div>
       )}

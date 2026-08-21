@@ -9,19 +9,15 @@
 // theo browser, không theo cài đặt này.
 import { en, type Messages } from './en'
 import { vi } from './vi'
+import { DEFAULT_LOCALE, isLocale, type Locale } from './locale'
 
 export type { Messages } from './en'
-
-export const LOCALES = ['en', 'vi'] as const
-export type Locale = (typeof LOCALES)[number]
-
-/** Ngôn ngữ khi config chưa có gì. */
-export const DEFAULT_LOCALE: Locale = 'en'
+export {
+  LOCALES, DEFAULT_LOCALE, isLocale, intlLocale, rememberLocale, lastKnownLocale,
+  type Locale,
+} from './locale'
 
 const TABLE: Record<Locale, Messages> = { en, vi }
-
-export const isLocale = (value: unknown): value is Locale =>
-  typeof value === 'string' && (LOCALES as readonly string[]).includes(value)
 
 /** Giá trị lạ → DEFAULT_LOCALE. UI không bao giờ nên trắng chữ vì config rác. */
 export const messagesFor = (locale: unknown): Messages =>

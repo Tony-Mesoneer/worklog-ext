@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { createElement, isValidElement } from 'react'
 import type { ReactElement } from 'react'
 import { ErrorBoundary } from '@/ui/shared/ErrorBoundary'
+import { rememberLocale } from '@/i18n'
 
 // vitest.config.ts chạy môi trường 'node' (không jsdom) cho toàn repo. Đã thử
 // react-dom/server (renderToStaticMarkup) để né việc thêm jsdom, nhưng bản SSR
@@ -29,21 +30,43 @@ function findText(node: unknown, needle: string): boolean {
 }
 
 describe('ErrorBoundary', () => {
+  const fallbackOf = (err: Error) => {
+    const boundary = new ErrorBoundary({ children: createElement('span', null, 'nội dung gốc') })
+    Object.assign(boundary.state, ErrorBoundary.getDerivedStateFromError(err))
+    return boundary.render()
+  }
+
   it('switches to fallback (not rethrow) after getDerivedStateFromError, showing the real message', () => {
     const err = new Error('config hỏng: parseHhMm nhận undefined')
     const state = ErrorBoundary.getDerivedStateFromError(err)
     expect(state.error).toBe(err)
 
-    const boundary = new ErrorBoundary({ children: createElement('span', null, 'nội dung gốc') })
-    Object.assign(boundary.state, state)
-
-    const fallback = boundary.render()
-    expect(findText(fallback, 'Đã có lỗi')).toBe(true)
+    const fallback = fallbackOf(err)
     expect(findText(fallback, 'config hỏng: parseHhMm nhận undefined')).toBe(true)
-    expect(findText(fallback, 'Tải lại')).toBe(true)
-    expect(findText(fallback, 'Mở Options')).toBe(true)
     // Fallback thay thế hẳn con gốc, không còn "nội dung gốc" trong cây trả về.
     expect(findText(fallback, 'nội dung gốc')).toBe(false)
+  })
+
+  // ErrorBoundary là class và bọc NGOÀI LocaleProvider, nên nó không đọc được
+  // React context. Nó dùng locale được ghi nhớ gần nhất — chưa có gì thì dùng
+  // mặc định. Test này khoá đúng hợp đồng đó, vì nó là thứ duy nhất giữ cho màn
+  // hình lỗi không phụ thuộc vào đúng cái provider vừa sập.
+  it('dùng ngôn ngữ mặc định khi provider chưa từng mount', () => {
+    rememberLocale('en')
+    const fallback = fallbackOf(new Error('boom'))
+    expect(findText(fallback, 'Something went wrong')).toBe(true)
+    expect(findText(fallback, 'Reload')).toBe(true)
+    expect(findText(fallback, 'Open Options')).toBe(true)
+  })
+
+  it('dùng locale đã ghi nhớ sau khi provider mount', () => {
+    rememberLocale('vi')
+    const fallback = fallbackOf(new Error('boom'))
+    expect(findText(fallback, 'Đã có lỗi')).toBe(true)
+    expect(findText(fallback, 'Tải lại')).toBe(true)
+    expect(findText(fallback, 'Mở Options')).toBe(true)
+    // Trả lại mặc định để test khác không phụ thuộc thứ tự chạy.
+    rememberLocale('en')
   })
 
   it('componentDidCatch logs only the error object and the component stack', () => {

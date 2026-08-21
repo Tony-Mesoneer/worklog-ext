@@ -16,6 +16,7 @@
 // không có meta) → KHÔNG render gì. Một pill rỗng còn tệ hơn không có pill.
 import type { StatusCategory } from '@/core/issue-hierarchy'
 import { fontSize, radii, statusCategoryColors } from './theme'
+import { useT } from './LocaleProvider'
 
 type Props = {
   name: string
@@ -23,11 +24,12 @@ type Props = {
 }
 
 export function StatusBadge({ name, category }: Props) {
+  const t = useT()
   if (name.trim() === '') return null
   const c = statusCategoryColors[category]
   return (
     <span
-      title={`Trạng thái: ${name}`}
+      title={t.common.statusTitle(name)}
       style={{
         flex: '0 0 auto',
         background: c.bg,

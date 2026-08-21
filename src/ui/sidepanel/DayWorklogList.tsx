@@ -17,6 +17,7 @@ import { Button } from '@/ui/shared/Button'
 import { StatusBadge } from '@/ui/shared/StatusBadge'
 import type { IssueMetaMap } from '@/core/issue-hierarchy'
 import { colors, fontSize, radii, space } from '@/ui/shared/theme'
+import { useT } from '@/ui/shared/LocaleProvider'
 
 type Props = {
   worklogs: Worklog[]
@@ -27,6 +28,7 @@ type Props = {
 }
 
 export function DayWorklogList({ worklogs, meta, busy, onDelete }: Props) {
+  const t = useT()
   // Ngày trống thì không vẽ gì: DayBlocks phía trên đã nói điều đó, thêm một
   // dòng "chưa có worklog" nữa là lặp.
   if (worklogs.length === 0) return null
@@ -35,7 +37,7 @@ export function DayWorklogList({ worklogs, meta, busy, onDelete }: Props) {
 
   return (
     <ul
-      aria-label="Worklog đã ghi trong ngày"
+      aria-label={t.sidepanel.listAria}
       style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: space.x1 }}
     >
       {sorted.map((w) => {
@@ -73,13 +75,14 @@ export function DayWorklogList({ worklogs, meta, busy, onDelete }: Props) {
               onClick={() => onDelete(w)}
               // Nhãn phải nói xoá CÁI NÀO: một danh sách toàn nút "Xoá" giống
               // nhau là vô dụng với screen reader.
-              aria-label={
-                `Xoá worklog ${formatDuration(w.timeSpentSeconds)} trên ${w.issueKey} `
-                + `lúc ${formatMinutes(w.startMinutes)}`
-              }
-              title="Xoá worklog này"
+              aria-label={t.sidepanel.deleteAria(
+                formatDuration(w.timeSpentSeconds),
+                w.issueKey,
+                formatMinutes(w.startMinutes),
+              )}
+              title={t.sidepanel.deleteTitle}
             >
-              Xoá
+              {t.common.remove}
             </Button>
           </li>
         )

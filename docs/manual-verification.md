@@ -111,7 +111,14 @@ Phần này KHÔNG có test tự động (thuần hiển thị) — chỉ có ty
 - [ ] Ngày/giờ ở mục 6 đổi định dạng theo ngôn ngữ (`21/08/2026` ↔ `8/21/2026`).
 - [ ] Dropdown ngôn ngữ luôn hiện "English" và "Tiếng Việt" bằng chính ngôn ngữ
       đó, ở cả hai chế độ.
-- [ ] Side panel và dashboard vẫn tiếng Việt cứng — đúng phạm vi đợt 1, chưa dịch.
+- [ ] Side panel đổi ngay khi đang mở, kể cả khi đổi từ Options ở tab khác.
+- [ ] Dashboard: header ngày đổi thứ tự (`21/08` ở vi ↔ `08/21` ở en), giờ "cập
+      nhật lúc" đổi 24h ↔ 12h AM/PM, tên tháng trong lịch đổi theo ngôn ngữ.
+- [ ] Thuật ngữ Jira giữ nguyên tiếng Anh ở cả hai chế độ: Coverage, Member,
+      Assignee, Status, Points — cố ý, để đối chiếu được với chính Jira.
+- [ ] Màn hình lỗi (ErrorBoundary): đổi sang tiếng Việt rồi gây lỗi render →
+      màn hình lỗi cũng tiếng Việt. Nó nằm ngoài LocaleProvider nên đọc locale
+      ghi nhớ gần nhất; lần đầu mở app mà sập ngay thì nó tiếng Anh — đúng thiết kế.
 
 ## 6. Accessibility
 

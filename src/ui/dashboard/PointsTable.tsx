@@ -10,6 +10,8 @@ import { StatusBadge } from '@/ui/shared/StatusBadge'
 import { hoursLabel } from '@/ui/shared/format'
 import { ErrorBanner, toUiError, type UiError } from '@/ui/shared/errors'
 import { colors, fontSize, space, table as tableColors } from '@/ui/shared/theme'
+import { useT } from '@/ui/shared/LocaleProvider'
+import type { Messages } from '@/i18n'
 
 // Thụt lề của sub-task. Ở tab này việc gom nhóm không chỉ để đẹp: story points
 // gần như luôn nằm ở issue CHA còn giờ thì log ở sub-task, nên danh sách phẳng
@@ -20,8 +22,8 @@ const CHILD_INDENT = 22
 // Nhãn của dòng project. Board của Jira có thể trải nhiều project qua filter
 // của nó, nên tab này cũng cần tầng project — và dùng ĐÚNG một luật với tab
 // Coverage: nhiều project thì gom, một project thì không bọc gì.
-const projectLabel = (projectKey: string): string =>
-  projectKey === UNKNOWN_PROJECT ? 'Không rõ project' : projectKey
+const projectLabel = (t: Messages, projectKey: string): string =>
+  projectKey === UNKNOWN_PROJECT ? t.dashboard.unknownProject : projectKey
 
 // h/point, trung vị, cờ outlier KHÔNG đổi: buildPointsTable vẫn là nơi duy nhất
 // tính chúng, ở đây chỉ đổi thứ tự vẽ và thụt lề.
@@ -31,6 +33,7 @@ function IssueRow({ row, meta, child }: {
   child: boolean
 }) {
   const noPoints = row.storyPoints === null || row.storyPoints === 0
+  const t = useT()
   return (
     <tr style={{ background: row.isOutlier ? colors.accentSofter : undefined }}>
       <th scope="row" style={{ fontWeight: 400, paddingLeft: child ? CHILD_INDENT : undefined }}>
@@ -43,7 +46,7 @@ function IssueRow({ row, meta, child }: {
           : row.status}
       </td>
       <td className="wl-table__num" style={{ color: noPoints ? colors.danger : undefined }}>
-        {noPoints ? 'chưa có' : row.storyPoints}
+        {noPoints ? t.dashboard.noPointsCell : row.storyPoints}
       </td>
       <td className="wl-table__num">{hoursLabel(row.timeSpentSeconds)}</td>
       <td
@@ -52,7 +55,7 @@ function IssueRow({ row, meta, child }: {
           fontWeight: row.isOutlier ? 700 : 400,
           color: row.isOutlier ? colors.accentRing : undefined,
         }}
-        title={row.isOutlier ? 'Lệch xa trung vị h/point của sprint' : undefined}
+        title={row.isOutlier ? t.dashboard.outlierTitle : undefined}
       >
         {row.hoursPerPoint === null ? '—' : row.hoursPerPoint.toFixed(1)}
       </td>
@@ -71,6 +74,7 @@ function ParentGroups({ rows, meta, keyPrefix }: {
   meta: IssueMetaMap
   keyPrefix: string
 }) {
+  const t = useT()
   return (
     <>
       {groupIssueRowsByParent(rows, meta, (r) => r.key).map((group) => (
@@ -84,7 +88,7 @@ function ParentGroups({ rows, meta, keyPrefix }: {
                 {group.key} {group.summary}
               </th>
               <td colSpan={5} style={{ textAlign: 'left', color: colors.muted }}>
-                không có trong sprint này
+                {t.dashboard.notInSprint}
               </td>
             </tr>
           )}
@@ -105,6 +109,7 @@ export function PointsPanel() {
   const [meta, setMeta] = useState<IssueMetaMap>({})
   const [sprintName, setSprintName] = useState('')
   const [error, setError] = useState<UiError | null>(null)
+  const t = useT()
 
   useEffect(() => {
     void send<PointsLoadResult>({ type: 'points/load' })
@@ -118,10 +123,10 @@ export function PointsPanel() {
 
   if (error) return <ErrorBanner error={error} />
   if (!data) {
-    return <Card><p style={{ margin: 0, color: colors.muted }}>Đang tải…</p></Card>
+    return <Card><p style={{ margin: 0, color: colors.muted }}>{t.dashboard.loadingPoints}</p></Card>
   }
   if (data.rows.length === 0) {
-    return <Card><p style={{ margin: 0, color: colors.muted }}>Sprint hiện tại không có issue nào.</p></Card>
+    return <Card><p style={{ margin: 0, color: colors.muted }}>{t.dashboard.noSprintIssues}</p></Card>
   }
 
   const med = data.medianHoursPerPoint
@@ -131,17 +136,17 @@ export function PointsPanel() {
 
   return (
     <>
-      <Card title="Sprint hiện tại">
+      <Card title={t.dashboard.currentSprint}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: space.x5, alignItems: 'baseline' }}>
           <strong style={{ fontSize: fontSize.lg }}>{sprintName}</strong>
           <span style={{ color: colors.muted }}>
-            Trung vị{' '}
+            {t.dashboard.median}{' '}
             <strong style={{ color: colors.text }}>
               {med === null ? '—' : `${med.toFixed(1)} h/point`}
             </strong>
           </span>
           <span style={{ color: data.noEstimate.length > 0 ? colors.danger : colors.muted }}>
-            {data.noEstimate.length} issue chưa có story points
+            {t.dashboard.noEstimateCount(data.noEstimate.length)}
           </span>
         </div>
       </Card>
@@ -151,11 +156,11 @@ export function PointsPanel() {
           <table className="wl-table">
             <thead>
               <tr>
-                <th scope="col" style={{ textAlign: 'left', minWidth: 240 }}>Issue</th>
-                <th scope="col" style={{ textAlign: 'left' }}>Assignee</th>
-                <th scope="col" style={{ textAlign: 'left' }}>Status</th>
-                <th scope="col">Points</th>
-                <th scope="col">Đã log</th>
+                <th scope="col" style={{ textAlign: 'left', minWidth: 240 }}>{t.dashboard.colIssue}</th>
+                <th scope="col" style={{ textAlign: 'left' }}>{t.dashboard.colAssignee}</th>
+                <th scope="col" style={{ textAlign: 'left' }}>{t.dashboard.colStatus}</th>
+                <th scope="col">{t.dashboard.colPoints}</th>
+                <th scope="col">{t.dashboard.colLogged}</th>
                 <th scope="col">h/point</th>
               </tr>
             </thead>
@@ -170,7 +175,7 @@ export function PointsPanel() {
                         colSpan={6}
                         style={{ fontWeight: 700, background: tableColors.groupRowBg }}
                       >
-                        {projectLabel(pg.projectKey)}
+                        {projectLabel(t, pg.projectKey)}
                       </th>
                     </tr>
                     <ParentGroups

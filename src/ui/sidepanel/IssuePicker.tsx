@@ -5,6 +5,7 @@ import type { IssueMeta } from '@/core/issue-hierarchy'
 import { StatusBadge } from '@/ui/shared/StatusBadge'
 import { ErrorBanner, toUiError, type UiError } from '@/ui/shared/errors'
 import { colors, fontSize, space } from '@/ui/shared/theme'
+import { useT } from '@/ui/shared/LocaleProvider'
 
 type Props = { value: string; onChange: (issueKey: string) => void; projects: string[] }
 
@@ -26,6 +27,7 @@ function IssueButton({ issue, meta, current, onPick }: {
   current: boolean
   onPick: (key: string) => void
 }) {
+  const t = useT()
   const parentKey = meta?.parentKey ?? null
   return (
     <li>
@@ -39,7 +41,7 @@ function IssueButton({ issue, meta, current, onPick }: {
         title={
           `${issue.key} — ${issue.summary}`
           + (meta && meta.statusName !== '' ? ` · ${meta.statusName}` : '')
-          + (parentKey ? `\n↳ thuộc ${parentKey} — ${meta?.parentSummary ?? ''}` : '')
+          + (parentKey ? `\n${t.sidepanel.parentOf(parentKey, meta?.parentSummary ?? '')}` : '')
         }
       >
         <span className="wl-option__row">
@@ -60,6 +62,7 @@ function IssueButton({ issue, meta, current, onPick }: {
 }
 
 export function IssuePicker({ value, onChange, projects }: Props) {
+  const t = useT()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<{ key: string; summary: string }[]>([])
 
@@ -121,12 +124,12 @@ export function IssuePicker({ value, onChange, projects }: Props) {
           />
         </div>
         <div className="wl-field" style={{ flex: '1 1 130px' }}>
-          <label className="wl-field__label" htmlFor={searchFieldId}>Tìm issue</label>
+          <label className="wl-field__label" htmlFor={searchFieldId}>{t.sidepanel.searchIssue}</label>
           <input
             id={searchFieldId}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="gõ ≥ 2 ký tự…"
+            placeholder={t.sidepanel.searchIssuePlaceholder}
             style={{ width: '100%' }}
           />
         </div>
@@ -141,7 +144,7 @@ export function IssuePicker({ value, onChange, projects }: Props) {
           round-trip. Thiếu badge ở đây là cái giá đã cân nhắc. */}
       {showingSearch ? (
         results.length === 0 ? (
-          <div style={hint}>Không tìm thấy issue nào khớp "{query.trim()}".</div>
+          <div style={hint}>{t.sidepanel.noIssueMatch(query.trim())}</div>
         ) : (
           <ul className="wl-list" style={{ maxHeight: 132, overflowY: 'auto' }}>
             {results.map((r) => (
@@ -154,14 +157,14 @@ export function IssuePicker({ value, onChange, projects }: Props) {
         )
       ) : (
         <>
-          {mineLoading && <div style={hint}>Đang tải issue của bạn…</div>}
+          {mineLoading && <div style={hint}>{t.sidepanel.loadingMine}</div>}
           {mineError && <ErrorBanner error={mineError} />}
           {!mineLoading && !mineError && mine.length === 0 && (
-            <div style={hint}>Không có issue nào assign cho bạn trong sprint hiện tại.</div>
+            <div style={hint}>{t.sidepanel.noMine}</div>
           )}
           {!mineLoading && !mineError && mine.length > 0 && (
             <>
-              <span className="wl-field__label">Issue của bạn trong sprint</span>
+              <span className="wl-field__label">{t.sidepanel.mineLabel}</span>
               <ul className="wl-list" style={{ maxHeight: 132, overflowY: 'auto' }}>
                 {mine.slice(0, MAX_SHOWN).map((r) => (
                   <IssueButton

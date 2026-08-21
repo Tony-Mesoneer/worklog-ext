@@ -3,6 +3,7 @@ import type { ResolvedSprintEvent } from '@/core/event-resolve'
 import { formatDuration } from '@/core/duration'
 import { Button } from '@/ui/shared/Button'
 import { colors, fontSize, space } from '@/ui/shared/theme'
+import { useT } from '@/ui/shared/LocaleProvider'
 
 type Props = {
   events: ResolvedSprintEvent[]
@@ -11,12 +12,13 @@ type Props = {
 }
 
 export function EventButtons({ events, loading, onPick }: Props) {
+  const t = useT()
   if (events.length === 0) {
     return (
       <p style={{ fontSize: fontSize.sm, color: colors.muted, margin: 0 }}>
         {loading
-          ? 'Đang tra sub-task ceremony trong sprint…'
-          : 'Chưa cấu hình sprint event — thêm trong Options.'}
+          ? t.sidepanel.resolvingCeremonies
+          : t.sidepanel.noEvents}
       </p>
     )
   }
@@ -37,7 +39,7 @@ export function EventButtons({ events, loading, onPick }: Props) {
             onClick={() => onPick(e)}
             title={
               e.issueKey === null
-                ? `${e.name} — ${e.reason ?? 'không xác định được issue'}`
+                ? t.sidepanel.eventDisabled(e.name, e.reason ?? t.sidepanel.unknownIssue)
                 : `${e.issueKey} · ${formatDuration(e.defaultMinutes * 60)}`
             }
           >
@@ -48,7 +50,7 @@ export function EventButtons({ events, loading, onPick }: Props) {
 
       {loading && (
         <span style={{ fontSize: fontSize.sm, color: colors.muted }}>
-          Đang tra sub-task ceremony trong sprint…
+          {t.sidepanel.resolvingCeremonies}
         </span>
       )}
 

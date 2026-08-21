@@ -27,6 +27,9 @@ export const en = {
     search: 'Search',
     connect: 'Connect',
     loading: 'Loading…',
+    retry: 'Retry',
+    openOptions: 'Open Options',
+    statusTitle: (name: string): string => `Status: ${name}`,
   },
 
   language: {
@@ -186,6 +189,196 @@ export const en = {
       download: 'Download update',
       failed: (reason: string): string => `Could not check: ${reason}`,
     },
+  },
+
+  errors: {
+    auth:
+      'Your Jira session expired or lacks permission. Sign in to Jira again and retry, '
+      + 'or enter an API token in Options.',
+    // ErrorBoundary là màn hình sập — nó nằm NGOÀI LocaleProvider trong main.tsx,
+    // nên nó đọc locale từ bản ghi nhớ cuối cùng (xem lastKnownLocale). Nếu chưa
+    // có gì, nó dùng ngôn ngữ mặc định: một màn hình lỗi không được phụ thuộc
+    // vào đúng cái provider có thể vừa sập.
+    boundary: (message: string): string =>
+      `Something went wrong rendering this screen. ${message}`,
+    boundaryReload: 'Reload',
+    boundaryDetails: 'Error details',
+    dismiss: 'Dismiss',
+  },
+
+  updateBanner: {
+    available: (version: string, current: string): string =>
+      `Version ${version} is available (you are on ${current}).`,
+    howTo: 'Unpack it over the folder you are using, then hit Reload on chrome://extensions.',
+    later: 'Later',
+    download: 'Download update',
+  },
+
+  sidepanel: {
+    settings: 'Settings',
+    prevDay: 'Previous day',
+    nextDay: 'Next day',
+    noJira: 'Jira is not configured yet.',
+    invalidDuration: 'Invalid duration',
+    noIssue: 'No issue selected',
+    sprintUnavailable: (reason: string): string => `could not look up the sprint (${reason})`,
+    undoFailed: (issueKey: string, reason: string): string =>
+      `Could not write the worklog back to ${issueKey}: ${reason}`,
+    deleteFailed: (ids: string, issueKey: string): string =>
+      `Could not delete worklog ${ids} on ${issueKey} — delete it manually in Jira`,
+    remaining: (duration: string): string => `${duration} still missing`,
+    enough: 'target met',
+    progressLabel: (logged: string, target: string): string =>
+      `Logged ${logged} of the ${target} target`,
+    fillTitle: (duration: string): string =>
+      `Prefills ${duration} into the duration field, starting at the next free slot `
+      + '— you still pick an issue and press Log',
+    fillButton: (duration: string): string => `Fill ${duration} into this day`,
+    fillWarn: (from: string, free: string, missing: string): string =>
+      `only ${free} free from ${from} to the end of the day (${missing} short)`,
+    deleted: (issueKey: string): string => `Deleted a worklog on ${issueKey}`,
+    loggedMulti: (count: number, issueKey: string): string =>
+      `Logged ${count} worklogs to ${issueKey} (skipping the break)`,
+    logged: (issueKey: string): string => `Logged to ${issueKey}`,
+    cardDay: 'Today',
+    cardLog: 'Log time',
+    openDashboard: 'Open team dashboard →',
+
+    listAria: 'Worklogs recorded today',
+    deleteAria: (duration: string, issueKey: string, time: string): string =>
+      `Delete the ${duration} worklog on ${issueKey} at ${time}`,
+    deleteTitle: 'Delete this worklog',
+
+    freeTitle: (duration: string, from: string): string => `${duration} free from ${from}`,
+    freeShort: (duration: string): string => `${duration} free`,
+    breakTitle: 'Lunch break',
+    breakShort: 'lunch',
+    willLogHere: 'will log here',
+    noWorklog: 'No worklogs today yet.',
+    hideTail: 'Hide the end of the day',
+    showTail: (duration: string, until: string): string => `+ ${duration} free until ${until}`,
+
+    startLabel: 'Start',
+    durationLabel: 'Duration',
+    durationPresets: 'Preset durations',
+    durationCustom: 'Custom duration',
+    noteLabel: 'Note',
+    notePlaceholder: 'optional',
+    durationUnparsed: (input: string): string =>
+      `Could not read “${input}” — try 1h30, 90m, 1.5h`,
+    willSplit: (count: number, list: string): string =>
+      `Will write ${count} worklogs: ${list}`,
+    startInBreak: (from: string, to: string): string =>
+      `${from} falls inside the break — will start at ${to} instead`,
+    pastEnd: (end: string, workdayEnd: string): string =>
+      `Ends at ${end}, past the end of the workday (${workdayEnd})`,
+    overlap: (keys: string): string => `Overlaps with ${keys}`,
+    logging: 'Writing…',
+    logButton: (duration: string): string => `Log ${duration}`.trim(),
+    // Liệt kê theo lối của từng ngôn ngữ: "A, B and C" ≠ "A, B và C".
+    listJoin: (parts: string[]): string =>
+      parts.length <= 1
+        ? (parts[0] ?? '')
+        : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`,
+
+    todayOpenCalendar: 'Today · open calendar',
+    dateOpenCalendar: (date: string): string => `${date} · open calendar`,
+    pickDate: 'Pick a date',
+    prevMonth: 'Previous month',
+    nextMonth: 'Next month',
+    today: 'Today',
+
+    searchIssue: 'Find an issue',
+    searchIssuePlaceholder: 'type ≥ 2 characters…',
+    noIssueMatch: (query: string): string => `No issue matches “${query}”.`,
+    loadingMine: 'Loading your issues…',
+    noMine: 'No issues assigned to you in the current sprint.',
+    mineLabel: 'Your issues in the sprint',
+    parentOf: (parentKey: string, parentSummary: string): string =>
+      `↳ under ${parentKey} — ${parentSummary}`,
+
+    resolvingCeremonies: 'Looking up ceremony sub-tasks in the sprint…',
+    noEvents: 'No sprint events configured — add them in Options.',
+    eventDisabled: (name: string, reason: string): string => `${name} — ${reason}`,
+    unknownIssue: 'could not determine the issue',
+  },
+
+  dashboard: {
+    title: 'Team worklog',
+    customRange: 'Custom range',
+    memberCount: (count: number): string => `${count} members`,
+    tabCoverage: 'Coverage',
+    tabPoints: 'Story points vs hours',
+    filters: 'Filters',
+    summary: 'Summary',
+    noMembers: 'No members are being tracked yet.',
+    stale: 'Could not fetch fresh data from Jira — showing the last snapshot.',
+    noDataError: 'Nothing to show yet — fix the error above, then press "Refresh".',
+    loadingData: 'Loading data…',
+
+    presetSprint: 'Current sprint',
+    presetThisWeek: 'This week',
+    presetLastWeek: 'Last week',
+    presetThisMonth: 'This month',
+    rangeLabel: 'Date range',
+    from: 'From',
+    to: 'To',
+    allProjects: 'All projects',
+    staleAt: (when: string): string => `stale since ${when}`,
+    updatedAt: (when: string): string => `updated ${when}`,
+    refresh: 'Refresh',
+
+    loggedVsCapacity: 'Logged / capacity',
+    toDateNote: (full: string): string => `to date · ${full} for the whole range`,
+    coverage: 'Coverage',
+    shortHours: 'Short on hours',
+    nothingLogged: 'Logged nothing',
+    teamProgress: (logged: string, capacity: string, cut: string, full: string): string =>
+      `The team logged ${logged} of ${capacity} capacity${cut}, ${full} for the whole range`,
+    toDateSuffix: ' to date',
+
+    memberIssue: 'Member / Issue',
+    totalToDate: 'Total / to date',
+    totalCapacity: 'Total / capacity',
+    total: 'Total',
+    totalTeam: 'Team total',
+    totalByMember: 'Total by member',
+    unknownProject: 'Unknown project',
+    ownOfParent: ' logged directly on the parent issue',
+    expand: (name: string): string => `Expand issues of ${name}`,
+    collapse: (name: string): string => `Collapse issues of ${name}`,
+    cellAria: (name: string, date: string, hours: string, off: boolean): string =>
+      `${name}, ${date}: ${hours}${off ? ', marked as a day off' : ''}`,
+    notLoggedYet: 'nothing logged',
+    cellTitle: (off: boolean): string =>
+      `${off ? 'Day off · ' : ''}Click: details · Right-click: mark as a day off`,
+    dayOffShort: 'off',
+    memberProgress: (name: string, logged: string, capacity: string, cut: string, full: string): string =>
+      `${name}: logged ${logged} of ${capacity} capacity${cut}, ${full} for the whole range`,
+    tableCaption:
+      'Hours logged per member per day. Every cell is a button: Enter opens that '
+      + "day's worklog details, which include a button to mark the day off.",
+
+    detailAria: (memberName: string, date: string): string =>
+      `Worklog details for ${memberName} on ${date}`,
+    detailNothing: 'nothing logged',
+    markDayOff: 'Mark as a day off',
+    unmarkDayOff: 'Unmark day off',
+    noWorklogs: 'No worklogs.',
+
+    loadingPoints: 'Loading…',
+    noSprintIssues: 'The current sprint has no issues.',
+    currentSprint: 'Current sprint',
+    median: 'Median',
+    noEstimateCount: (count: number): string => `${count} issues without story points`,
+    colIssue: 'Issue',
+    colAssignee: 'Assignee',
+    colStatus: 'Status',
+    colPoints: 'Points',
+    colLogged: 'Logged',
+    notInSprint: 'not in this sprint',
+    noPointsCell: 'none',
+    outlierTitle: "Far from the sprint's median h/point",
   },
 }
 

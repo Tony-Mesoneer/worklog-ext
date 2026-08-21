@@ -1,5 +1,5 @@
 import { parseHhMm } from './timeline'
-import { DEFAULT_LOCALE, isLocale, type Locale } from '@/i18n'
+import { DEFAULT_LOCALE, isLocale, type Locale } from '@/i18n/locale'
 
 // v1 → v2: workdayStart/workdayEnd/breaks được thêm ở v1 nhưng KHÔNG có UI để
 // sửa, nên bất kỳ giá trị nào đã lưu (nếu có) chỉ có thể là default cũ —

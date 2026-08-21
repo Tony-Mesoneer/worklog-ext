@@ -29,6 +29,7 @@ import { DayWorklogList } from './DayWorklogList'
 import { EventButtons } from './EventButtons'
 import { IssuePicker } from './IssuePicker'
 import { LogForm } from './LogForm'
+import { useT } from '@/ui/shared/LocaleProvider'
 
 const toEntries = (worklogs: Worklog[]): DayEntry[] =>
   worklogs.map((w) => ({
@@ -43,9 +44,10 @@ const toEntries = (worklogs: Worklog[]): DayEntry[] =>
 // xong, và người dùng không còn cách nào quay lại Options để sửa. Ghost +
 // icon-only để nó đọc ra là chrome phụ, không cạnh tranh với Log/tab chính.
 function SettingsButton() {
+  const t = useT()
   return (
     <Button
-      variant="ghost" iconOnly aria-label="Cấu hình" title="Cấu hình"
+      variant="ghost" iconOnly aria-label={t.sidepanel.settings} title={t.sidepanel.settings}
       onClick={() => chrome.runtime.openOptionsPage()}
     >
       <GearIcon />
@@ -64,6 +66,7 @@ function SettingsHeader() {
 }
 
 export function SidePanel() {
+  const t = useT()
   const [config, setConfig] = useState<Config | null>(null)
   const [date, setDate] = useState('')
   const [worklogs, setWorklogs] = useState<Worklog[]>([])
@@ -118,7 +121,7 @@ export function SidePanel() {
       // chảy vào sprint cũ mà không ai biết. Event tra-theo-tên bị khoá kèm lý
       // do; event ghim issueKey thủ công vẫn dùng được.
       setResolved(resolveSprintEvents(c.sprintEvents, [], {
-        unavailable: `không tra được sprint (${toUiError(e).message})`,
+        unavailable: t.sidepanel.sprintUnavailable(toUiError(e).message),
       }))
     } finally { setResolving(false) }
   }, [])
@@ -159,8 +162,8 @@ export function SidePanel() {
   const submit = async () => {
     if (!config) return
     const seconds = parseDuration(durationInput)
-    if (seconds === null) { setError({ message: 'Duration không hợp lệ', auth: false }); return }
-    if (issueKey.trim() === '') { setError({ message: 'Chưa chọn issue', auth: false }); return }
+    if (seconds === null) { setError({ message: t.sidepanel.invalidDuration, auth: false }); return }
+    if (issueKey.trim() === '') { setError({ message: t.sidepanel.noIssue, auth: false }); return }
 
     setBusy(true)
     try {
@@ -221,7 +224,7 @@ export function SidePanel() {
       } catch (e) {
         const ui = toUiError(e)
         setError({
-          message: `Không ghi lại được worklog trên ${w.issueKey}: ${ui.message}`,
+          message: t.sidepanel.undoFailed(w.issueKey, ui.message),
           auth: ui.auth,
         })
       } finally { setBusy(false) }
@@ -247,8 +250,7 @@ export function SidePanel() {
     if (failed.length > 0) {
       setError({
         message:
-          `Không xoá được worklog ${failed.join(', ')} trên ${issueKeyOfAction}` +
-          ' — xoá tay trong Jira',
+          t.sidepanel.deleteFailed(failed.join(', '), issueKeyOfAction),
         auth: false,
       })
     }
@@ -263,11 +265,11 @@ export function SidePanel() {
           ? error.auth
             ? <ErrorBanner error={error} />
             : (
-              <Banner kind="error" action={{ label: 'Thử lại', onClick: loadConfig }}>
+              <Banner kind="error" action={{ label: t.common.retry, onClick: loadConfig }}>
                 {error.message}
               </Banner>
             )
-          : <p style={{ color: colors.muted, margin: 0 }}>Đang tải…</p>}
+          : <p style={{ color: colors.muted, margin: 0 }}>{t.common.loading}</p>}
       </div>
     )
   }
@@ -275,8 +277,8 @@ export function SidePanel() {
     return (
       <div style={{ padding: space.x3, display: 'grid', gap: space.x3 }}>
         <SettingsHeader />
-        <Banner kind="info" action={{ label: 'Mở Options', onClick: () => chrome.runtime.openOptionsPage() }}>
-          Chưa cấu hình Jira.
+        <Banner kind="info" action={{ label: t.common.openOptions, onClick: () => chrome.runtime.openOptionsPage() }}>
+          {t.sidepanel.noJira}
         </Banner>
       </div>
     )
@@ -343,7 +345,7 @@ export function SidePanel() {
         <div style={{ display: 'grid', gap: space.x2, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: space.x2, minWidth: 0 }}>
             <Button
-              variant="ghost" iconOnly aria-label="Ngày trước"
+              variant="ghost" iconOnly aria-label={t.sidepanel.prevDay}
               onClick={() => setDate(addDays(date, -1))} disabled={busy}
             >
               ←
@@ -356,7 +358,7 @@ export function SidePanel() {
               onChange={(d) => setDate(d)}
             />
             <Button
-              variant="ghost" iconOnly aria-label="Ngày sau"
+              variant="ghost" iconOnly aria-label={t.sidepanel.nextDay}
               onClick={() => setDate(addDays(date, 1))} disabled={busy}
             >
               →
@@ -372,12 +374,12 @@ export function SidePanel() {
               / {formatDuration(targetSeconds)}
             </span>
             <span style={{ marginLeft: 'auto', fontSize: fontSize.sm, color: colors.muted }}>
-              {remaining > 0 ? `còn thiếu ${formatDuration(remaining)}` : 'đã đủ giờ'}
+              {remaining > 0 ? t.sidepanel.remaining(formatDuration(remaining)) : t.sidepanel.enough}
             </span>
           </div>
           <ProgressBar
             value={totalSeconds} max={targetSeconds} height={8}
-            label={`Đã log ${formatDuration(totalSeconds)} trên mục tiêu ${formatDuration(targetSeconds)}`}
+            label={t.sidepanel.progressLabel(formatDuration(totalSeconds), formatDuration(targetSeconds))}
           />
 
           {/* Lối tắt log-bù — hành động PHỤ, đi cạnh con số "còn thiếu", không
@@ -386,16 +388,17 @@ export function SidePanel() {
             <div style={{ display: 'flex', alignItems: 'baseline', gap: space.x2, flexWrap: 'wrap' }}>
               <Button
                 variant="secondary" size="sm" onClick={fillShortfall} disabled={busy}
-                title={`Điền sẵn ${formatDuration(shortfall.fillMinutes * 60)} vào ô thời lượng,`
-                  + ' bắt đầu từ khoảng trống kế tiếp — bạn vẫn chọn issue rồi bấm Log'}
+                title={t.sidepanel.fillTitle(formatDuration(shortfall.fillMinutes * 60))}
               >
-                Lấp {formatDuration(shortfall.fillMinutes * 60)} vào ngày này
+                {t.sidepanel.fillButton(formatDuration(shortfall.fillMinutes * 60))}
               </Button>
               {shortfall.capped && (
                 <span style={{ fontSize: fontSize.xs, color: colors.warning }}>
-                  từ {formatMinutes(shortfall.proposedStartMinutes)} đến hết ngày chỉ còn
-                  {' '}{formatDuration(shortfall.freeMinutes * 60)} trống
-                  {' '}(thiếu {formatDuration(shortfall.missingMinutes * 60)})
+                  {t.sidepanel.fillWarn(
+                    formatMinutes(shortfall.proposedStartMinutes),
+                    formatDuration(shortfall.freeMinutes * 60),
+                    formatDuration(shortfall.missingMinutes * 60),
+                  )}
                 </span>
               )}
             </div>
@@ -413,15 +416,15 @@ export function SidePanel() {
       {lastAction && (
         <Banner kind="success" action={{ label: 'Undo', onClick: () => void undo() }}>
           {lastAction.kind === 'deleted'
-            ? `Đã xoá worklog trên ${lastAction.worklog.issueKey}`
+            ? t.sidepanel.deleted(lastAction.worklog.issueKey)
             : lastAction.ids.length > 1
-              ? `Đã log ${lastAction.ids.length} worklog vào ${lastAction.issueKey} (bỏ qua giờ nghỉ)`
-              : `Đã log vào ${lastAction.issueKey}`}
+              ? t.sidepanel.loggedMulti(lastAction.ids.length, lastAction.issueKey)
+              : t.sidepanel.logged(lastAction.issueKey)}
         </Banner>
       )}
 
       {/* NHÓM 2 — ngày đã trôi qua thế nào. */}
-      <Card title="Trong ngày">
+      <Card title={t.sidepanel.cardDay}>
         <div style={{ opacity: loadingDay ? 0.55 : 1, transition: 'opacity .12s ease' }}>
           <DayBlocks
             entries={entries}
@@ -445,7 +448,7 @@ export function SidePanel() {
       </Card>
 
       {/* NHÓM 3 — form ghi giờ, kết thúc bằng nút primary. */}
-      <Card title="Ghi giờ">
+      <Card title={t.sidepanel.cardLog}>
         <div style={{ display: 'grid', gap: space.x3, minWidth: 0 }}>
           <div className="wl-field">
             <span className="wl-field__label">Sprint event</span>
@@ -482,7 +485,7 @@ export function SidePanel() {
       </Card>
 
       <Button variant="ghost" size="sm" onClick={() => void send({ type: 'dashboard/open' })}>
-        Mở dashboard team →
+        {t.sidepanel.openDashboard}
       </Button>
     </div>
   )

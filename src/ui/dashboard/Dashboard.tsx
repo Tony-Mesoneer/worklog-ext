@@ -24,10 +24,13 @@ import { CoverageSummary } from './CoverageSummary'
 import { CoverageTable } from './CoverageTable'
 import { CellDetail } from './CellDetail'
 import { PointsPanel } from './PointsTable'
+import { useLocale, useT } from '@/ui/shared/LocaleProvider'
 
 type Tab = 'coverage' | 'points'
 
 export function Dashboard() {
+  const t = useT()
+  const locale = useLocale()
   const [config, setConfig] = useState<Config | null>(null)
   const [tab, setTab] = useState<Tab>('coverage')
   const [today, setToday] = useState('')
@@ -146,7 +149,7 @@ export function Dashboard() {
         <SettingsHeader />
         {error
           ? <ErrorBanner error={error} />
-          : <p style={{ color: colors.muted, margin: 0 }}>Đang tải…</p>}
+          : <p style={{ color: colors.muted, margin: 0 }}>{t.common.loading}</p>}
       </>,
     )
   }
@@ -154,8 +157,8 @@ export function Dashboard() {
     return page(
       <>
         <SettingsHeader />
-        <Banner kind="info" action={{ label: 'Mở Options', onClick: () => chrome.runtime.openOptionsPage() }}>
-          Chưa chọn member nào để theo dõi.
+        <Banner kind="info" action={{ label: t.common.openOptions, onClick: () => chrome.runtime.openOptionsPage() }}>
+          {t.dashboard.noMembers}
         </Banner>
       </>,
     )
@@ -209,11 +212,11 @@ export function Dashboard() {
       {/* Page header — bản cũ không có tiêu đề nào, chỉ mấy cái nút trần ở góc. */}
       <header style={{ display: 'flex', flexWrap: 'wrap', gap: space.x3, alignItems: 'flex-end' }}>
         <div style={{ minWidth: 0 }}>
-          <h1 style={{ margin: 0, fontSize: fontSize.xxl, fontWeight: 700 }}>Worklog team</h1>
+          <h1 style={{ margin: 0, fontSize: fontSize.xxl, fontWeight: 700 }}>{t.dashboard.title}</h1>
           <p style={{ margin: '2px 0 0', color: colors.muted, fontSize: fontSize.md }}>
-            {sprintRange ? sprintRange.name : 'Khoảng tự chọn'}
-            {rangeLabel(from, to) === '' ? '' : ` · ${rangeLabel(from, to)}`}
-            {` · ${config.members.length} member`}
+            {sprintRange ? sprintRange.name : t.dashboard.customRange}
+            {rangeLabel(locale, from, to) === '' ? '' : ` · ${rangeLabel(locale, from, to)}`}
+            {` · ${t.dashboard.memberCount(config.members.length)}`}
           </p>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: space.x3 }}>
@@ -221,7 +224,7 @@ export function Dashboard() {
             label="Tab dashboard"
             items={[
               { value: 'coverage', label: 'Coverage' },
-              { value: 'points', label: 'Story points vs giờ' },
+              { value: 'points', label: t.dashboard.tabPoints },
             ]}
             value={tab}
             onChange={setTab}
@@ -238,7 +241,7 @@ export function Dashboard() {
 
       {tab === 'coverage' && (
         <>
-          <Card title="Bộ lọc">
+          <Card title={t.dashboard.filters}>
             <FilterBar
               from={from} to={to} preset={preset} sprintRange={sprintRange} today={today}
               projectOptions={projectOptions} project={project} onProjectChange={setProject}
@@ -252,7 +255,7 @@ export function Dashboard() {
               thật, chỉ là cũ. */}
           {stale && table && (
             <Banner kind="warn">
-              Không lấy được dữ liệu mới từ Jira — đang hiện snapshot cũ.
+              {t.dashboard.stale}
             </Banner>
           )}
 
@@ -260,13 +263,13 @@ export function Dashboard() {
             <Card>
               <p style={{ margin: 0, color: colors.muted }}>
                 {error
-                  ? 'Chưa có dữ liệu nào để hiện — xử lý lỗi ở trên rồi bấm "Làm mới".'
-                  : 'Đang tải dữ liệu…'}
+                  ? t.dashboard.noDataError
+                  : t.dashboard.loadingData}
               </p>
             </Card>
           ) : (
             <>
-              <Card title="Tóm tắt">
+              <Card title={t.dashboard.summary}>
                 <CoverageSummary data={table} />
               </Card>
 
@@ -319,9 +322,10 @@ export function Dashboard() {
 // biến mất là hết đường quay lại Options. Ghost + icon-only để đọc ra là
 // chrome phụ, không cạnh tranh với "Coverage"/"Story points".
 function SettingsButton() {
+  const t = useT()
   return (
     <Button
-      variant="ghost" iconOnly aria-label="Cấu hình" title="Cấu hình"
+      variant="ghost" iconOnly aria-label={t.sidepanel.settings} title={t.sidepanel.settings}
       onClick={() => chrome.runtime.openOptionsPage()}
     >
       <GearIcon />

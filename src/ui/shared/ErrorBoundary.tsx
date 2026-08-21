@@ -14,6 +14,7 @@ import { Component } from 'react'
 import type { ErrorInfo, ReactNode } from 'react'
 import { Banner } from './Banner'
 import { fontSize, space } from './theme'
+import { lastKnownLocale, messagesFor } from '@/i18n'
 
 type Props = { children: ReactNode }
 type State = { error: Error | null }
@@ -35,27 +36,30 @@ export class ErrorBoundary extends Component<Props, State> {
     const { error } = this.state
     if (!error) return this.props.children
 
+    // Không dùng useT(): đây là class, và nó bọc NGOÀI LocaleProvider (phải vậy,
+    // không thì provider sập là màn hình trắng). Đọc locale ghi nhớ gần nhất —
+    // một màn hình lỗi không được phụ thuộc vào đúng cái provider vừa sập.
+    const t = messagesFor(lastKnownLocale())
+
     // Render tối giản, không phụ thuộc state/props phức tạp nào khác — bản
     // thân fallback không được phép crash.
     return (
       <div style={{ padding: space.x4, display: 'grid', gap: space.x3 }}>
-        <Banner kind="error">
-          Đã có lỗi khi hiển thị màn hình này. {error.message}
-        </Banner>
+        <Banner kind="error">{t.errors.boundary(error.message)}</Banner>
         <div style={{ display: 'flex', gap: space.x2, flexWrap: 'wrap' }}>
           <button type="button" className="wl-btn wl-btn--primary" onClick={() => location.reload()}>
-            Tải lại
+            {t.errors.boundaryReload}
           </button>
           <button
             type="button"
             className="wl-btn wl-btn--secondary"
             onClick={() => chrome.runtime.openOptionsPage()}
           >
-            Mở Options
+            {t.common.openOptions}
           </button>
         </div>
         <details style={{ fontSize: fontSize.xs }}>
-          <summary>Chi tiết lỗi</summary>
+          <summary>{t.errors.boundaryDetails}</summary>
           <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{error.stack}</pre>
         </details>
       </div>

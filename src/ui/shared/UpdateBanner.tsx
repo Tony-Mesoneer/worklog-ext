@@ -6,8 +6,10 @@ import { Banner } from './Banner'
 import { Button } from './Button'
 import { fontSize, space } from './theme'
 import { useUpdate } from './useUpdate'
+import { useT } from './LocaleProvider'
 
 export function UpdateBanner() {
+  const t = useT()
   const { status, dismiss } = useUpdate()
   if (!status || status.state !== 'available' || !status.latest) return null
 
@@ -18,17 +20,18 @@ export function UpdateBanner() {
   return (
     <Banner
       kind="info"
-      action={{ label: 'Tải bản mới', onClick: () => void chrome.tabs.create({ url: href }) }}
+      action={{
+        label: t.updateBanner.download,
+        onClick: () => void chrome.tabs.create({ url: href }),
+      }}
     >
       <div style={{ display: 'grid', gap: space.x1 }}>
-        <span>
-          Có bản <strong>{latest.version}</strong> (đang dùng {currentVersion}).
-        </span>
+        <span>{t.updateBanner.available(latest.version, currentVersion)}</span>
         <span style={{ fontSize: fontSize.xs }}>
-          Giải nén thay thư mục đang dùng, rồi bấm Reload ở <code>chrome://extensions</code>.
+          {t.updateBanner.howTo}
           {' '}
           <Button variant="ghost" size="sm" onClick={() => void dismiss()}>
-            Để sau
+            {t.updateBanner.later}
           </Button>
         </span>
       </div>

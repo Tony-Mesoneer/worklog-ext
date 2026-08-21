@@ -6,6 +6,7 @@ import { formatMinutes } from '@/core/timeline'
 import { Button } from '@/ui/shared/Button'
 import { longDateLabel } from '@/ui/shared/format'
 import { colors, fontSize, radii, space } from '@/ui/shared/theme'
+import { useLocale, useT } from '@/ui/shared/LocaleProvider'
 
 type Props = {
   memberName: string
@@ -20,6 +21,8 @@ type Props = {
 export function CellDetail({
   memberName, date, worklogs, dayOff, onToggleDayOff, onClose,
 }: Props) {
+  const t = useT()
+  const locale = useLocale()
   const closeRef = useRef<HTMLButtonElement>(null)
 
   // Focus vào panel khi mở và Esc để đóng: panel mở bằng Enter trên một ô bảng,
@@ -37,7 +40,7 @@ export function CellDetail({
     <aside
       role="dialog"
       aria-modal="false"
-      aria-label={`Chi tiết worklog của ${memberName} ngày ${date}`}
+      aria-label={t.dashboard.detailAria(memberName, date)}
       style={{
         position: 'fixed', right: 0, top: 0, bottom: 0, width: 'min(380px, 92vw)',
         background: colors.surface, color: colors.text,
@@ -52,10 +55,11 @@ export function CellDetail({
         <div style={{ flex: 1, minWidth: 0 }}>
           <strong style={{ fontSize: fontSize.lg }}>{memberName}</strong>
           <div style={{ color: colors.muted, fontSize: fontSize.sm }}>
-            {longDateLabel(date)} · {worklogs.length === 0 ? 'chưa log' : formatDuration(total)}
+            {longDateLabel(locale, date)} ·{' '}
+        {worklogs.length === 0 ? t.dashboard.detailNothing : formatDuration(total)}
           </div>
         </div>
-        <Button ref={closeRef} variant="ghost" size="sm" onClick={onClose}>Đóng</Button>
+        <Button ref={closeRef} variant="ghost" size="sm" onClick={onClose}>{t.common.close}</Button>
       </div>
 
       {/* Nút này LÀ đường bàn phím tương đương của click-phải trong bảng. */}
@@ -65,11 +69,11 @@ export function CellDetail({
         onClick={onToggleDayOff}
         aria-pressed={dayOff}
       >
-        {dayOff ? 'Bỏ đánh dấu ngày nghỉ' : 'Đánh dấu ngày nghỉ'}
+        {dayOff ? t.dashboard.unmarkDayOff : t.dashboard.markDayOff}
       </Button>
 
       {worklogs.length === 0 ? (
-        <p style={{ color: colors.muted, margin: 0 }}>Không có worklog nào.</p>
+        <p style={{ color: colors.muted, margin: 0 }}>{t.dashboard.noWorklogs}</p>
       ) : (
         <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: space.x2 }}>
           {worklogs.map((w) => (

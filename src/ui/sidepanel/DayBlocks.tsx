@@ -29,6 +29,7 @@ import { formatDuration } from '@/core/duration'
 import type { IssueMetaMap } from '@/core/issue-hierarchy'
 import { Button } from '@/ui/shared/Button'
 import { colors, fontSize } from '@/ui/shared/theme'
+import { useT } from '@/ui/shared/LocaleProvider'
 
 type Props = {
   entries: DayEntry[]
@@ -131,6 +132,7 @@ function buildBlocks(
 }
 
 function BlockRow({ block, meta }: { block: Block; meta: IssueMetaMap }) {
+  const t = useT()
   const h = heightOf(block)
   const dur = formatDuration(block.minutes * 60)
 
@@ -141,9 +143,9 @@ function BlockRow({ block, meta }: { block: Block; meta: IssueMetaMap }) {
       <div
         className="wl-blk wl-blk--gap"
         style={{ height: h, justifyContent: 'flex-end' }}
-        title={`Trống ${dur} từ ${formatMinutes(block.start)}`}
+        title={t.sidepanel.freeTitle(dur, formatMinutes(block.start))}
       >
-        {h >= 16 && <span className="wl-blk__dur">trống {dur}</span>}
+        {h >= 16 && <span className="wl-blk__dur">{t.sidepanel.freeShort(dur)}</span>}
       </div>
     )
   }
@@ -162,9 +164,9 @@ function BlockRow({ block, meta }: { block: Block; meta: IssueMetaMap }) {
       <div
         className="wl-blk wl-blk--break"
         style={{ height: h }}
-        title="Giờ nghỉ trưa"
+        title={t.sidepanel.breakTitle}
       >
-        <span className="wl-blk__dur">nghỉ trưa</span>
+        <span className="wl-blk__dur">{t.sidepanel.breakShort}</span>
       </div>
     )
   }
@@ -185,7 +187,7 @@ function BlockRow({ block, meta }: { block: Block; meta: IssueMetaMap }) {
     <div className={cls} style={{ height: h }} title={title}>
       <span className="wl-blk__time" style={{ width: 32 }}>{formatMinutes(block.start)}</span>
       <span className="wl-blk__key" style={{ flex: 1 }}>
-        {block.kind === 'entry' ? block.issueKey : 'sẽ ghi vào đây'}
+        {block.kind === 'entry' ? block.issueKey : t.sidepanel.willLogHere}
       </span>
       <span className="wl-blk__dur">{dur}</span>
     </div>
@@ -195,6 +197,7 @@ function BlockRow({ block, meta }: { block: Block; meta: IssueMetaMap }) {
 export function DayBlocks({
   entries, workdayStartMinutes, dayEndMinutes, breaks, selection, meta,
 }: Props) {
+  const t = useT()
   const [showTail, setShowTail] = useState(false)
   const { blocks, tailFrom } = buildBlocks(
     entries, workdayStartMinutes, dayEndMinutes, breaks, selection,
@@ -205,7 +208,7 @@ export function DayBlocks({
     <div style={{ display: 'grid', gap: 2, minWidth: 0 }}>
       {blocks.length === 0 && (
         <p style={{ margin: 0, fontSize: fontSize.sm, color: colors.muted }}>
-          Chưa có worklog nào trong ngày.
+          {t.sidepanel.noWorklog}
         </p>
       )}
 
@@ -218,7 +221,7 @@ export function DayBlocks({
           <>
             <BlockRow block={{ kind: 'gap', start: tailFrom, minutes: tailMinutes }} meta={meta} />
             <Button variant="ghost" size="sm" onClick={() => setShowTail(false)}>
-              Ẩn phần cuối ngày
+              {t.sidepanel.hideTail}
             </Button>
           </>
         ) : (
@@ -226,7 +229,7 @@ export function DayBlocks({
             variant="ghost" size="sm" onClick={() => setShowTail(true)}
             title={`${formatMinutes(tailFrom)} – ${formatMinutes(dayEndMinutes)}`}
           >
-            {`+ trống ${formatDuration(tailMinutes * 60)} tới ${formatMinutes(dayEndMinutes)}`}
+            {t.sidepanel.showTail(formatDuration(tailMinutes * 60), formatMinutes(dayEndMinutes))}
           </Button>
         )
       )}

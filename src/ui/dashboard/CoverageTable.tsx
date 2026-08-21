@@ -14,6 +14,8 @@ import { ProgressBar } from '@/ui/shared/ProgressBar'
 import type { ProjectCoverage } from '@/core/coverage-by-project'
 import { cellLabel, dayMonthLabel, hoursLabel } from '@/ui/shared/format'
 import { colors, table as tableColors } from '@/ui/shared/theme'
+import { useLocale, useT } from '@/ui/shared/LocaleProvider'
+import type { Messages } from '@/i18n'
 
 type Props = {
   data: Data
@@ -61,8 +63,8 @@ const INDENT_PROJECT = 14
 const INDENT_GROUP = 30
 const INDENT_CHILD = 46
 
-const projectLabel = (projectKey: string): string =>
-  projectKey === UNKNOWN_PROJECT ? 'Không rõ project' : projectKey
+const projectLabel = (t: Messages, projectKey: string): string =>
+  projectKey === UNKNOWN_PROJECT ? t.dashboard.unknownProject : projectKey
 
 // Một hàng issue trong phần mở rộng của member. Dùng cho cả ba loại hàng —
 // issue không cha, dòng tổng của nhóm cha, sub-task — khác nhau ở thụt lề và độ
@@ -85,6 +87,7 @@ function IssueRow({
    */
   ownOfParent?: boolean
 }) {
+  const t = useT()
   return (
     <tr className="wl-row--sub">
       <th
@@ -104,7 +107,7 @@ function IssueRow({
           {subtask ? '↳ ' : ''}{row.issueKey}
         </strong>
         {ownOfParent ? (
-          <> giờ ghi trực tiếp trên issue cha</>
+          <>{t.dashboard.ownOfParent}</>
         ) : (
           <>
             {meta && (
@@ -137,12 +140,13 @@ function IssueRow({
  * đó. Chỉ xuất hiện khi member có giờ trên NHIỀU project — quyết định đó nằm ở
  * core (groupRowsByProject trả null khi chỉ có một project).
  */
-function ProjectHeaderRow({ row, dates, off, label }: {
+function ProjectHeaderRow({ row, dates, off, projectKey }: {
   row: CoverageIssueRow
   dates: string[]
   off: Set<string>
-  label: string
+  projectKey: string
 }) {
+  const t = useT()
   return (
     <tr className="wl-row--sub">
       <th
@@ -153,7 +157,7 @@ function ProjectHeaderRow({ row, dates, off, label }: {
           position: 'sticky', left: 0, background: tableColors.groupRowBg, zIndex: 1,
         }}
       >
-        <span style={{ whiteSpace: 'nowrap' }}>{label}</span>
+        <span style={{ whiteSpace: 'nowrap' }}>{projectLabel(t, projectKey)}</span>
       </th>
       {dates.map((d) => (
         <td
@@ -242,7 +246,7 @@ function memberIssueRows(
     <Fragment key={`${keyPrefix}-p-${pg.projectKey}`}>
       <ProjectHeaderRow
         row={mergeCoverageIssueRows(pg.projectKey, '', pg.rows)}
-        dates={dates} off={off} label={projectLabel(pg.projectKey)}
+        dates={dates} off={off} projectKey={pg.projectKey}
       />
       {parentGroupRows(pg.rows, meta, dates, off, `${keyPrefix}-${pg.projectKey}`)}
     </Fragment>
@@ -308,6 +312,8 @@ export function CoverageTable({
   // Khoá mở rộng phải mang cả project: cùng một member xuất hiện trong nhiều
   // nhóm, khoá chỉ theo accountId sẽ mở/đóng đồng thời ở mọi nhóm.
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const t = useT()
+  const locale = useLocale()
 
 
   // Khoảng ngày có phần chưa xảy ra → nói rõ thanh đang đo tới hôm nay. Khoảng
@@ -340,7 +346,7 @@ export function CoverageTable({
               className="wl-btn wl-btn--ghost wl-btn--sm"
               onClick={() => toggle(rowKey)}
               aria-expanded={isOpen}
-              aria-label={`${isOpen ? 'Thu gọn' : 'Mở rộng'} issue của ${row.member.displayName}`}
+              aria-label={isOpen ? t.dashboard.collapse(row.member.displayName) : t.dashboard.expand(row.member.displayName)}
               style={{ marginRight: 4, padding: '0 4px' }}
             >
               {isOpen ? '▾' : '▸'}
@@ -366,17 +372,15 @@ export function CoverageTable({
                     e.preventDefault()
                     onToggleDayOff(row.member.accountId, d)
                   }}
-                  aria-label={
-                    `${row.member.displayName}, ${dayMonthLabel(d)}: `
-                    + `${seconds === 0 ? 'chưa log giờ' : formatDuration(seconds)}`
-                    + `${isOff ? ', đã đánh dấu nghỉ' : ''}`
-                  }
-                  title={
-                    `${isOff ? 'Ngày nghỉ · ' : ''}Bấm: xem chi tiết `
-                    + '· Bấm phải: đánh dấu nghỉ'
-                  }
+                  aria-label={t.dashboard.cellAria(
+                    row.member.displayName,
+                    dayMonthLabel(locale, d),
+                    seconds === 0 ? t.dashboard.notLoggedYet : formatDuration(seconds),
+                    isOff,
+                  )}
+                  title={t.dashboard.cellTitle(isOff)}
                 >
-                  {isOff && seconds === 0 ? 'off' : cellLabel(seconds)}
+                  {isOff && seconds === 0 ? t.dashboard.dayOffShort : cellLabel(seconds)}
                 </button>
               </td>
             )
@@ -400,12 +404,13 @@ export function CoverageTable({
                 max={row.capacityToDateSeconds}
                 height={4}
                 valueText={`${hoursLabel(row.total)} / ${hoursLabel(row.capacityToDateSeconds)}`}
-                label={
-                  `${row.member.displayName}: đã log ${hoursLabel(row.total)} `
-                  + `trên capacity ${hoursLabel(row.capacityToDateSeconds)}`
-                  + `${cutToToday ? ' tới hôm nay' : ''}`
-                  + `, cả kỳ ${hoursLabel(row.capacityFullRangeSeconds)}`
-                }
+                label={t.dashboard.memberProgress(
+                  row.member.displayName,
+                  hoursLabel(row.total),
+                  hoursLabel(row.capacityToDateSeconds),
+                  cutToToday ? t.dashboard.toDateSuffix : '',
+                  hoursLabel(row.capacityFullRangeSeconds),
+                )}
               />
             ) : (
               hoursLabel(row.total)
@@ -427,13 +432,12 @@ export function CoverageTable({
     <div className="wl-table-scroll">
       <table className="wl-table">
         <caption style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>
-          Giờ đã log của từng member theo ngày. Mỗi ô là một nút: Enter mở chi
-          tiết worklog của ngày đó, trong đó có nút đánh dấu ngày nghỉ.
+          {t.dashboard.tableCaption}
         </caption>
         <thead>
           <tr>
             <th scope="col" style={{ textAlign: 'left', minWidth: 190, position: 'sticky', left: 0, zIndex: 2 }}>
-              Member / Issue
+              {t.dashboard.memberIssue}
             </th>
             {data.dates.map((d) => (
               <th
@@ -444,11 +448,11 @@ export function CoverageTable({
                   minWidth: DAY_COL_WIDTH,
                 }}
               >
-                {dayMonthLabel(d)}
+                {dayMonthLabel(locale, d)}
               </th>
             ))}
             <th scope="col" style={{ width: TOTAL_COL_WIDTH, minWidth: TOTAL_COL_WIDTH }}>
-              {cutToToday ? 'Tổng / tới hôm nay' : 'Tổng / capacity'}
+              {cutToToday ? t.dashboard.totalToDate : t.dashboard.totalCapacity}
             </th>
           </tr>
         </thead>
@@ -462,7 +466,7 @@ export function CoverageTable({
                   {groups.map((g) => (
                     <Fragment key={`g-${g.projectKey}`}>
                       <GroupHeaderRow
-                        label={projectLabel(g.projectKey)}
+                        label={projectLabel(t, g.projectKey)}
                         table={g.table}
                         dates={data.dates}
                       />
@@ -475,7 +479,7 @@ export function CoverageTable({
                       nhiều project thì không nhóm nào một mình trả lời được.
                       Chỉ nhóm này có capacity, vì chỉ hàng ở đây phủ hết dữ
                       liệu. Mở rộng vẫn xem được issue, gom theo project. */}
-                  <GroupHeaderRow label="Tổng theo member" dates={data.dates} />
+                  <GroupHeaderRow label={t.dashboard.totalByMember} dates={data.dates} />
                   {data.rows.map((row) => memberRow(row, null))}
                 </>
               )}
@@ -483,7 +487,7 @@ export function CoverageTable({
         <tfoot>
           <tr>
             <th scope="row" style={{ position: 'sticky', left: 0, zIndex: 1, background: tableColors.footerBg }}>
-              Tổng cả team
+              {t.dashboard.totalTeam}
             </th>
             {data.dates.map((d) => (
               <td

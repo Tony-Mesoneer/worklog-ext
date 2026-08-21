@@ -8,6 +8,7 @@ import {
 import { Button } from '@/ui/shared/Button'
 import { SegmentedControl } from '@/ui/shared/SegmentedControl'
 import { colors, fontSize, space } from '@/ui/shared/theme'
+import { useT } from '@/ui/shared/LocaleProvider'
 
 type Props = {
   entries: DayEntry[]
@@ -40,13 +41,8 @@ const segmentText = (s: Segment): string =>
   `${formatMinutes(s.startMinutes)}–${formatMinutes(s.startMinutes + s.durationMinutes)}` +
   ` (${formatDuration(s.durationMinutes * 60)})`
 
-// "A và B", "A, B và C" — liệt kê kiểu tiếng Việt, không phải mảng JSON.
-const joinVi = (parts: string[]): string =>
-  parts.length <= 1
-    ? (parts[0] ?? '')
-    : `${parts.slice(0, -1).join(', ')} và ${parts[parts.length - 1]}`
-
 export function LogForm(p: Props) {
+  const t = useT()
   const seconds = parseDuration(p.durationInput)
   // Lưới bỏ hẳn các mốc nằm trong giờ nghỉ: dropdown không được mời người dùng
   // bắt đầu một worklog vào giữa bữa trưa.
@@ -64,7 +60,7 @@ export function LogForm(p: Props) {
           nhất đơn vị slot có ý nghĩa, vì đó là cách người dùng nhập dữ liệu.
           Timeline hiển thị bằng khối, không bằng slot. */}
       <div className="wl-field">
-        <label className="wl-field__label" htmlFor={startId}>Bắt đầu</label>
+        <label className="wl-field__label" htmlFor={startId}>{t.sidepanel.startLabel}</label>
         <select
           id={startId}
           value={p.startMinutes}
@@ -83,12 +79,12 @@ export function LogForm(p: Props) {
       </div>
 
       <div className="wl-field">
-        <span className="wl-field__label">Thời lượng</span>
+        <span className="wl-field__label">{t.sidepanel.durationLabel}</span>
         <div style={{ display: 'flex', gap: space.x2, flexWrap: 'wrap', alignItems: 'center' }}>
           {/* mode="toggle": có thể không chip nào được chọn (gõ tay "1h30"), nên
               aria-selected của tablist là sai nghĩa ở đây. */}
           <SegmentedControl
-            label="Thời lượng có sẵn"
+            label={t.sidepanel.durationPresets}
             mode="toggle"
             items={p.presets.map((m) => ({ value: m, label: formatDuration(m * 60) }))}
             value={p.presets.find((m) => m * 60 === seconds) ?? null}
@@ -99,7 +95,7 @@ export function LogForm(p: Props) {
             value={p.durationInput}
             onChange={(e) => p.onDurationChange(e.target.value)}
             placeholder="1h30"
-            aria-label="Thời lượng tự nhập"
+            aria-label={t.sidepanel.durationCustom}
             aria-invalid={invalid || undefined}
             style={{ width: 78, flex: '0 0 auto' }}
           />
@@ -107,18 +103,18 @@ export function LogForm(p: Props) {
       </div>
 
       <div className="wl-field">
-        <label className="wl-field__label" htmlFor={noteId}>Ghi chú</label>
+        <label className="wl-field__label" htmlFor={noteId}>{t.sidepanel.noteLabel}</label>
         <input
           id={noteId}
           value={p.comment}
           onChange={(e) => p.onCommentChange(e.target.value)}
-          placeholder="không bắt buộc"
+          placeholder={t.sidepanel.notePlaceholder}
         />
       </div>
 
       {invalid && (
         <span role="alert" style={{ fontSize: fontSize.sm, color: colors.danger }}>
-          Không hiểu "{p.durationInput}" — thử 1h30, 90m, 1.5h
+          {t.sidepanel.durationUnparsed(p.durationInput)}
         </span>
       )}
 
@@ -126,7 +122,10 @@ export function LogForm(p: Props) {
           tin vào panel. Nói TRƯỚC khi bấm Log, bằng đúng các mốc giờ sẽ POST. */}
       {p.segments.length > 1 && (
         <span style={{ fontSize: fontSize.sm, color: colors.accentRing }}>
-          Sẽ ghi {p.segments.length} worklog: {joinVi(p.segments.map(segmentText))}
+          {t.sidepanel.willSplit(
+            p.segments.length,
+            t.sidepanel.listJoin(p.segments.map(segmentText)),
+          )}
         </span>
       )}
 
@@ -134,23 +133,27 @@ export function LogForm(p: Props) {
           sang sau giờ nghỉ chứ không im lặng ghi giờ khác giờ đang hiện. */}
       {p.segments.length === 1 && p.segments[0]!.startMinutes !== p.startMinutes && (
         <span style={{ fontSize: fontSize.sm, color: colors.accentRing }}>
-          {formatMinutes(p.startMinutes)} nằm trong giờ nghỉ — sẽ ghi từ{' '}
-          {formatMinutes(p.segments[0]!.startMinutes)}
+          {t.sidepanel.startInBreak(
+            formatMinutes(p.startMinutes),
+            formatMinutes(p.segments[0]!.startMinutes),
+          )}
         </span>
       )}
 
       {p.pastEndMinutes !== null && (
         // Cảnh báo, KHÔNG chặn: cùng cách xử lý như cảnh báo chồng giờ.
         <span style={{ fontSize: fontSize.sm, color: colors.warning }}>
-          Kết thúc {formatMinutes(p.pastEndMinutes)}, quá giờ tan làm{' '}
-          {formatMinutes(p.dayEndMinutes)}
+          {t.sidepanel.pastEnd(
+            formatMinutes(p.pastEndMinutes),
+            formatMinutes(p.dayEndMinutes),
+          )}
         </span>
       )}
 
       {p.overlapKeys.length > 0 && (
         // Cảnh báo, KHÔNG chặn: Jira cho phép chồng giờ và đôi khi chồng là đúng.
         <span style={{ fontSize: fontSize.sm, color: colors.warning }}>
-          Chồng giờ với {p.overlapKeys.join(', ')}
+          {t.sidepanel.overlap(p.overlapKeys.join(', '))}
         </span>
       )}
 
@@ -162,7 +165,9 @@ export function LogForm(p: Props) {
         disabled={!canSubmit}
         onClick={p.onSubmit}
       >
-        {p.busy ? 'Đang ghi…' : `Log ${seconds ? formatDuration(seconds) : ''}`.trim()}
+        {p.busy
+          ? t.sidepanel.logging
+          : t.sidepanel.logButton(seconds ? formatDuration(seconds) : '')}
       </Button>
     </div>
   )

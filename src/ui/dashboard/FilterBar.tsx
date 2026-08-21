@@ -4,6 +4,7 @@ import { addDays } from '@/core/jiraTime'
 import { Button } from '@/ui/shared/Button'
 import { SegmentedControl, type SegmentItem } from '@/ui/shared/SegmentedControl'
 import { colors, fontSize, space } from '@/ui/shared/theme'
+import { intlLocale, useLocale, useT } from '@/ui/shared/LocaleProvider'
 
 export type Preset = 'sprint' | 'thisWeek' | 'lastWeek' | 'thisMonth' | 'custom'
 
@@ -38,6 +39,8 @@ const mondayOf = (date: string): string => {
 }
 
 export function FilterBar(p: Props) {
+  const t = useT()
+  const locale = useLocale()
   const today = p.today
   const fromId = useId()
   const toId = useId()
@@ -61,9 +64,9 @@ export function FilterBar(p: Props) {
   // preset === 'custom' thì không segment nào được chọn — đúng trạng thái.
   const items: SegmentItem<Preset>[] = [
     ...(p.sprintRange ? [{ value: 'sprint' as Preset, label: p.sprintRange.name }] : []),
-    { value: 'thisWeek', label: 'Tuần này', disabled: today === '' },
-    { value: 'lastWeek', label: 'Tuần trước', disabled: today === '' },
-    { value: 'thisMonth', label: 'Tháng này', disabled: today === '' },
+    { value: 'thisWeek', label: t.dashboard.presetThisWeek, disabled: today === '' },
+    { value: 'lastWeek', label: t.dashboard.presetLastWeek, disabled: today === '' },
+    { value: 'thisMonth', label: t.dashboard.presetThisMonth, disabled: today === '' },
   ]
 
   return (
@@ -72,23 +75,23 @@ export function FilterBar(p: Props) {
       gap: `${space.x3}px ${space.x4}px`,
     }}>
       <div className="wl-field">
-        <span className="wl-field__label">Khoảng thời gian</span>
+        <span className="wl-field__label">{t.dashboard.rangeLabel}</span>
         <SegmentedControl
-          label="Khoảng thời gian" items={items} value={p.preset}
+          label={t.dashboard.rangeLabel} items={items} value={p.preset}
           onChange={(v) => apply(v)}
         />
       </div>
 
       <div style={{ display: 'flex', gap: space.x2, alignItems: 'flex-end' }}>
         <div className="wl-field">
-          <label className="wl-field__label" htmlFor={fromId}>Từ ngày</label>
+          <label className="wl-field__label" htmlFor={fromId}>{t.dashboard.from}</label>
           <input
             id={fromId} type="date" value={p.from}
             onChange={(e) => p.onChange(e.target.value, p.to, 'custom')}
           />
         </div>
         <div className="wl-field">
-          <label className="wl-field__label" htmlFor={toId}>Đến ngày</label>
+          <label className="wl-field__label" htmlFor={toId}>{t.dashboard.to}</label>
           <input
             id={toId} type="date" value={p.to}
             onChange={(e) => p.onChange(p.from, e.target.value, 'custom')}
@@ -106,7 +109,7 @@ export function FilterBar(p: Props) {
             id={projectId} value={p.project}
             onChange={(e) => p.onProjectChange(e.target.value)}
           >
-            <option value="">Tất cả project</option>
+            <option value="">{t.dashboard.allProjects}</option>
             {p.projectOptions.map((key) => (
               <option key={key} value={key}>{key}</option>
             ))}
@@ -121,11 +124,16 @@ export function FilterBar(p: Props) {
             color: p.stale ? colors.warning : colors.muted,
             textAlign: 'right',
           }}>
-            {p.stale ? 'dữ liệu cũ lúc ' : 'cập nhật '}
-            {new Date(p.fetchedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+            {/* Giờ theo ngôn ngữ đang chọn: en-US dùng 12h có AM/PM, vi-VN
+                dùng 24h — hardcode 'vi-VN' làm UI tiếng Anh hiện "14:05". */}
+            {(p.stale ? t.dashboard.staleAt : t.dashboard.updatedAt)(
+              new Date(p.fetchedAt).toLocaleTimeString(intlLocale(locale), {
+                hour: '2-digit', minute: '2-digit',
+              }),
+            )}
           </span>
         )}
-        <Button onClick={p.onRefresh} loading={p.loading}>Làm mới</Button>
+        <Button onClick={p.onRefresh} loading={p.loading}>{t.dashboard.refresh}</Button>
       </div>
     </div>
   )
