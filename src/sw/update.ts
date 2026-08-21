@@ -11,7 +11,9 @@ import {
 } from '@/core/version'
 import { loadConfig } from '@/store/config'
 import { readUpdateStore, writeUpdateStore } from '@/store/update'
+import { isFirefox } from '@/platform/ext'
 import { MessageError } from './messages'
+import { ext } from '@/platform/ext'
 
 export type UpdateStatusResult = {
   state: UpdateState
@@ -23,7 +25,7 @@ export type UpdateStatusResult = {
 }
 
 /** Version đang chạy, đọc từ manifest — không hardcode ở đâu khác. */
-export const currentVersion = (): string => chrome.runtime.getManifest().version
+export const currentVersion = (): string => ext.runtime.getManifest().version
 
 const REQUEST_TIMEOUT_MS = 10_000
 
@@ -31,9 +33,9 @@ const REQUEST_TIMEOUT_MS = 10_000
 // dấu ↑, không phải số: "có bản mới" là boolean, không phải đếm.
 async function paintBadge(state: UpdateState): Promise<void> {
   const available = state === 'available'
-  await chrome.action.setBadgeText({ text: available ? '↑' : '' })
+  await ext.action.setBadgeText({ text: available ? '↑' : '' })
   if (available) {
-    await chrome.action.setBadgeBackgroundColor({ color: '#0B7285' })
+    await ext.action.setBadgeBackgroundColor({ color: '#0B7285' })
   }
 }
 
@@ -98,7 +100,9 @@ export async function checkForUpdate(force: boolean): Promise<UpdateStatusResult
     })
     if (!res.ok) throw new MessageError(httpMessage(res.status, repo), res.status)
 
-    const latest = parseRelease(await res.json())
+    // Chọn đúng zip cho nền tảng đang chạy: mỗi release có cả bản Chrome và bản
+    // Firefox, đưa sai file là đưa một thứ không cài được.
+    const latest = parseRelease(await res.json(), { firefox: isFirefox() })
     if (!latest) throw new MessageError('Release mới nhất không có tag dạng version')
 
     // lastCheckedAt chỉ nhích khi ĐỌC ĐƯỢC release: fail thì lần mở panel sau

@@ -7,6 +7,7 @@
 // một round-trip ra GitHub — và `lastCheckedAt` là thứ duy nhất chặn việc mỗi
 // lần mở panel lại đốt một lượt rate limit.
 import type { ReleaseInfo } from '@/core/version'
+import { ext } from '@/platform/ext'
 
 const KEY = 'update'
 
@@ -32,7 +33,7 @@ const isRecord = (v: unknown): v is Record<string, unknown> =>
 // Khoan dung như migrateConfig: hình dạng lạ → default. Cache update hỏng không
 // bao giờ được là lý do side panel không mở lên được.
 export async function readUpdateStore(): Promise<UpdateStore> {
-  const res = await chrome.storage.local.get(KEY)
+  const res = await ext.storage.local.get(KEY)
   const raw = res[KEY]
   if (!isRecord(raw)) return { ...emptyUpdateStore }
   const latest = raw['latest']
@@ -49,6 +50,6 @@ export async function readUpdateStore(): Promise<UpdateStore> {
 
 export async function writeUpdateStore(patch: Partial<UpdateStore>): Promise<UpdateStore> {
   const next = { ...(await readUpdateStore()), ...patch }
-  await chrome.storage.local.set({ [KEY]: next })
+  await ext.storage.local.set({ [KEY]: next })
   return next
 }

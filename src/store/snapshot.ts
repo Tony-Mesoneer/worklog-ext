@@ -4,6 +4,7 @@ import {
 } from '@/core/snapshot-key'
 import type { Worklog } from '@/core/coverage'
 import type { IssueMetaMap } from '@/core/issue-hierarchy'
+import { ext } from '@/platform/ext'
 
 // `meta` OPTIONAL có chủ ý: snapshot đã nằm trong storage.local từ trước khi có
 // tính năng cha/con không có field này, và một cache cũ phải đọc được chứ không
@@ -26,7 +27,7 @@ export async function readSnapshot(
   scope: Scope,
 ): Promise<{ snapshot: Snapshot; stale: boolean } | null> {
   const key = snapshotKey(scope)
-  const res = await chrome.storage.local.get(key)
+  const res = await ext.storage.local.get(key)
   const snapshot = res[key] as Snapshot | undefined
   if (!snapshot) return null
   return { snapshot, stale: isStale(snapshot.fetchedAt, Date.now(), SNAPSHOT_TTL_MS) }
@@ -35,7 +36,7 @@ export async function readSnapshot(
 export async function writeSnapshot(
   scope: Scope, worklogs: Worklog[], now: number, meta: IssueMetaMap = {},
 ): Promise<void> {
-  await chrome.storage.local.set({
+  await ext.storage.local.set({
     [snapshotKey(scope)]: { fetchedAt: now, worklogs, meta } satisfies Snapshot,
   })
 }
@@ -52,7 +53,7 @@ export async function patchSnapshot(
     ...existing.snapshot.worklogs.filter((w) => !remove.has(w.id)),
     ...add,
   ]
-  await chrome.storage.local.set({
+  await ext.storage.local.set({
     [snapshotKey(scope)]: {
       fetchedAt: existing.snapshot.fetchedAt, worklogs,
       // Giữ nguyên meta: patch chỉ thêm/bớt worklog, không biết gì mới về issue.
@@ -84,7 +85,7 @@ export async function patchSnapshot(
 export async function removeWorklogsFromSnapshots(worklogIds: string[]): Promise<void> {
   if (worklogIds.length === 0) return
   const remove = new Set(worklogIds)
-  const all = await chrome.storage.local.get(null)
+  const all = await ext.storage.local.get(null)
 
   const patch: Record<string, Snapshot> = {}
   for (const [key, value] of Object.entries(all)) {
@@ -98,14 +99,14 @@ export async function removeWorklogsFromSnapshots(worklogIds: string[]): Promise
       fetchedAt: snapshot.fetchedAt, worklogs, meta: snapshotMeta(snapshot),
     }
   }
-  if (Object.keys(patch).length > 0) await chrome.storage.local.set(patch)
+  if (Object.keys(patch).length > 0) await ext.storage.local.set(patch)
 }
 
 // Dọn snapshot cũ: mỗi (from, to, accountIds) là một key vĩnh viễn,
 // không dọn thì storage.local đầy dần tới lúc quota vỡ. Chỉ chạm key có prefix
 // `snapshot:` — `config` không bao giờ bị xoá.
 export async function pruneSnapshots(cap: number = SNAPSHOT_MAX_KEYS): Promise<void> {
-  const all = await chrome.storage.local.get(null)
+  const all = await ext.storage.local.get(null)
   const metas = Object.entries(all)
     .filter(([k]) => k.startsWith('snapshot:'))
     .map(([key, value]) => ({
@@ -116,5 +117,5 @@ export async function pruneSnapshots(cap: number = SNAPSHOT_MAX_KEYS): Promise<v
           : 0,
     }))
   const evict = snapshotKeysToEvict(metas, cap)
-  if (evict.length > 0) await chrome.storage.local.remove(evict)
+  if (evict.length > 0) await ext.storage.local.remove(evict)
 }

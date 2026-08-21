@@ -6,6 +6,7 @@ import { StatusBadge } from '@/ui/shared/StatusBadge'
 import { ErrorBanner, toUiError, type UiError } from '@/ui/shared/errors'
 import { colors, fontSize, space } from '@/ui/shared/theme'
 import { useT } from '@/ui/shared/LocaleProvider'
+import { ext } from '@/platform/ext'
 
 type Props = { value: string; onChange: (issueKey: string) => void; projects: string[] }
 
@@ -75,7 +76,7 @@ export function IssuePicker({ value, onChange, projects }: Props) {
 
   // Prefill từ tab đang active. Chỉ chạy một lần khi mở panel.
   useEffect(() => {
-    void chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
+    void ext.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
       const k = tab?.url ? keyFromUrl(tab.url) : null
       if (k) onChange(k)
     })

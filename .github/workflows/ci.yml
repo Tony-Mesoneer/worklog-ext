@@ -33,15 +33,31 @@ jobs:
       - name: Test
         run: npm test
 
-      - name: Build
+      - name: Build Chrome
         run: npx vite build
+
+      - name: Build Firefox
+        run: npx vite build
+        env:
+          TARGET: firefox
+
+      - name: Kiểm manifest Firefox theo luật AMO
+        # web-ext lint exit 0 khi chỉ có warning, 1 khi có error — nên đây là
+        # cổng chặn ĐÚNG mức: error thì fail, warning vẫn hiện trong log.
+        # Hai warning đã biết và cố ý: UNSAFE_VAR_ASSIGNMENT là innerHTML trong
+        # react-dom (không phải code của repo), và KEY_FIREFOX_ANDROID_… là do
+        # KHÔNG khai gecko_android — Firefox Android không có sidebar nên bề mặt
+        # chính của extension không tồn tại ở đó.
+        run: npm run lint:firefox
 
       - name: Đóng gói zip
         id: pack
-        run: node scripts/pack.mjs --github-output
+        run: |
+          node scripts/pack.mjs --github-output
+          node scripts/pack.mjs --target firefox
 
       - uses: actions/upload-artifact@v7
         with:
-          name: ${{ steps.pack.outputs.name }}-${{ github.run_number }}
-          path: ${{ steps.pack.outputs.zip }}
+          name: worklog-ext-${{ github.run_number }}
+          path: release/*.zip
           if-no-files-found: error

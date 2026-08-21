@@ -71,16 +71,25 @@ const isRecord = (v: unknown): v is Record<string, unknown> =>
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '')
 
-// Zip do scripts/pack.mjs sinh ra là asset duy nhất ta quan tâm. Lấy cái .zip
-// đầu tiên CÓ url: asset đang upload dở vẫn xuất hiện trong payload nhưng chưa
-// có browser_download_url, và một link chết còn tệ hơn không có link.
-const pickZip = (raw: unknown): string | null => {
+// Từ v0.6.0 mỗi release có HAI zip: bản Chrome (`worklog-ext-<v>.zip`) và bản
+// Firefox (`worklog-ext-<v>-firefox.zip`). Nên không thể lấy "cái .zip đầu tiên"
+// nữa — làm vậy là mời người dùng Firefox tải bản Chrome.
+//
+// Chỉ nhận asset CÓ url: asset đang upload dở vẫn xuất hiện trong payload nhưng
+// chưa có browser_download_url, và một link chết còn tệ hơn không có link.
+//
+// Không khớp được thì trả null CHỦ Ý, không rơi về zip của nền tảng khác: đưa
+// file Chrome cho người dùng Firefox tệ hơn là không đưa gì — banner sẽ rơi về
+// link trang release, nơi họ tự thấy có những gì. Release cũ (v0.2–v0.5) chỉ có
+// zip Chrome nên người dùng Firefox rơi vào đúng nhánh này.
+const pickZip = (raw: unknown, firefox: boolean): string | null => {
   if (!Array.isArray(raw)) return null
   for (const asset of raw) {
     if (!isRecord(asset)) continue
-    const name = str(asset['name'])
+    const name = str(asset['name']).toLowerCase()
     const url = str(asset['browser_download_url'])
-    if (name.toLowerCase().endsWith('.zip') && url !== '') return url
+    if (!name.endsWith('.zip') || url === '') continue
+    if (name.includes('firefox') === firefox) return url
   }
   return null
 }
@@ -91,7 +100,13 @@ const pickZip = (raw: unknown): string | null => {
  * vì đây là dữ liệu ngoài tầm kiểm soát và một update check fail không được làm
  * vỡ service worker.
  */
-export function parseRelease(raw: unknown): ReleaseInfo | null {
+export function parseRelease(
+  raw: unknown,
+  // Mặc định Chrome: nó là số đông, và giữ mặc định này nghĩa là mọi chỗ gọi cũ
+  // không đổi hành vi. Chỗ duy nhất truyền `true` là service worker, sau khi tự
+  // phát hiện nền tảng — xem platform/ext.
+  opts: { firefox?: boolean } = {},
+): ReleaseInfo | null {
   if (!isRecord(raw)) return null
   const tag = str(raw['tag_name']).trim()
   const version = stripTagPrefix(tag)
@@ -100,7 +115,7 @@ export function parseRelease(raw: unknown): ReleaseInfo | null {
     version,
     tag,
     url: str(raw['html_url']),
-    downloadUrl: pickZip(raw['assets']),
+    downloadUrl: pickZip(raw['assets'], opts.firefox === true),
     publishedAt: str(raw['published_at']),
     notes: str(raw['body']),
   }

@@ -24,11 +24,11 @@ describe('migrateConfig', () => {
     expect(c.workdayStart).toBe('07:45')
   })
 
-  it('default giờ làm việc: 08:30–18:00, nghỉ 12:00–13:00', () => {
+  it('default giờ làm việc: 08:30–18:00, nghỉ 12:00–13:30', () => {
     const c = migrateConfig({})
     expect(c.workdayStart).toBe('08:30')
     expect(c.workdayEnd).toBe('18:00')
-    expect(c.breaks).toEqual([{ start: '12:00', end: '13:00' }])
+    expect(c.breaks).toEqual([{ start: '12:00', end: '13:30' }])
   })
 
   // Các test breaks bên dưới cố tình gắn version: CONFIG_VERSION — chúng kiểm
@@ -175,7 +175,7 @@ describe('migrateConfig', () => {
   })
 
   describe('migration v1 → v2 (giờ làm việc/giờ nghỉ)', () => {
-    it('config v1 (không có version, hoặc version < 2) được nâng lên giờ làm việc mặc định mới', () => {
+    it('config cũ hơn CONFIG_VERSION được nâng lên giờ làm việc mặc định mới', () => {
       // Mô phỏng config v1 thật: workdayStart cũ '09:00', chưa từng có
       // workdayEnd/breaks vì hai field này chỉ xuất hiện từ v1 nhưng không có
       // UI để set — nghĩa là bất kỳ giá trị nào ở đây cũng chỉ có thể là cũ.
@@ -183,7 +183,16 @@ describe('migrateConfig', () => {
       expect(c.version).toBe(CONFIG_VERSION)
       expect(c.workdayStart).toBe('08:30')
       expect(c.workdayEnd).toBe('18:00')
-      expect(c.breaks).toEqual([{ start: '12:00', end: '13:00' }])
+      expect(c.breaks).toEqual([{ start: '12:00', end: '13:30' }])
+    })
+
+    it('v2 → v3: giờ nghỉ 12:00–13:00 đã lưu được ghi đè thành 12:00–13:30', () => {
+      // Đây là chỗ ĐÚNG của bug đã báo: đổi default một mình không sửa gì cho
+      // người đang dùng, vì config của họ đã ở v2 và migration cũ chỉ chạy khi
+      // version < 2 — họ vẫn bị đề xuất log vào 13:00.
+      const c = migrateConfig({ version: 2, breaks: [{ start: '12:00', end: '13:00' }] })
+      expect(c.breaks).toEqual([{ start: '12:00', end: '13:30' }])
+      expect(c.version).toBe(CONFIG_VERSION)
     })
 
     it('migration v1 → v2 không đụng vào field khác — projects/members/sprintEvents/daysOff/primaryBoardId nguyên vẹn', () => {

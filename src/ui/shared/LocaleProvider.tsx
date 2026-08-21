@@ -44,10 +44,10 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
       // đang dùng, không nhảy về default giữa phiên.
       if (isLocale(next?.locale)) { setLocale(next.locale); rememberLocale(next.locale) }
     }
-    chrome.storage.onChanged.addListener(onChanged)
+    ext.storage.onChanged.addListener(onChanged)
     return () => {
       alive = false
-      chrome.storage.onChanged.removeListener(onChanged)
+      ext.storage.onChanged.removeListener(onChanged)
     }
   }, [])
 
@@ -67,3 +67,4 @@ export const useLocale = (): Locale => useContext(LocaleContext).locale
 // intlLocale sống ở @/i18n/locale (module thuần, format.ts cũng dùng). Re-export
 // để component chỉ cần import một chỗ.
 export { intlLocale } from '@/i18n/locale'
+import { ext } from '@/platform/ext'

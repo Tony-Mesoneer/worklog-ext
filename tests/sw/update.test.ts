@@ -12,10 +12,13 @@ let store: Record<string, unknown> = {}
 let badge: { text: string; color?: string } = { text: '' }
 const fetchMock = vi.fn()
 
-const setup = (config: Partial<Config>, version = '0.2.0') => {
+// `sidebarAction` có mặt = Firefox (xem platform/ext isFirefox). Nó quyết định
+// asset nào được chọn trong release, nên phải test được cả hai nhánh.
+const setup = (config: Partial<Config>, version = '0.2.0', firefox = false) => {
   store = { config: { ...defaultConfig, ...config } }
   badge = { text: '' }
   ;(globalThis as unknown as { chrome: unknown }).chrome = {
+    ...(firefox ? { sidebarAction: { open: async () => {}, close: async () => {} } } : {}),
     runtime: { getManifest: () => ({ version }) },
     action: {
       setBadgeText: async ({ text }: { text: string }) => { badge.text = text },
@@ -38,13 +41,19 @@ const setup = (config: Partial<Config>, version = '0.2.0') => {
   vi.stubGlobal('fetch', fetchMock)
 }
 
-const release = (tag: string) => ({
-  tag_name: tag,
-  html_url: `https://github.com/o/r/releases/tag/${tag}`,
-  published_at: '2026-08-20T10:00:00Z',
-  body: '',
-  assets: [{ name: `worklog-ext-${tag.replace(/^v/, '')}.zip`, browser_download_url: 'https://x/w.zip' }],
-})
+const release = (tag: string) => {
+  const v = tag.replace(/^v/, '')
+  return {
+    tag_name: tag,
+    html_url: `https://github.com/o/r/releases/tag/${tag}`,
+    published_at: '2026-08-20T10:00:00Z',
+    body: '',
+    assets: [
+      { name: `worklog-ext-${v}.zip`, browser_download_url: 'https://x/w.zip' },
+      { name: `worklog-ext-${v}-firefox.zip`, browser_download_url: 'https://x/w-ff.zip' },
+    ],
+  }
+}
 
 const ok = (body: unknown) => ({ ok: true, status: 200, json: async () => body })
 const fail = (status: number) => ({ ok: false, status, json: async () => ({}) })
@@ -186,5 +195,31 @@ describe('dismissUpdate', () => {
     // Bản mới hơn xuất hiện thì banner sống lại — dismiss không phải "tắt vĩnh viễn".
     fetchMock.mockResolvedValue(ok(release('v0.4.0')))
     expect((await checkForUpdate(true)).state).toBe('available')
+  })
+})
+
+describe('chọn asset theo nền tảng', () => {
+  it('Chrome nhận zip Chrome', async () => {
+    setup({ updateRepo: 'o/r' })
+    fetchMock.mockResolvedValue(ok(release('v0.3.0')))
+    expect((await checkForUpdate(false)).latest?.downloadUrl).toBe('https://x/w.zip')
+  })
+
+  it('Firefox nhận zip Firefox', async () => {
+    setup({ updateRepo: 'o/r' }, '0.2.0', true)
+    fetchMock.mockResolvedValue(ok(release('v0.3.0')))
+    expect((await checkForUpdate(false)).latest?.downloadUrl).toBe('https://x/w-ff.zip')
+  })
+
+  it('release cũ chỉ có zip Chrome: Firefox không nhận link file nào', async () => {
+    setup({ updateRepo: 'o/r' }, '0.2.0', true)
+    const r = release('v0.3.0')
+    fetchMock.mockResolvedValue(ok({ ...r, assets: [r.assets[0]] }))
+    const res = await checkForUpdate(false)
+    // Vẫn báo CÓ bản mới; chỉ là không có file để tải trực tiếp, UI rơi về
+    // link trang release.
+    expect(res.state).toBe('available')
+    expect(res.latest?.downloadUrl).toBeNull()
+    expect(res.latest?.url).toContain('/releases/tag/v0.3.0')
   })
 })

@@ -48,7 +48,7 @@ describe('worklog/add cắt quanh giờ nghỉ', () => {
     let n = 0
     addWorklog.mockImplementation(async () => ({ id: `w${++n}` }))
     deleteWorklog.mockResolvedValue(undefined)
-    setConfig({}) // 08:30–18:00, nghỉ 12:00–13:00
+    setConfig({}) // default: 08:30–18:00, nghỉ 12:00–13:30
   })
 
   it('không đi qua giờ nghỉ → đúng MỘT POST, như trước', async () => {
@@ -61,7 +61,7 @@ describe('worklog/add cắt quanh giờ nghỉ', () => {
     const res = await add(11 * 60, 3 * 3600)
     expect(posted()).toEqual([
       '2026-08-19T11:00:00.000+0000|3600',
-      '2026-08-19T13:00:00.000+0000|7200',
+      '2026-08-19T13:30:00.000+0000|7200',
     ])
     expect(res).toEqual({ ids: ['w1', 'w2'] })
   })

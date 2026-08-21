@@ -2,6 +2,8 @@ import { handle } from './handlers'
 import type { Message, Reply } from './messages'
 import { checkForUpdate, updateStatus } from './update'
 import { UPDATE_CHECK_INTERVAL_MS } from '@/core/version'
+import { ext } from '@/platform/ext'
+import { openPanelOnActionClick, openSidePanel } from '@/platform/sidepanel'
 
 // Check update phải chạy bằng chrome.alarms, không phải setInterval: service
 // worker MV3 bị kill sau ~30s không hoạt động, nên mọi timer trong bộ nhớ đều
@@ -9,7 +11,7 @@ import { UPDATE_CHECK_INTERVAL_MS } from '@/core/version'
 const UPDATE_ALARM = 'update-check'
 
 const scheduleUpdateCheck = () => {
-  chrome.alarms
+  ext.alarms
     .create(UPDATE_ALARM, { periodInMinutes: UPDATE_CHECK_INTERVAL_MS / 60_000 })
     // create() với cùng tên chỉ ghi đè, nên gọi lại ở mọi lần khởi động là an
     // toàn — và cần thiết, vì alarm không sống qua lần cập nhật extension.
@@ -19,10 +21,10 @@ const scheduleUpdateCheck = () => {
   void checkForUpdate(false).catch((e: unknown) => console.error('[sw] update check', e))
 }
 
-chrome.runtime.onInstalled.addListener(scheduleUpdateCheck)
-chrome.runtime.onStartup.addListener(scheduleUpdateCheck)
+ext.runtime.onInstalled.addListener(scheduleUpdateCheck)
+ext.runtime.onStartup.addListener(scheduleUpdateCheck)
 
-chrome.alarms.onAlarm.addListener((alarm) => {
+ext.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name !== UPDATE_ALARM) return
   void checkForUpdate(false).catch((e: unknown) => console.error('[sw] update check', e))
 })
@@ -31,11 +33,12 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 // state đã lưu ở mỗi lần SW được đánh thức.
 void updateStatus().catch((e: unknown) => console.error('[sw] update status', e))
 
-chrome.sidePanel
-  .setPanelBehavior({ openPanelOnActionClick: true })
-  .catch((e) => console.error('[sw] setPanelBehavior', e))
+// Chrome: bật click-icon-mở-panel. Firefox: không có API tương đương và
+// sidebar_action đã tự có lối vào — xem platform/sidepanel.
+void openPanelOnActionClick().catch((e: unknown) =>
+  console.error('[sw] openPanelOnActionClick', e))
 
-chrome.runtime.onMessage.addListener((msg: Message, _sender, sendResponse) => {
+ext.runtime.onMessage.addListener((msg: Message, _sender, sendResponse) => {
   handle(msg)
     .then((data) => sendResponse({ ok: true, data } satisfies Reply))
     .catch((e: unknown) => {
@@ -51,16 +54,9 @@ chrome.runtime.onMessage.addListener((msg: Message, _sender, sendResponse) => {
   return true
 })
 
-// WINDOW_ID_CURRENT (-2) là sentinel, không phải window id thật — sidePanel.open
-// cần id cụ thể. Phải resolve window trước, và phải catch: đây là entry point
-// Cmd+Shift+L, lỗi im lặng ở đây là lỗi người dùng gặp đầu tiên.
-chrome.commands.onCommand.addListener((command) => {
+// Phải catch: đây là entry point Cmd+Shift+L, lỗi im lặng ở đây là lỗi người
+// dùng gặp đầu tiên. Khác biệt Chrome/Firefox nằm trong platform/sidepanel.
+ext.commands.onCommand.addListener((command) => {
   if (command !== 'open-sidepanel') return
-  chrome.windows
-    .getCurrent()
-    .then((win) => {
-      if (win.id === undefined) throw new Error('không xác định được window hiện tại')
-      return chrome.sidePanel.open({ windowId: win.id })
-    })
-    .catch((e: unknown) => console.error('[sw] sidePanel.open', e))
+  void openSidePanel().catch((e: unknown) => console.error('[sw] openSidePanel', e))
 })

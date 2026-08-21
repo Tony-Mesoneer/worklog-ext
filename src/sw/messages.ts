@@ -4,6 +4,7 @@ import type { ResolvedSprintEvent } from '@/core/event-resolve'
 import type { IssueMeta, IssueMetaMap } from '@/core/issue-hierarchy'
 import type { SprintIssue } from '@/core/points'
 import type { Scope } from '@/core/snapshot-key'
+import { ext } from '@/platform/ext'
 
 export type Message =
   | { type: 'config/load' }
@@ -97,7 +98,7 @@ export class MessageError extends Error {
 // Helper dùng ở cả ba bề mặt UI. Nó ném MessageError với message đọc được để
 // component chỉ cần try/catch một chỗ.
 export async function send<T>(message: Message): Promise<T> {
-  const reply = (await chrome.runtime.sendMessage(message)) as Reply | undefined
+  const reply = (await ext.runtime.sendMessage(message)) as Reply | undefined
   if (!reply) throw new MessageError('Service worker không trả lời')
   if (!reply.ok) throw new MessageError(reply.error, reply.status)
   return reply.data as T

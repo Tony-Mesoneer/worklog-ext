@@ -4,7 +4,8 @@ import {
 } from '@/core/deficit'
 import { segmentsEnd, splitAroundBreaks, type Break, type DayEntry } from '@/core/timeline'
 
-// Giờ làm việc mặc định: 08:30–18:00, nghỉ trưa 12:00–13:00 → 8h30 khả dụng.
+// Giờ làm việc dùng trong test: 08:30–18:00, nghỉ 12:00–13:00 → 8h30 khả dụng.
+// Là hằng số CỦA TEST, không phải default của app (đã là 12:00–13:30).
 const START = 8 * 60 + 30
 const END = 18 * 60
 const LUNCH: Break[] = [{ startMinutes: 12 * 60, endMinutes: 13 * 60 }]

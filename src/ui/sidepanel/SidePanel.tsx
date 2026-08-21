@@ -30,6 +30,7 @@ import { EventButtons } from './EventButtons'
 import { IssuePicker } from './IssuePicker'
 import { LogForm } from './LogForm'
 import { useT } from '@/ui/shared/LocaleProvider'
+import { ext } from '@/platform/ext'
 
 const toEntries = (worklogs: Worklog[]): DayEntry[] =>
   worklogs.map((w) => ({
@@ -48,7 +49,7 @@ function SettingsButton() {
   return (
     <Button
       variant="ghost" iconOnly aria-label={t.sidepanel.settings} title={t.sidepanel.settings}
-      onClick={() => chrome.runtime.openOptionsPage()}
+      onClick={() => ext.runtime.openOptionsPage()}
     >
       <GearIcon />
     </Button>
@@ -277,7 +278,7 @@ export function SidePanel() {
     return (
       <div style={{ padding: space.x3, display: 'grid', gap: space.x3 }}>
         <SettingsHeader />
-        <Banner kind="info" action={{ label: t.common.openOptions, onClick: () => chrome.runtime.openOptionsPage() }}>
+        <Banner kind="info" action={{ label: t.common.openOptions, onClick: () => ext.runtime.openOptionsPage() }}>
           {t.sidepanel.noJira}
         </Banner>
       </div>

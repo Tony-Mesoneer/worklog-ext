@@ -25,6 +25,7 @@ import { CoverageTable } from './CoverageTable'
 import { CellDetail } from './CellDetail'
 import { PointsPanel } from './PointsTable'
 import { useLocale, useT } from '@/ui/shared/LocaleProvider'
+import { ext } from '@/platform/ext'
 
 type Tab = 'coverage' | 'points'
 
@@ -157,7 +158,7 @@ export function Dashboard() {
     return page(
       <>
         <SettingsHeader />
-        <Banner kind="info" action={{ label: t.common.openOptions, onClick: () => chrome.runtime.openOptionsPage() }}>
+        <Banner kind="info" action={{ label: t.common.openOptions, onClick: () => ext.runtime.openOptionsPage() }}>
           {t.dashboard.noMembers}
         </Banner>
       </>,
@@ -326,7 +327,7 @@ function SettingsButton() {
   return (
     <Button
       variant="ghost" iconOnly aria-label={t.sidepanel.settings} title={t.sidepanel.settings}
-      onClick={() => chrome.runtime.openOptionsPage()}
+      onClick={() => ext.runtime.openOptionsPage()}
     >
       <GearIcon />
     </Button>

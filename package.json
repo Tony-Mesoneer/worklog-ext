@@ -6,9 +6,13 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:firefox": "tsc --noEmit && TARGET=firefox vite build",
+    "build:all": "npm run build && npm run build:firefox",
     "test": "vitest run",
     "test:watch": "vitest",
     "pack": "node scripts/pack.mjs",
+    "pack:firefox": "node scripts/pack.mjs --target firefox",
+    "lint:firefox": "NO_UPDATE_NOTIFIER=1 web-ext lint --source-dir dist-firefox",
     "bump": "node scripts/bump-version.mjs",
     "check:version": "node scripts/check-version-sync.mjs",
     "next:version": "node scripts/next-version.mjs"
@@ -26,6 +30,7 @@
     "@vitejs/plugin-react": "^4.3.1",
     "typescript": "^5.5.4",
     "vite": "^5.4.0",
-    "vitest": "^2.0.5"
+    "vitest": "^2.0.5",
+    "web-ext": "^10.6.0"
   }
 }

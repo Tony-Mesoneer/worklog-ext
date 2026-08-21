@@ -15,6 +15,7 @@ import type { ErrorInfo, ReactNode } from 'react'
 import { Banner } from './Banner'
 import { fontSize, space } from './theme'
 import { lastKnownLocale, messagesFor } from '@/i18n'
+import { ext } from '@/platform/ext'
 
 type Props = { children: ReactNode }
 type State = { error: Error | null }
@@ -53,7 +54,7 @@ export class ErrorBoundary extends Component<Props, State> {
           <button
             type="button"
             className="wl-btn wl-btn--secondary"
-            onClick={() => chrome.runtime.openOptionsPage()}
+            onClick={() => ext.runtime.openOptionsPage()}
           >
             {t.common.openOptions}
           </button>
