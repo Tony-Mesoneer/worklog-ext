@@ -76,7 +76,9 @@ export const defaultConfig: Config = {
   slotMinutes: 15,
   durationPresets: [15, 30, 60, 240, 360, 480],
   sprintEvents: [],
-  updateRepo: '',
+  // Mặc định trỏ về repo gốc. Vẫn sửa được ở Options: bản fork phải đổi chỗ
+  // này, không thì nó đi hỏi update của một repo không phải của mình.
+  updateRepo: 'Tony-Mesoneer/worklog-ext',
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>

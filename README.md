@@ -21,7 +21,7 @@ Implementation hoàn thành. Extension chạy local, chưa publish lên Chrome W
 2. **Cấu hình**: Mở trang Options (click icon extension → "Options"), nhập Jira URL rồi bấm "Kết nối", thêm project key, **chọn board chính** (bắt buộc cho preset sprint và tab Story points), thêm members và sprint events. Nếu session Jira không dùng được, nhập email + API token ở mục "API token (dự phòng)".
 3. **Log worklog**: Nhấn `Cmd+Shift+L` để mở side panel, chọn issue, nhập dữ liệu, click "Log" để ghi vào Jira.
 4. **Dashboard**: Xem nút "Dashboard" trong side panel để mở trang theo dõi giờ của team và so sánh story points vs giờ thực.
-5. **Cập nhật**: Ở Options, mục "6. Cập nhật", nhập repo GitHub dạng `owner/tên`. Extension sẽ tự kiểm tra release mới mỗi 6 giờ.
+5. **Cập nhật**: Extension tự kiểm tra release mới mỗi 6 giờ (mặc định trỏ về `Tony-Mesoneer/worklog-ext`; đổi hoặc để rỗng để tắt ở Options → "6. Cập nhật").
 
 **Lưu ý**: Extension chạy hoàn toàn local trong trình duyệt và kết nối trực tiếp với Jira Cloud. Không có backend, không lưu dữ liệu trên server.
 

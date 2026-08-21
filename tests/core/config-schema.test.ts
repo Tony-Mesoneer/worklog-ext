@@ -231,15 +231,19 @@ describe('migrateConfig', () => {
 })
 
 describe('updateRepo', () => {
-  it('thiếu → rỗng (tính năng check update tắt)', () => {
-    expect(migrateConfig({}).updateRepo).toBe('')
+  it('thiếu → default trỏ về repo gốc', () => {
+    expect(migrateConfig({}).updateRepo).toBe('Tony-Mesoneer/worklog-ext')
+  })
+
+  it('rỗng được GIỮ rỗng — đó là cách người dùng tắt việc check update', () => {
+    expect(migrateConfig({ updateRepo: '' }).updateRepo).toBe('')
   })
 
   it('được trim, vì dán từ URL rất dễ lẫn khoảng trắng', () => {
     expect(migrateConfig({ updateRepo: '  o/r  ' }).updateRepo).toBe('o/r')
   })
 
-  it('sai kiểu → rỗng', () => {
-    expect(migrateConfig({ updateRepo: 42 }).updateRepo).toBe('')
+  it('sai kiểu → default', () => {
+    expect(migrateConfig({ updateRepo: 42 }).updateRepo).toBe('Tony-Mesoneer/worklog-ext')
   })
 })
