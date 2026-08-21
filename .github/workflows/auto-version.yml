@@ -26,12 +26,12 @@ jobs:
       level: ${{ steps.next.outputs.level }}
       next: ${{ steps.next.outputs.next }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Cần full history + tags để `git describe` tìm được tag gần nhất.
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
 

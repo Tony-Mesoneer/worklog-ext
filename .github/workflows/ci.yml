@@ -15,9 +15,9 @@ jobs:
     name: Typecheck, test, build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -40,7 +40,7 @@ jobs:
         id: pack
         run: node scripts/pack.mjs --github-output
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.pack.outputs.name }}-${{ github.run_number }}
           path: ${{ steps.pack.outputs.zip }}
