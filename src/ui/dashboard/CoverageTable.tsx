@@ -33,20 +33,10 @@ type Props = {
    * project, hàng member của project đó bên dưới, và tfoot vẫn là tổng của MỌI
    * project (lấy từ `data`).
    *
-   * Có `groups` thì cột capacity tự tắt, không cần caller nhớ: hàng member ở
-   * đây chỉ mang giờ của MỘT project, mà capacity của member là của cả ngày làm
-   * việc — xem core/coverage-by-project.
+   * Sau các nhóm project là nhóm "Tổng theo member": mỗi member một hàng, giờ
+   * của MỌI project, và đây là chỗ duy nhất có capacity — xem `memberRow`.
    */
   groups?: ProjectCoverage[]
-  /**
-   * Cột cuối là thanh tiến độ so với capacity, hay chỉ là tổng giờ.
-   *
-   * `false` cho bảng của MỘT project: capacity không chia được theo project
-   * (`hoursPerDay` là 8h/ngày cho cả ngày làm việc, không phải 8h cho mỗi
-   * project), nên một thanh tiến độ ở đó chỉ có thể đo vào một mẫu số bịa ra.
-   * Xem core/coverage-by-project.
-   */
-  showCapacity?: boolean
 }
 
 const DAY_COL_WIDTH = 58
@@ -260,14 +250,18 @@ function memberIssueRows(
 }
 
 /**
- * Hàng header của một NHÓM project ở tầng ngoài cùng — khác `ProjectHeaderRow`
- * (tầng project BÊN TRONG phần mở rộng của một member, có thụt lề). Cái này
- * không thụt và dùng nền của tfoot, để đọc ra là một dải phân cách chứ không
- * phải một hàng dữ liệu ngang hàng với member.
+ * Dải phân cách một NHÓM ở tầng ngoài cùng — khác `ProjectHeaderRow` (tầng
+ * project BÊN TRONG phần mở rộng của một member, có thụt lề). Cái này không thụt
+ * và dùng nền của tfoot, để đọc ra là dải phân cách chứ không phải một hàng dữ
+ * liệu ngang hàng với member.
+ *
+ * `table` optional: nhóm project mang tổng của project đó, còn nhóm "Tổng theo
+ * member" thì KHÔNG — số của nó trùng y hệt tfoot ngay bên dưới, in hai lần chỉ
+ * làm người đọc phải kiểm tra xem hai dòng có khác nhau không.
  */
-function ProjectGroupRow({ label, table, dates }: {
+function GroupHeaderRow({ label, table, dates }: {
   label: string
-  table: Data
+  table?: Data
   dates: string[]
 }) {
   return (
@@ -292,7 +286,7 @@ function ProjectGroupRow({ label, table, dates }: {
             minWidth: DAY_COL_WIDTH,
           }}
         >
-          {cellLabel(table.totalPerDay[d] ?? 0)}
+          {table === undefined ? '' : cellLabel(table.totalPerDay[d] ?? 0)}
         </td>
       ))}
       <td
@@ -302,22 +296,19 @@ function ProjectGroupRow({ label, table, dates }: {
           width: TOTAL_COL_WIDTH, minWidth: TOTAL_COL_WIDTH,
         }}
       >
-        {hoursLabel(table.grandTotal)}
+        {table === undefined ? '' : hoursLabel(table.grandTotal)}
       </td>
     </tr>
   )
 }
 
 export function CoverageTable({
-  data, meta, daysOff, onCellClick, onToggleDayOff, showCapacity = true, groups,
+  data, meta, daysOff, onCellClick, onToggleDayOff, groups,
 }: Props) {
   // Khoá mở rộng phải mang cả project: cùng một member xuất hiện trong nhiều
   // nhóm, khoá chỉ theo accountId sẽ mở/đóng đồng thời ở mọi nhóm.
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
-  // Gom nhóm thì hàng member chỉ mang giờ của MỘT project — capacity không chia
-  // được theo project, nên tắt ở đây thay vì tin caller nhớ truyền showCapacity.
-  const withCapacity = showCapacity && groups === undefined
 
   // Khoảng ngày có phần chưa xảy ra → nói rõ thanh đang đo tới hôm nay. Khoảng
   // nằm hoàn toàn trong quá khứ thì hai con số bằng nhau, thêm chữ chỉ gây nhiễu.
@@ -336,6 +327,10 @@ export function CoverageTable({
       ? row.member.accountId
       : `${projectKey}#${row.member.accountId}`
     const isOpen = expanded.has(rowKey)
+    // Capacity chỉ có nghĩa khi hàng này phủ TOÀN BỘ dữ liệu đang xem.
+    // `hoursPerDay` là 8h/ngày cho cả ngày làm việc, không phải 8h cho mỗi
+    // project — nên hàng trong một nhóm project chỉ hiện giờ trần.
+    const withCapacity = projectKey === null
     return (
       <Fragment key={rowKey}>
         <tr>
@@ -453,9 +448,7 @@ export function CoverageTable({
               </th>
             ))}
             <th scope="col" style={{ width: TOTAL_COL_WIDTH, minWidth: TOTAL_COL_WIDTH }}>
-              {!withCapacity
-                ? 'Tổng'
-                : cutToToday ? 'Tổng / tới hôm nay' : 'Tổng / capacity'}
+              {cutToToday ? 'Tổng / tới hôm nay' : 'Tổng / capacity'}
             </th>
           </tr>
         </thead>
@@ -464,16 +457,28 @@ export function CoverageTable({
               tập hàng và khoá mở rộng, không đổi cách vẽ một hàng. */}
           {groups === undefined
             ? data.rows.map((row) => memberRow(row, null))
-            : groups.map((g) => (
-                <Fragment key={`g-${g.projectKey}`}>
-                  <ProjectGroupRow
-                    label={projectLabel(g.projectKey)}
-                    table={g.table}
-                    dates={data.dates}
-                  />
-                  {g.table.rows.map((row) => memberRow(row, g.projectKey))}
-                </Fragment>
-              ))}
+            : (
+                <>
+                  {groups.map((g) => (
+                    <Fragment key={`g-${g.projectKey}`}>
+                      <GroupHeaderRow
+                        label={projectLabel(g.projectKey)}
+                        table={g.table}
+                        dates={data.dates}
+                      />
+                      {g.table.rows.map((row) => memberRow(row, g.projectKey))}
+                    </Fragment>
+                  ))}
+                  {/* Nhóm cuối: mỗi member MỘT hàng, giờ của mọi project cộng
+                      lại. Đây là câu hỏi chính của dashboard ("ai thiếu giờ"),
+                      và gom theo project làm nó biến mất — một member trải trên
+                      nhiều project thì không nhóm nào một mình trả lời được.
+                      Chỉ nhóm này có capacity, vì chỉ hàng ở đây phủ hết dữ
+                      liệu. Mở rộng vẫn xem được issue, gom theo project. */}
+                  <GroupHeaderRow label="Tổng theo member" dates={data.dates} />
+                  {data.rows.map((row) => memberRow(row, null))}
+                </>
+              )}
         </tbody>
         <tfoot>
           <tr>

@@ -75,7 +75,15 @@ Phần này KHÔNG có test tự động (thuần hiển thị) — chỉ có ty
 - [ ] Dữ liệu chỉ có **một** project → không có dòng header project nào, bảng
       giống hệt bản trước và **có** cột capacity/% + cờ thiếu giờ.
 - [ ] Lọc vào **một** project cụ thể → cũng có capacity trở lại.
-- [ ] Khi gom nhóm: cột cuối là "Tổng" (giờ trần), không có thanh tiến độ.
+- [ ] Khi gom nhóm: hàng trong nhóm project có cột cuối là giờ trần (không thanh
+      tiến độ); hàng trong nhóm **Tổng theo member** thì CÓ thanh tiến độ.
+- [ ] Nhóm **Tổng theo member** nằm ngay trên tfoot, mỗi member đúng MỘT hàng,
+      giờ theo ngày = tổng của mọi project người đó log ngày đó.
+- [ ] Member log 4h CAG + 4h ABC trong một ngày → nhóm tổng hiện **8h** ngày đó,
+      và cờ thiếu giờ tính theo 8h chứ không theo 4h của một project.
+- [ ] Mở rộng một hàng trong nhóm tổng → issue gom theo project (tầng project
+      bên trong), khác với mở rộng trong nhóm project (không có tầng đó).
+- [ ] Dải "Tổng theo member" để TRỐNG các ô số — số của nó trùng tfoot bên dưới.
 - [ ] Dòng header của mỗi project = tổng đúng các hàng member trong nhóm đó.
 - [ ] `Tổng cả team` ở tfoot = tổng của MỌI nhóm, kể cả "Không rõ project".
 - [ ] Một member log ở hai project: mở rộng ở nhóm CAG **không** làm mở luôn ở

@@ -14,8 +14,8 @@
 // số), chia đều cho số project thì ai dồn giờ vào một project sẽ bị báo thiếu ở
 // project kia. Nên `CoverageTable` của mỗi nhóm VẪN mang capacity mà
 // buildCoverage tính (đó là capacity thật của member trong khoảng ngày, không
-// phải của project) — và UI có trách nhiệm không hiển thị nó trong card project.
-// Xem prop `showCapacity` của CoverageTable.
+// phải của project) — và UI chỉ hiển thị nó ở nhóm "Tổng theo member", nơi một
+// hàng phủ hết mọi project.
 import { buildCoverage, type CoverageTable, type Member, type Worklog } from './coverage'
 import { UNKNOWN_PROJECT, type IssueMetaMap } from './issue-hierarchy'
 
