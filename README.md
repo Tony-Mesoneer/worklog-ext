@@ -13,7 +13,6 @@ Jira Cloud là source of truth duy nhất. Không backend.
 Implementation hoàn thành. Extension chạy local, chưa publish lên Chrome Web Store.
 
 - Design: [`docs/superpowers/specs/2026-08-19-worklog-extension-design.md`](docs/superpowers/specs/2026-08-19-worklog-extension-design.md)
-- Spike auth (chạy trong DevTools trên tab Jira): [`spike/auth-probe.js`](spike/auth-probe.js)
 
 ## Cách dùng
 
@@ -96,6 +95,13 @@ npm run build && npm run pack   # → release/worklog-ext-<version>.zip
 ```
 
 `manifest.json` nằm ở gốc zip (đúng dạng Chrome Web Store yêu cầu). `release/` được gitignore.
+
+## Icon
+
+`python3 scripts/generate-icons.py` sinh lại `public/icons/icon{16,32,48,128}.png`
+— nền `rgb(18,18,18)`, chữ trắng SF Pro Heavy, `M.` ở cỡ nhỏ và `Meso.` ở cỡ lớn.
+Cần Pillow và font hệ thống macOS. Mỗi cỡ render riêng chứ không scale từ một ảnh
+lớn xuống, vì chữ ở 16px scale xuống là nhoè.
 
 ## Cập nhật extension
 
