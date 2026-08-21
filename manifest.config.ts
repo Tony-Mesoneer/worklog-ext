@@ -20,12 +20,16 @@ export type Target = 'chrome' | 'firefox'
 const GECKO_ID = 'worklog-ext@tony-mesoneer.github.io'
 
 /**
- * Sàn phiên bản Firefox. 128 là ESR hiện hành — chọn thận trọng vì tôi KHÔNG
- * xác nhận được phiên bản tối thiểu thật cho `optional_host_permissions` (trang
- * MDN không nêu số). Hạ xuống sau khi test trên Firefox thật; đặt một số thấp
- * mà không kiểm thì người dùng cài được rồi mới gặp lỗi.
+ * Sàn phiên bản Firefox — con số này KHÔNG phải lựa chọn, nó bị ép.
+ *
+ * `data_collection_permissions` (AMO bắt buộc với add-on mới) chỉ có từ Firefox
+ * 140; `web-ext lint` fail với KEY_FIREFOX_UNSUPPORTED_BY_MIN_VERSION nếu đặt
+ * thấp hơn. Android cần 142, nhưng extension này là công cụ desktop nên lấy mốc
+ * desktop và không khai `gecko_android`.
+ *
+ * Hạ xuống chỉ khả thi nếu bỏ khai báo data collection, tức không nộp được AMO.
  */
-const FIREFOX_MIN = '128.0'
+const FIREFOX_MIN = '140.0'
 
 export function manifestFor(target: Target) {
   if (target === 'chrome') return base
@@ -49,7 +53,18 @@ export function manifestFor(target: Target) {
     // 'sidePanel' là permission của Chrome; Firefox không biết nó.
     permissions: permissions.filter((p) => p !== 'sidePanel'),
     browser_specific_settings: {
-      gecko: { id: GECKO_ID, strict_min_version: FIREFOX_MIN },
+      gecko: {
+        id: GECKO_ID,
+        strict_min_version: FIREFOX_MIN,
+        // AMO bắt buộc khai báo này cho add-on mới (web-ext lint:
+        // MISSING_DATA_COLLECTION_PERMISSIONS). 'none' là khai báo đúng ở đây và
+        // không phải một chỗ trống cho tiện: extension không có backend, không
+        // analytics, không telemetry — nó chỉ gọi Jira của chính người dùng.
+        // Thêm bất kỳ việc thu dữ liệu nào sau này thì PHẢI sửa dòng này.
+        // `as const` trên phần tử, không trên mảng: crxjs cần mảng MUTABLE
+        // của literal type, `['none'] as const` cho readonly và không hợp kiểu.
+        data_collection_permissions: { required: ['none' as const] },
+      },
     },
   }
 }

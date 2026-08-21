@@ -120,6 +120,26 @@ Phần này KHÔNG có test tự động (thuần hiển thị) — chỉ có ty
       màn hình lỗi cũng tiếng Việt. Nó nằm ngoài LocaleProvider nên đọc locale
       ghi nhớ gần nhất; lần đầu mở app mà sập ngay thì nó tiếng Anh — đúng thiết kế.
 
+### 5e. Firefox
+
+Build và lint sạch (`npm run lint:firefox`: 0 error), **chưa ai chạy thử trên
+Firefox thật**. Load bằng `about:debugging#/runtime/this-firefox` →
+"Load Temporary Add-on" → `dist-firefox/manifest.json`.
+
+- [ ] Sidebar mở được từ menu Sidebars của Firefox.
+- [ ] `Cmd+Shift+L` mở được sidebar. **Đây là chỗ đáng nghi nhất**:
+      `sidebarAction.open()` đòi user gesture, và chưa ai xác nhận handler của
+      `commands` có tính là gesture hay không. Nếu không mở được, đó là lý do.
+- [ ] Options mở được, kết nối Jira thành công bằng **session** (không nhập
+      token). Nếu fail: Total Cookie Protection đang chặn cookie Jira → thử lại
+      bằng API token ở mục 2, và ghi lại kết quả vào README.
+- [ ] Log một worklog, xoá nó, Undo — cả ba đường đều đi qua `ext.*`, nếu shim
+      sai thì `await` trả `undefined` và sẽ vỡ ở đây trước tiên.
+- [ ] Dashboard mở được bằng nút trong sidebar (`tabs.create`).
+- [ ] Badge `↑` hiện khi có bản mới, và banner đưa link zip **-firefox**, không
+      phải zip Chrome.
+- [ ] Đổi ngôn ngữ ở Options → sidebar đang mở đổi theo (`storage.onChanged`).
+
 ## 6. Accessibility
 
 - [ ] Điều hướng toàn bộ side panel và dashboard chỉ bằng bàn phím.

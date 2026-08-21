@@ -105,17 +105,18 @@ lớn xuống, vì chữ ở 16px scale xuống là nhoè.
 
 ## Firefox
 
-Build được, **chưa test trên Firefox thật**. Xem phần "chưa xác nhận" bên dưới
-trước khi tin nó chạy.
+Build và **lint sạch theo luật AMO** (`web-ext lint`: 0 error). Chưa chạy thử
+trên Firefox thật — xem phần "chưa xác nhận" bên dưới.
 
 ```bash
 npm run build:firefox      # → dist-firefox/
+npm run lint:firefox       # web-ext lint, cổng chặn của CI
 npm run pack:firefox       # → release/worklog-ext-<version>-firefox.zip
 ```
 
 Load: `about:debugging#/runtime/this-firefox` → "Load Temporary Add-on" → chọn
-`dist-firefox/manifest.json`. Add-on tạm mất khi đóng Firefox; muốn cài lâu dài
-thì phải sign qua AMO.
+`dist-firefox/manifest.json`. Add-on tạm mất khi đóng Firefox; cài lâu dài cần
+sign qua AMO.
 
 **Khác biệt so với bản Chrome** — một `manifest.json` gốc, biến đổi theo target
 trong [`manifest.config.ts`](manifest.config.ts):
@@ -125,7 +126,7 @@ trong [`manifest.config.ts`](manifest.config.ts):
 | `background.service_worker` | `background.scripts` (Firefox MV3 không có service worker) |
 | `side_panel` + `sidePanel` API | `sidebar_action` + `sidebarAction` API |
 | permission `sidePanel` | bỏ (Firefox không biết key này) |
-| — | `browser_specific_settings.gecko.id` để sign |
+| — | `gecko.id` + `data_collection_permissions: ['none']` |
 | `dist/` | `dist-firefox/` |
 
 `dist/` giữ nguyên cho Chrome có chủ ý: đổi đường dẫn sẽ buộc mọi người đang
@@ -138,18 +139,38 @@ hoặc `sidePanel`. Trên Firefox `chrome.*` tồn tại nhưng là callback-bas
 `await chrome.storage.local.get(k)` trả `undefined` mà không throw — đó là lý do
 không chỗ nào trong `src/` gọi `chrome.*` trực tiếp nữa.
 
-**Chưa xác nhận, sẽ chỉ biết khi chạy trên Firefox thật:**
+Mỗi release có hai zip, và tính năng check-update chọn đúng zip cho nền tảng
+đang chạy. Release cũ (v0.2–v0.5) chỉ có zip Chrome, nên trên Firefox banner sẽ
+đưa link trang release thay vì một file không cài được.
+
+### `strict_min_version` là 140.0, không phải lựa chọn
+
+AMO bắt buộc `data_collection_permissions` với add-on mới, và key đó chỉ có từ
+Firefox 140 (`web-ext lint` fail với `KEY_FIREFOX_UNSUPPORTED_BY_MIN_VERSION`
+nếu đặt thấp hơn). Hạ xuống chỉ khả thi nếu bỏ khai báo đó, tức không nộp được
+AMO. Giá trị khai là `['none']` — extension không có backend, không analytics,
+không telemetry.
+
+### Hai warning của lint là cố ý
+
+- `UNSAFE_VAR_ASSIGNMENT` (×2): `innerHTML` trong **react-dom**, không phải code
+  của repo (`grep -rn innerHTML src/` không có kết quả). Mọi extension React đều
+  có warning này.
+- `KEY_FIREFOX_ANDROID_UNSUPPORTED_BY_MIN_VERSION`: vì **không** khai
+  `gecko_android`. Firefox Android không có sidebar, nên bề mặt chính của
+  extension không tồn tại ở đó — khai một sàn phiên bản Android sẽ là ngụ ý hỗ
+  trợ không có thật.
+
+### Chưa xác nhận — chỉ biết khi chạy trên Firefox thật
 
 - `sidebarAction.open()` đòi user gesture. Handler của `commands`
   (`Cmd+Shift+L`) *nên* tính là gesture, nhưng chưa kiểm.
 - Total Cookie Protection có thể chặn session cookie Jira trong fetch từ
-  background. Nếu vỡ thì rơi về đường API token đã có (Options → mục 2), tức
-  UX Firefox có thể là "bắt buộc nhập token".
-- `strict_min_version` đặt `128.0` (ESR hiện hành) vì không xác nhận được phiên
-  bản tối thiểu thật cho `optional_host_permissions`. Hạ xuống sau khi test —
-  đặt số thấp mà không kiểm thì người dùng cài được rồi mới gặp lỗi.
-- Chưa có bước sign AMO trong CI. Release chỉ ra zip; muốn tự cập nhật thật thì
-  cần `web-ext sign` + `gecko.update_url`.
+  background. Nếu vỡ thì rơi về đường API token (Options → mục 2), tức UX
+  Firefox có thể là "bắt buộc nhập token".
+- Chưa có bước sign AMO trong CI. Release chỉ ra zip; muốn Firefox **tự cập
+  nhật thật** (điều Chrome không làm được với bản unpacked) thì cần
+  `web-ext sign` + `gecko.update_url` trỏ vào một `updates.json`.
 
 ## Cập nhật extension
 

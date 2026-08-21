@@ -41,6 +41,15 @@ jobs:
         env:
           TARGET: firefox
 
+      - name: Kiểm manifest Firefox theo luật AMO
+        # web-ext lint exit 0 khi chỉ có warning, 1 khi có error — nên đây là
+        # cổng chặn ĐÚNG mức: error thì fail, warning vẫn hiện trong log.
+        # Hai warning đã biết và cố ý: UNSAFE_VAR_ASSIGNMENT là innerHTML trong
+        # react-dom (không phải code của repo), và KEY_FIREFOX_ANDROID_… là do
+        # KHÔNG khai gecko_android — Firefox Android không có sidebar nên bề mặt
+        # chính của extension không tồn tại ở đó.
+        run: npm run lint:firefox
+
       - name: Đóng gói zip
         id: pack
         run: |

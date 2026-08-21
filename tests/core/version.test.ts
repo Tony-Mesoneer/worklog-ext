@@ -101,6 +101,56 @@ const payload = {
   ],
 }
 
+describe('parseRelease — chọn zip theo nền tảng', () => {
+  // Từ v0.6.0 mỗi release có HAI zip. Lấy cái đầu tiên sẽ mời người dùng
+  // Firefox tải bản Chrome — bug do chính việc thêm target thứ hai sinh ra.
+  const twoZips = {
+    ...payload,
+    assets: [
+      { name: 'worklog-ext-0.6.0.zip', browser_download_url: 'https://x/chrome.zip' },
+      { name: 'worklog-ext-0.6.0-firefox.zip', browser_download_url: 'https://x/ff.zip' },
+    ],
+  }
+
+  it('Chrome lấy zip KHÔNG có firefox trong tên', () => {
+    expect(parseRelease(twoZips, { firefox: false })?.downloadUrl).toBe('https://x/chrome.zip')
+  })
+
+  it('Firefox lấy zip firefox, kể cả khi nó không đứng đầu', () => {
+    expect(parseRelease(twoZips, { firefox: true })?.downloadUrl).toBe('https://x/ff.zip')
+  })
+
+  it('thứ tự asset đảo lại vẫn chọn đúng', () => {
+    const flipped = { ...twoZips, assets: [...twoZips.assets].reverse() }
+    expect(parseRelease(flipped, { firefox: false })?.downloadUrl).toBe('https://x/chrome.zip')
+    expect(parseRelease(flipped, { firefox: true })?.downloadUrl).toBe('https://x/ff.zip')
+  })
+
+  it('release cũ chỉ có zip Chrome: Firefox KHÔNG nhận link đó', () => {
+    // Đưa file Chrome cho người dùng Firefox tệ hơn là không đưa gì: banner sẽ
+    // rơi về link trang release, nơi họ tự thấy có gì.
+    const chromeOnly = {
+      ...payload,
+      assets: [{ name: 'worklog-ext-0.5.0.zip', browser_download_url: 'https://x/chrome.zip' }],
+    }
+    expect(parseRelease(chromeOnly, { firefox: true })?.downloadUrl).toBeNull()
+    expect(parseRelease(chromeOnly, { firefox: false })?.downloadUrl).toBe('https://x/chrome.zip')
+  })
+
+  it('mặc định (không truyền opts) là Chrome — giữ hành vi cũ', () => {
+    expect(parseRelease(twoZips)?.downloadUrl).toBe('https://x/chrome.zip')
+  })
+
+  it('không phân biệt hoa thường trong tên file', () => {
+    const upper = {
+      ...payload,
+      assets: [{ name: 'Worklog-Ext-0.6.0-FIREFOX.ZIP', browser_download_url: 'https://x/ff.zip' }],
+    }
+    expect(parseRelease(upper, { firefox: true })?.downloadUrl).toBe('https://x/ff.zip')
+    expect(parseRelease(upper, { firefox: false })?.downloadUrl).toBeNull()
+  })
+})
+
 describe('parseRelease', () => {
   it('đọc version từ tag và chọn asset .zip', () => {
     const r = parseRelease(payload)

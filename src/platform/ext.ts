@@ -44,3 +44,14 @@ export const ext: Ext = new Proxy({} as Ext, {
     Reflect.getOwnPropertyDescriptor(resolve(), key)
     ?? { configurable: true, enumerable: true, value: resolve()[key as keyof Ext] },
 })
+
+/**
+ * Nền tảng này là Firefox (theo nghĩa "dùng sidebarAction thay vì sidePanel").
+ *
+ * Phát hiện bằng SỰ CÓ MẶT của API, không sniff user agent: UA sai ngay khi một
+ * bên đổi chuỗi, còn câu hỏi thật ta cần trả lời luôn là "API nào có ở đây".
+ *
+ * Dùng để chọn asset trong release (bản Chrome hay bản Firefox) — xem
+ * core/version pickZip.
+ */
+export const isFirefox = (): boolean => 'sidebarAction' in ext
