@@ -53,7 +53,7 @@ const MIN_H = 20
 const MAX_H = 56
 const MIN_GAP_H = 12
 const MAX_GAP_H = 22
-// Dải giờ nghỉ cần cao hơn dải trống một chút để chữ "nghỉ 12:00–13:00" không
+// Dải giờ nghỉ cần cao hơn dải trống một chút để nhãn "nghỉ trưa" không
 // bị cắt — nó là dải duy nhất luôn có nhãn.
 const MIN_BREAK_H = 16
 

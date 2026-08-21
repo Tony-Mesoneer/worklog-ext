@@ -4,7 +4,10 @@ import {
   buildSlots, nextFreeStart, formatMinutes, type Break, type DayEntry,
 } from '@/core/timeline'
 
-// Giờ làm việc mặc định của feature: 08:30–18:00, nghỉ trưa 12:00–13:00.
+// LUNCH ở đây là hằng số CỦA TEST (12:00–13:00), không phải default của app
+// (đã là 12:00–13:30). Test này kiểm LOGIC cắt đoạn với một khoảng nghỉ cho
+// trước, nên nó không đổi khi default đổi — và không được đọc là tài liệu
+// về default.
 const START = 8 * 60 + 30
 const END = 18 * 60
 const LUNCH: Break[] = [{ startMinutes: 12 * 60, endMinutes: 13 * 60 }]

@@ -136,7 +136,10 @@ Phần này KHÔNG có test tự động (thuần hiển thị) — chỉ có ty
   Config không có nguồn ngày lễ. Thêm một danh sách ngày lễ là việc nhỏ nếu
   team có lịch cố định.
 - **Giờ làm việc và giờ nghỉ trưa không có UI** (tính năng "ẩn" theo yêu cầu).
-  Sửa bằng cách viết trực tiếp vào `chrome.storage.local`.
+  Sửa bằng cách viết trực tiếp vào `storage.local`. Default: 08:30–18:00, nghỉ
+  12:00–13:30. Vì không có UI, mọi lần đổi default đều đi kèm bump
+  `CONFIG_VERSION` để config đang lưu được ghi đè — không bump thì người đang
+  dùng giữ giá trị cũ và không thấy gì thay đổi.
 - **Kết quả ô search issue không có badge trạng thái**: `/issue/picker` chỉ trả
   key và summary. Đánh đổi có chủ ý — picker xếp theo issue bạn vừa xem, thứ
   JQL không làm được.

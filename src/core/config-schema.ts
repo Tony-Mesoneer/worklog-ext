@@ -4,7 +4,13 @@ import { DEFAULT_LOCALE, isLocale, type Locale } from '@/i18n/locale'
 // v1 → v2: workdayStart/workdayEnd/breaks được thêm ở v1 nhưng KHÔNG có UI để
 // sửa, nên bất kỳ giá trị nào đã lưu (nếu có) chỉ có thể là default cũ —
 // migrateConfig ghi đè chúng bằng default mới một lần khi nâng version.
-export const CONFIG_VERSION = 2
+//
+// v2 → v3: giờ nghỉ trưa đổi từ 12:00–13:00 sang 12:00–13:30. Vẫn CHƯA có UI cho
+// `breaks`, nên lập luận trên còn nguyên giá trị: giá trị đang lưu chỉ có thể là
+// default cũ, ghi đè là an toàn. Không bump version thì người đang dùng giữ
+// nguyên 12:00–13:00 và vẫn bị log vào 13:00 — đúng triệu chứng đã báo, và đổi
+// default một mình không sửa được gì cho họ.
+export const CONFIG_VERSION = 3
 
 // `matchSummary` là TÊN sub-task ceremony trong sprint đang mở ("Daily Scrum").
 // Có nó thì issue key được tra tại runtime, nên sprint mới có sub-task mới là
@@ -79,7 +85,7 @@ export const defaultConfig: Config = {
   // chỉ có default ở đây. Không worklog nào được đi qua giờ nghỉ.
   workdayStart: '08:30',
   workdayEnd: '18:00',
-  breaks: [{ start: '12:00', end: '13:00' }],
+  breaks: [{ start: '12:00', end: '13:30' }],
   slotMinutes: 15,
   durationPresets: [15, 30, 60, 240, 360, 480],
   sprintEvents: [],
@@ -123,12 +129,11 @@ export function migrateConfig(raw: unknown): Config {
   const r = isRecord(raw) ? raw : {}
   const d = defaultConfig
 
-  // version < 2: config này sinh ra trước khi workdayStart/workdayEnd/breaks
-  // có nghĩa thật (chưa từng có UI để người dùng tự sửa ba field này), nên
-  // giá trị đang lưu — nếu có — chắc chắn chỉ là default cũ. Ghi đè, KHÔNG
-  // đọc từ `r` cho ba field đó.
+  // version < CONFIG_VERSION: ba field workdayStart/workdayEnd/breaks chưa từng
+  // có UI để người dùng tự sửa, nên giá trị đang lưu — nếu có — chắc chắn chỉ là
+  // default của một bản trước. Ghi đè, KHÔNG đọc từ `r` cho ba field đó.
   const rawVersion = typeof r['version'] === 'number' ? r['version'] : 0
-  const needsWorkdayMigration = rawVersion < 2
+  const needsWorkdayMigration = rawVersion < CONFIG_VERSION
 
   const seenAccountIds = new Set<string>()
   const members: ConfigMember[] = (Array.isArray(r['members']) ? r['members'] : [])
