@@ -30,9 +30,14 @@ GitHub Actions, hai workflow:
 
 | Workflow | Trigger | Việc làm |
 | --- | --- | --- |
-| [`ci.yml`](.github/workflows/ci.yml) | mọi push, mọi PR | check version sync → `tsc --noEmit` → `vitest run` → `vite build` → zip, upload artifact |
+| [`ci.yml`](.github/workflows/ci.yml) | mọi PR (không chạy trên push) | version sync → `tsc --noEmit` → `vitest run` → build Chrome + Firefox → `web-ext lint` → zip, upload artifact |
 | [`auto-version.yml`](.github/workflows/auto-version.yml) | push/merge vào `main` | đọc conventional commits → bump version → commit + tag → gọi `release.yml` |
-| [`release.yml`](.github/workflows/release.yml) | tag `v*`, được gọi từ `auto-version.yml`, hoặc chạy tay | check tag khớp `manifest.json` → typecheck → test → build → GitHub Release kèm `worklog-ext-<version>.zip` |
+| [`release.yml`](.github/workflows/release.yml) | tag `v*`, được gọi từ `auto-version.yml`, hoặc chạy tay | check tag khớp `manifest.json` → typecheck → test → build cả hai target → lint → sign XPI (nếu có secrets) → GitHub Release kèm zip Chrome + zip Firefox |
+
+`ci.yml` **không** bắt event `push`: có cả `push` và `pull_request` thì mỗi lần
+push chạy CI hai lần, và sau khi merge thì `push: main` lặp lại đúng công việc
+mà `release.yml` đã làm. `pull_request` là cái được giữ vì nó build trên merge
+commit — bắt được xung đột nghĩa khi `main` đi tiếp trong lúc PR nằm chờ.
 
 Không cần secret nào — release chỉ ra file zip. Upload lên Chrome Web Store vẫn làm thủ công (kéo file zip từ Release vào Developer Dashboard).
 
