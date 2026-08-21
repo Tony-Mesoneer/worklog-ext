@@ -1,0 +1,630 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Worklog</title>
+<meta name="description" content="Extension log worklog Jira từ side panel Chrome. Start time tự suy ra, dashboard giờ của cả team. Không backend." />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%231a162a'/><text y='72' x='50' font-size='58' font-weight='800' font-family='system-ui' fill='white' text-anchor='middle'>M.</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wght@400;600;800&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" />
+<style>
+/* Trang cam kết MỘT theme tối, có chủ ý: sản phẩm là một panel tối nằm cạnh
+   Jira, và một bản sáng sẽ quảng cáo cho một sản phẩm khác. Vì cam kết một
+   theme nên mọi màu phải khai tường minh — kể cả background của body — để trang
+   không vay nền của host. */
+:root {
+  --ground: #141218;
+  --ground-deep: #100e14;
+  --surface: #1d1a23;
+  --surface-alt: #232030;
+  --line: #2e2a38;
+  --line-strong: #3d3850;
+  --ink: #e8e5ee;
+  --muted: #9b95a8;
+  --accent: #967dd6;
+  --accent-ring: #bca8f0;
+  --accent-soft: rgba(150, 125, 214, 0.16);
+  --accent-softer: rgba(150, 125, 214, 0.07);
+  --warn: #f2a25c;
+  --ok: #6fcf8b;
+  --logo: #1a162a;
+
+  --display: 'Martian Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --body: 'Instrument Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --step--1: clamp(0.78rem, 0.76rem + 0.1vw, 0.83rem);
+  --step-0: clamp(0.95rem, 0.92rem + 0.15vw, 1.03rem);
+  --step-1: clamp(1.15rem, 1.05rem + 0.5vw, 1.4rem);
+  --step-2: clamp(1.5rem, 1.3rem + 1vw, 2.1rem);
+  --step-3: clamp(2rem, 1.5rem + 2.4vw, 3.6rem);
+
+  --rail: 96px;
+  --measure: 62ch;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: var(--step-0);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 {
+  font-family: var(--display);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.08;
+  text-wrap: balance;
+  margin: 0;
+}
+h1 { font-size: var(--step-3); }
+h2 { font-size: var(--step-2); }
+h3 { font-size: var(--step-1); letter-spacing: -0.02em; }
+p { margin: 0; max-width: var(--measure); }
+a { color: var(--accent-ring); }
+
+:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.eyebrow {
+  font-family: var(--display);
+  font-size: var(--step--1);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ---------- Rail: trang dựng như một ngày làm việc ----------
+   Vạch giờ ở lề trái, mỗi section neo vào một mốc. Đây là bề mặt chính của sản
+   phẩm (timeline ngày trong side panel) mang lên làm khung trang, không phải
+   một hoạ tiết vay ở đâu khác. Ẩn dưới 1080px: dưới đó nó thành một cột hẹp
+   chen chỗ của nội dung. */
+.wrap {
+  max-width: 1140px;
+  margin: 0 auto;
+  padding: 0 clamp(20px, 5vw, 56px);
+}
+
+.band { position: relative; padding: clamp(56px, 8vw, 108px) 0; }
+.band + .band { border-top: 1px solid var(--line); }
+
+.band__mark {
+  display: none;
+  position: absolute;
+  left: calc(-1 * var(--rail));
+  top: clamp(56px, 8vw, 108px);
+  width: var(--rail);
+  padding-right: 18px;
+  text-align: right;
+  font-family: var(--display);
+  font-size: var(--step--1);
+  font-weight: 400;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.band__mark::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0.62em;
+  width: 10px;
+  border-top: 1px solid var(--line-strong);
+}
+
+@media (min-width: 1080px) {
+  .wrap { padding-left: calc(var(--rail) + 24px); }
+  .band__mark { display: block; }
+  /* Đường dọc chạy suốt trang, đúng như trục giờ của timeline. */
+  .rail-line {
+    position: absolute;
+    left: calc(50% - 570px + clamp(20px, 5vw, 56px) + var(--rail));
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: linear-gradient(180deg, transparent, var(--line) 4%, var(--line) 96%, transparent);
+    pointer-events: none;
+  }
+}
+
+/* ---------- Hero ---------- */
+.hero { padding-top: clamp(40px, 7vw, 84px); }
+
+.brand { display: flex; align-items: center; gap: 14px; margin-bottom: clamp(36px, 6vw, 64px); }
+.brand__mark {
+  width: 40px; height: 40px; flex: 0 0 auto;
+  border-radius: 10px;
+  background: var(--logo);
+  display: grid; place-items: center;
+  font-family: var(--display); font-weight: 800; font-size: 15px;
+  letter-spacing: -0.04em;
+  color: #fff;
+}
+.brand__name { font-family: var(--display); font-weight: 600; letter-spacing: -0.02em; }
+.brand__ver {
+  margin-left: auto;
+  font-family: var(--display); font-size: var(--step--1); color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.hero__grid {
+  display: grid;
+  gap: clamp(36px, 6vw, 72px);
+  align-items: start;
+}
+@media (min-width: 900px) {
+  .hero__grid { grid-template-columns: minmax(0, 1fr) minmax(0, 400px); }
+}
+
+.hero__lede {
+  margin-top: 22px;
+  font-size: var(--step-1);
+  line-height: 1.45;
+  color: var(--muted);
+}
+.hero__lede strong { color: var(--ink); font-weight: 500; }
+
+.keys {
+  display: inline-flex; gap: 4px; vertical-align: baseline;
+}
+kbd {
+  font-family: var(--display); font-size: 0.78em; font-weight: 600;
+  background: var(--surface-alt);
+  border: 1px solid var(--line-strong);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  padding: 2px 6px;
+  color: var(--ink);
+}
+
+.cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 34px; }
+.btn {
+  font-family: var(--display); font-size: var(--step--1); font-weight: 600;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  padding: 12px 18px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  display: inline-flex; align-items: center; gap: 9px;
+  transition: background .14s ease, border-color .14s ease, transform .14s ease;
+}
+.btn--primary { background: var(--accent); color: #17121f; }
+.btn--primary:hover { background: var(--accent-ring); }
+.btn--ghost { border-color: var(--line-strong); color: var(--ink); }
+.btn--ghost:hover { border-color: var(--accent); background: var(--accent-softer); }
+.btn:active { transform: translateY(1px); }
+.btn small { font-family: var(--body); font-weight: 400; color: currentColor; opacity: .68; }
+
+/* ---------- Mock UI: dựng bằng CSS từ chính token của extension ----------
+   Không phải ảnh chụp. Nó là bản vẽ lại giao diện thật bằng đúng bộ màu và
+   thang khoảng cách của theme.css, nên nó nói đúng sản phẩm trông thế nào. */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px;
+  box-shadow: 0 24px 60px -32px rgba(0, 0, 0, .9);
+}
+.panel__head {
+  display: flex; align-items: baseline; gap: 10px;
+  padding-bottom: 12px; margin-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.panel__title { font-family: var(--display); font-weight: 600; font-size: var(--step--1); }
+.panel__meta {
+  margin-left: auto;
+  font-family: var(--display); font-size: 0.72rem; color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.day { display: grid; gap: 3px; }
+.blk {
+  display: flex; align-items: center; gap: 8px;
+  border-radius: 6px;
+  padding: 0 9px;
+  font-size: 0.8rem;
+  border: 1px solid transparent;
+}
+.blk__key { font-family: var(--display); font-weight: 600; font-size: 0.72rem; }
+.blk__dur {
+  margin-left: auto;
+  font-family: var(--display); font-size: 0.7rem; color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.blk--work { background: var(--accent-soft); border-color: rgba(150, 125, 214, .34); }
+.blk--gap {
+  background: repeating-linear-gradient(135deg, rgba(155,149,168,.10) 0 4px, transparent 4px 8px);
+  border-color: var(--line);
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.blk--break { background: var(--surface-alt); color: var(--muted); font-size: 0.72rem; }
+
+.progress {
+  margin-top: 13px; padding-top: 13px; border-top: 1px solid var(--line);
+  display: flex; align-items: center; gap: 10px;
+  font-family: var(--display); font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+.progress__bar {
+  flex: 1; height: 4px; border-radius: 999px;
+  background: var(--surface-alt); overflow: hidden;
+}
+.progress__fill { display: block; height: 100%; width: 72%; background: var(--accent); }
+
+/* ---------- Nội dung ---------- */
+.lead { margin-top: 18px; color: var(--muted); }
+
+.cards {
+  margin-top: 40px;
+  display: grid; gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+@media (min-width: 700px) { .cards { grid-template-columns: 1fr 1fr; } }
+.card { background: var(--ground); padding: clamp(20px, 3vw, 30px); }
+.card h3 { margin-bottom: 10px; }
+.card p { color: var(--muted); font-size: var(--step--1); line-height: 1.62; }
+.card__tag {
+  font-family: var(--display); font-size: 0.66rem; font-weight: 600;
+  letter-spacing: .1em; text-transform: uppercase;
+  color: var(--accent-ring);
+  display: block; margin-bottom: 12px;
+}
+
+/* Bảng coverage — dựng lại tầng project + tổng theo member của dashboard thật. */
+.tablewrap { margin-top: 36px; overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: var(--step--1); }
+th, td { padding: 8px 12px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+thead th {
+  background: var(--surface-alt);
+  font-family: var(--display); font-weight: 600; font-size: 0.7rem;
+  letter-spacing: .04em; text-transform: uppercase; color: var(--muted);
+}
+tbody td, tbody th { font-variant-numeric: tabular-nums; }
+tbody th { font-weight: 400; }
+.row--group th, .row--group td {
+  background: var(--surface-alt);
+  font-family: var(--display); font-weight: 600; font-size: 0.72rem;
+}
+.row--total th, .row--total td {
+  background: var(--surface);
+  font-family: var(--display); font-weight: 600;
+  border-bottom: none;
+}
+.pill {
+  display: inline-block; padding: 1px 8px; border-radius: 999px;
+  font-family: var(--display); font-size: 0.66rem; font-weight: 600;
+  border: 1px solid;
+}
+.pill--short { color: var(--warn); border-color: rgba(242,162,92,.4); background: rgba(242,162,92,.14); }
+.pill--ok { color: var(--ok); border-color: rgba(111,207,139,.4); background: rgba(111,207,139,.14); }
+.dim { color: var(--muted); }
+
+.facts { margin-top: 36px; display: grid; gap: 26px; }
+@media (min-width: 760px) { .facts { grid-template-columns: repeat(3, 1fr); } }
+.fact__n {
+  font-family: var(--display); font-size: var(--step-2); font-weight: 800;
+  letter-spacing: -0.04em; font-variant-numeric: tabular-nums;
+  color: var(--accent-ring);
+}
+.fact p { margin-top: 6px; color: var(--muted); font-size: var(--step--1); }
+
+.steps { margin-top: 36px; display: grid; gap: 28px; counter-reset: s; }
+@media (min-width: 760px) { .steps { grid-template-columns: 1fr 1fr; } }
+.step { padding-left: 44px; position: relative; }
+.step::before {
+  counter-increment: s;
+  content: counter(s);
+  position: absolute; left: 0; top: -2px;
+  width: 28px; height: 28px; border-radius: 8px;
+  display: grid; place-items: center;
+  background: var(--accent-softer); border: 1px solid var(--line-strong);
+  font-family: var(--display); font-size: 0.72rem; font-weight: 600;
+  color: var(--accent-ring);
+}
+.step h3 { font-size: var(--step-0); font-family: var(--body); font-weight: 600; letter-spacing: 0; }
+.step p { margin-top: 5px; color: var(--muted); font-size: var(--step--1); }
+.step code, .prose code, td code {
+  font-family: var(--display); font-size: 0.82em;
+  background: var(--surface-alt); border: 1px solid var(--line);
+  border-radius: 5px; padding: 1px 5px;
+}
+
+.note {
+  margin-top: 30px;
+  border-left: 2px solid var(--warn);
+  background: rgba(242, 162, 92, .07);
+  padding: 16px 18px;
+  border-radius: 0 8px 8px 0;
+}
+.note p { color: var(--ink); font-size: var(--step--1); }
+.note strong { color: var(--warn); }
+
+.prose { display: grid; gap: 16px; margin-top: 18px; }
+.prose p { color: var(--muted); }
+.prose p strong { color: var(--ink); font-weight: 600; }
+
+footer {
+  border-top: 1px solid var(--line);
+  background: var(--ground-deep);
+  padding: 44px 0;
+  color: var(--muted);
+  font-size: var(--step--1);
+}
+.footer__row { display: flex; flex-wrap: wrap; gap: 18px 28px; align-items: baseline; }
+.footer__row a { color: var(--muted); text-decoration: none; border-bottom: 1px solid var(--line-strong); }
+.footer__row a:hover { color: var(--ink); border-color: var(--accent); }
+.footer__note { margin-top: 20px; max-width: var(--measure); }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+</style>
+</head>
+<body>
+
+<div class="rail-line" aria-hidden="true"></div>
+
+<div class="wrap">
+
+  <header class="band hero" style="border-top: none;">
+    <div class="brand">
+      <span class="brand__mark" aria-hidden="true">M.</span>
+      <span class="brand__name">Worklog</span>
+      <span class="brand__ver">v0.5.0</span>
+    </div>
+
+    <div class="hero__grid">
+      <div>
+        <h1>Log giờ Jira mà không rời việc đang làm.</h1>
+        <p class="hero__lede">
+          Side panel mở bằng <span class="keys"><kbd>⌘</kbd><kbd>⇧</kbd><kbd>L</kbd></span>,
+          start time <strong>tự suy ra từ những gì bạn đã log hôm nay</strong>,
+          thời lượng chọn từ preset. Ceremony của sprint là một cú bấm.
+          Dashboard cho lead thấy ai đang thiếu giờ.
+        </p>
+        <div class="cta">
+          <a class="btn btn--primary" href="https://github.com/Tony-Mesoneer/worklog-ext/releases/latest">
+            Tải bản mới nhất <small>zip · Chrome</small>
+          </a>
+          <a class="btn btn--ghost" href="https://github.com/Tony-Mesoneer/worklog-ext">
+            Xem mã nguồn
+          </a>
+        </div>
+      </div>
+
+      <div class="panel" role="img" aria-label="Giao diện side panel: timeline một ngày với các khối worklog CAG-3027 1 giờ 30 phút, khoảng trống 30 phút, nghỉ trưa, CAG-2969 2 giờ, và thanh tiến độ 6 giờ trên 8 giờ.">
+        <div class="panel__head">
+          <span class="panel__title">Trong ngày</span>
+          <span class="panel__meta">Thứ Năm, 21/08</span>
+        </div>
+        <div class="day">
+          <div class="blk blk--work" style="height: 46px;">
+            <span class="blk__key">CAG-3027</span>
+            <span class="blk__dur">08:30 · 1h30</span>
+          </div>
+          <div class="blk blk--gap" style="height: 22px;">
+            <span>trống 30m</span>
+          </div>
+          <div class="blk blk--work" style="height: 34px;">
+            <span class="blk__key">CAG-3041</span>
+            <span class="blk__dur">10:30 · 1h</span>
+          </div>
+          <div class="blk blk--break" style="height: 26px;">
+            <span>nghỉ trưa</span>
+          </div>
+          <div class="blk blk--work" style="height: 58px;">
+            <span class="blk__key">CAG-2969</span>
+            <span class="blk__dur">13:00 · 2h</span>
+          </div>
+          <div class="blk blk--work" style="height: 40px;">
+            <span class="blk__key">Daily Scrum</span>
+            <span class="blk__dur">15:00 · 15m</span>
+          </div>
+        </div>
+        <div class="progress">
+          <span>4h45</span>
+          <span class="progress__bar"><span class="progress__fill"></span></span>
+          <span class="dim">còn thiếu 3h15</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <section class="band">
+    <span class="band__mark">08:30</span>
+    <span class="eyebrow">Vấn đề</span>
+    <h2>Không ai quên làm việc. Người ta quên ghi lại.</h2>
+    <p class="lead">
+      Log worklog trong Jira là mở issue, tìm menu, gõ thời lượng, chọn ngày, chọn
+      giờ bắt đầu, lưu. Sáu bước cho mười lăm phút họp. Nên cuối sprint người ta
+      ngồi dựng lại một tuần bằng ký ức — và số giờ đó không còn nói lên điều gì.
+    </p>
+
+    <div class="facts">
+      <div class="fact">
+        <div class="fact__n">15&thinsp;phút</div>
+        <p>Đơn vị nhập nhỏ nhất. Không có ô "giờ bắt đầu" phải tự tính — nó suy ra từ khoảng trống kế tiếp trong ngày.</p>
+      </div>
+      <div class="fact">
+        <div class="fact__n">1 cú bấm</div>
+        <p>Ceremony của sprint. Sang sprint mới, nút tự trỏ sang sub-task mới của sprint đó.</p>
+      </div>
+      <div class="fact">
+        <div class="fact__n">0 backend</div>
+        <p>Jira Cloud là nguồn sự thật duy nhất. Không server nào của chúng tôi nằm giữa.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="band">
+    <span class="band__mark">10:00</span>
+    <span class="eyebrow">Trong side panel</span>
+    <h2>Nhập ít nhất có thể, và nói trước khi làm gì lạ.</h2>
+
+    <div class="cards">
+      <div class="card">
+        <span class="card__tag">Start time</span>
+        <h3>Tự suy ra, không phải tự nhớ</h3>
+        <p>Panel đọc worklog đã có của ngày rồi đề xuất khoảng trống kế tiếp. Bạn chỉ chọn issue và thời lượng.</p>
+      </div>
+      <div class="card">
+        <span class="card__tag">Giờ nghỉ</span>
+        <h3>Không worklog nào đi qua giờ nghỉ trưa</h3>
+        <p>Yêu cầu 2 tiếng từ 11:30 sẽ thành hai worklog, và panel nói rõ điều đó <em>trước</em> khi bạn bấm Log — kèm đúng các mốc giờ sẽ ghi.</p>
+      </div>
+      <div class="card">
+        <span class="card__tag">Sprint event</span>
+        <h3>Khớp theo tên, không ghim theo key</h3>
+        <p>Cấu hình "Daily Scrum" một lần. Mỗi sprint mới, nút tự tìm sub-task cùng tên trong sprint đang mở — không còn ghi giờ vào sprint cũ.</p>
+      </div>
+      <div class="card">
+        <span class="card__tag">Xoá</span>
+        <h3>Log sai thì sửa tại chỗ</h3>
+        <p>Danh sách worklog của ngày có nút xoá trên từng dòng, và một cửa sổ Undo 8 giây sau khi xoá.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="band">
+    <span class="band__mark">14:00</span>
+    <span class="eyebrow">Dashboard</span>
+    <h2>Ai thiếu giờ, và giờ đó đi vào project nào.</h2>
+    <p class="lead">
+      Bảng member × ngày, gom theo project khi team làm nhiều project cùng lúc,
+      và một nhóm tổng ở cuối vì một người trải trên nhiều project thì không
+      nhóm nào một mình trả lời được câu hỏi "hôm nay đủ giờ chưa".
+    </p>
+
+    <div class="tablewrap">
+      <table>
+        <caption class="eyebrow" style="padding: 12px; text-align: left; caption-side: top;">Coverage · 19–21/08</caption>
+        <thead>
+          <tr>
+            <th scope="col">Member / Issue</th>
+            <th scope="col">T2</th>
+            <th scope="col">T3</th>
+            <th scope="col">T4</th>
+            <th scope="col">Tổng</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="row--group"><th scope="row">CAG</th><td>16h</td><td>12h</td><td>8h</td><td>36h</td></tr>
+          <tr><th scope="row">An</th><td>8h</td><td>4h</td><td class="dim">–</td><td>12h</td></tr>
+          <tr><th scope="row">Bình</th><td>8h</td><td>8h</td><td>8h</td><td>24h</td></tr>
+          <tr class="row--group"><th scope="row">ABC</th><td class="dim">–</td><td>4h</td><td>8h</td><td>12h</td></tr>
+          <tr><th scope="row">An</th><td class="dim">–</td><td>4h</td><td>8h</td><td>12h</td></tr>
+          <tr class="row--group"><th scope="row">Tổng theo member</th><td></td><td></td><td></td><td></td></tr>
+          <tr><th scope="row">An</th><td>8h</td><td>8h</td><td>8h</td><td>24h / 24h <span class="pill pill--ok">đủ</span></td></tr>
+          <tr><th scope="row">Bình</th><td>8h</td><td>8h</td><td class="dim">–</td><td>16h / 24h <span class="pill pill--short">thiếu</span></td></tr>
+          <tr class="row--total"><th scope="row">Tổng cả team</th><td>16h</td><td>16h</td><td>16h</td><td>48h</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="prose">
+      <p>
+        <strong>Cờ "thiếu giờ" có ngưỡng.</strong> Capacity đếm tới hết hôm nay, nên
+        lúc 9h sáng ai cũng đang hụt gần một ngày. Chỉ hụt <em>hơn</em> một ngày làm
+        việc của chính người đó mới bị gắn cờ — không thì mỗi buổi sáng bảng lại đỏ
+        toàn bộ và không ai đọc nó nữa.
+      </p>
+      <p>
+        <strong>Tab Story points vs giờ.</strong> Trung vị h/point của sprint, và issue
+        nào lệch xa trung vị. Sub-task xếp dưới issue cha, vì điểm nằm ở cha còn giờ
+        log ở con.
+      </p>
+    </div>
+  </section>
+
+  <section class="band">
+    <span class="band__mark">17:00</span>
+    <span class="eyebrow">Dữ liệu của bạn</span>
+    <h2>Không có server nào của chúng tôi ở giữa.</h2>
+    <div class="prose">
+      <p>
+        Extension chạy hoàn toàn trong trình duyệt và gọi trực tiếp Jira Cloud của
+        bạn. <strong>Không backend, không analytics, không telemetry.</strong>
+      </p>
+      <p>
+        Mặc định nó dùng session Jira bạn đang đăng nhập. Nếu session không dùng
+        được, bạn nhập API token — token lưu trong <code>storage.local</code> của
+        máy này, <strong>không đồng bộ lên Google account</strong> và không gửi đi
+        đâu ngoài Jira.
+      </p>
+      <p>
+        Cấu hình, danh sách member, cache dữ liệu: tất cả nằm trên máy bạn. Xoá
+        extension là xoá hết.
+      </p>
+    </div>
+  </section>
+
+  <section class="band">
+    <span class="band__mark">18:00</span>
+    <span class="eyebrow">Cài đặt</span>
+    <h2>Chưa lên Chrome Web Store. Cài từ zip.</h2>
+
+    <div class="steps">
+      <div class="step">
+        <h3>Tải và giải nén</h3>
+        <p>Lấy <code>worklog-ext-&lt;version&gt;.zip</code> ở trang Releases rồi giải nén ra một thư mục bạn sẽ giữ lại.</p>
+      </div>
+      <div class="step">
+        <h3>Load unpacked</h3>
+        <p>Mở <code>chrome://extensions</code>, bật Developer mode, chọn "Load unpacked" và trỏ vào thư mục vừa giải nén.</p>
+      </div>
+      <div class="step">
+        <h3>Kết nối Jira</h3>
+        <p>Mở Options, nhập địa chỉ Jira, bấm Kết nối. Thêm project key, chọn board chính, thêm member cần theo dõi.</p>
+      </div>
+      <div class="step">
+        <h3>Bắt đầu log</h3>
+        <p>Nhấn <span class="keys"><kbd>⌘</kbd><kbd>⇧</kbd><kbd>L</kbd></span> để mở side panel. Extension tự kiểm tra bản mới mỗi 6 giờ.</p>
+      </div>
+    </div>
+
+    <div class="note">
+      <p>
+        <strong>Firefox:</strong> build được nhưng <strong>chưa test trên Firefox thật</strong>.
+        Bản Firefox có trong mỗi release dưới tên <code>…-firefox.zip</code>, cài
+        bằng "Load Temporary Add-on". Hai điều chưa xác nhận: <code>sidebarAction.open()</code>
+        đòi user gesture, và Total Cookie Protection có thể chặn session cookie Jira —
+        nếu vỡ thì phải dùng API token.
+      </p>
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  <div class="wrap">
+    <div class="footer__row">
+      <span class="brand__name">Worklog v0.5.0</span>
+      <a href="https://github.com/Tony-Mesoneer/worklog-ext">GitHub</a>
+      <a href="https://github.com/Tony-Mesoneer/worklog-ext/releases">Releases</a>
+      <a href="https://github.com/Tony-Mesoneer/worklog-ext/issues">Báo lỗi</a>
+      <span style="margin-left: auto;">Tiếng Việt · English</span>
+    </div>
+    <p class="footer__note">
+      Giao diện trên trang này được dựng lại bằng CSS từ chính bộ token của
+      extension — không phải ảnh chụp màn hình. Số liệu trong bảng là ví dụ.
+    </p>
+  </div>
+</footer>
+
+</body>
+</html>
