@@ -49,6 +49,10 @@
   --success: #6FCF8B;
   --warning: #F2A25C;
   --danger: #F0757D;
+  /* Cùng giá trị với bannerColors.error trong theme.ts — nền đỏ mờ cho hover của
+   * control phá huỷ. Là token vì giờ có hai chỗ dùng (banner lỗi và nút xoá
+   * trong timeline), không phải hardcode ở chỗ thứ hai. */
+  --danger-soft: rgba(240, 117, 125, 0.16);
 
   /* Thang spacing 4px. Trước đây mọi khoảng cách là 6/8/10 rời rạc nên không có
    * nhịp nào phân biệt "trong một nhóm" với "giữa hai nhóm". */
@@ -548,6 +552,92 @@ button:hover:not(:disabled) {
   background: var(--stripe-non-working);
   color: var(--muted);
   justify-content: flex-end;
+}
+
+/* Khối worklog là một HÀNG có hai control: thân khối (mở/đóng chi tiết) và nút
+   xoá. Nên bản thân .wl-blk không thể là <button> — nút lồng nút là HTML sai và
+   bàn phím đi vào đó không ra được. */
+.wl-blk__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 100%;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wl-blk__main:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: -2px;
+  border-radius: var(--radius-chip);
+}
+
+/* Nút xoá 18px — vừa trong khối 15 phút (cao 20px) mà không phải nong chiều cao,
+   thứ sẽ phá chính mật độ mà timeline này được vẽ ra để có. */
+.wl-blk__del {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.wl-blk__del:hover:not(:disabled) {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.wl-blk__del:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: 1px;
+}
+
+.wl-blk__del:disabled {
+  opacity: .4;
+  cursor: default;
+}
+
+/* Dải chi tiết: nằm NGAY DƯỚI khối đang chọn, thụt vào để đọc ra là thuộc về
+   khối đó chứ không phải một hàng dữ liệu ngang hàng. */
+.wl-blk-detail {
+  display: grid;
+  gap: 2px;
+  margin-left: var(--space-3);
+  padding: var(--space-2);
+  border-left: 2px solid var(--accent);
+  background: var(--accent-softer);
+  border-radius: 0 var(--radius-chip) var(--radius-chip) 0;
+  font-size: var(--text-sm);
+  color: var(--muted);
+  min-width: 0;
+}
+
+.wl-blk-detail__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.wl-blk-detail__note {
+  color: var(--text);
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .wl-blk--sel {

@@ -96,7 +96,12 @@ Phần này KHÔNG có test tự động (thuần hiển thị) — chỉ có ty
 
 ### 5c. Xoá worklog (side panel)
 
-- [ ] Card "Trong ngày" có danh sách worklog kèm nút Xoá trên từng dòng.
+- [ ] Nút ✕ nằm TRONG khối trên timeline, và bấm được cả ở khối 15 phút (khối
+      thấp nhất, 20px) — không bị cắt, không đè lên thời lượng.
+- [ ] Bấm thân khối → bạt ra dải chi tiết ngay dưới nó: khoảng giờ, thời lượng,
+      status badge, summary, task cha, và comment (hoặc "Không có ghi chú").
+- [ ] Mở khối khác → khối trước tự đóng (mỗi lúc chỉ một dải mở).
+- [ ] Tab tới được cả thân khối và nút ✕; Enter/Space trên thân khối mở/đóng.
 - [ ] Xoá → banner "Đã xoá … — Undo", và worklog biến khỏi timeline.
 - [ ] Bấm Undo → worklog quay lại (id MỚI, không phải id cũ).
 - [ ] Xoá một worklog **cắt qua giờ nghỉ** rồi Undo → quay lại thành **hai**
