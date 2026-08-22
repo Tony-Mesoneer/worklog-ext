@@ -1,8 +1,21 @@
 name: CI
 
+# CHỈ `pull_request`, không có `push`. Trước đây có cả hai và mọi lần push đều
+# chạy CI HAI LẦN: event `push` và event `pull_request` sinh ra hai run, và
+# concurrency group không huỷ nhau được vì github.ref khác nhau
+# (`refs/heads/feat/x` so với `refs/pull/1/merge`).
+#
+# Bỏ `push` chứ không bỏ `pull_request` vì `pull_request` là cái kiểm CÓ GIÁ TRỊ
+# HƠN: nó build trên merge commit (main + branch), nên bắt được xung đột nghĩa
+# khi main đã đi tiếp trong lúc PR nằm chờ. Build riêng branch thì không thấy.
+#
+# main KHÔNG cần CI riêng: mọi commit tới main đều qua PR (đã kiểm ở trên), và
+# release.yml tự chạy lại typecheck/test/build/lint trước khi publish. Giữ
+# `push: main` chỉ là chạy lại y nguyên công việc đó lần thứ hai.
+#
+# Đánh đổi: push một branch mà CHƯA mở PR thì không có CI. Mở PR, hoặc chạy tay
+# bằng workflow_dispatch.
 on:
-  push:
-    branches: ['**']
   pull_request:
   workflow_dispatch:
 

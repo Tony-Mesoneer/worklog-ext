@@ -74,6 +74,44 @@ jobs:
           path: release/*.zip
           if-no-files-found: error
 
+      # Sign qua AMO để bản Firefox cài được LÂU DÀI: không sign thì chỉ load
+      # được dạng "Temporary Add-on", mất khi đóng browser.
+      #
+      # Job tự bỏ qua khi chưa có secrets, và KHÔNG fail: người chưa cấu hình AMO
+      # vẫn phải release được bản Chrome. `continue-on-error` cho chính bước sign
+      # vì AMO thỉnh thoảng chậm hoặc từ chối vì lý do ngoài repo — một release bị
+      # chặn hoàn toàn vì AMO là đánh đổi tệ hơn một release thiếu XPI.
+      - name: Có credential AMO?
+        id: amo
+        run: |
+          if [ -n "${{ secrets.AMO_JWT_ISSUER }}" ] && [ -n "${{ secrets.AMO_JWT_SECRET }}" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "Chưa có AMO_JWT_ISSUER/AMO_JWT_SECRET — bỏ qua bước sign." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Sign XPI qua AMO
+        if: steps.amo.outputs.ready == 'true'
+        continue-on-error: true
+        run: |
+          npx web-ext sign \
+            --source-dir dist-firefox \
+            --artifacts-dir release \
+            --channel unlisted \
+            --api-key "${{ secrets.AMO_JWT_ISSUER }}" \
+            --api-secret "${{ secrets.AMO_JWT_SECRET }}"
+        env:
+          NO_UPDATE_NOTIFIER: 1
+
+      - name: Liệt kê file sẽ đính vào release
+        id: files
+        run: |
+          ls -la release/
+          # XPI chỉ có mặt khi bước sign chạy và thành công. Dùng glob trong
+          # `files` của action nên không cần điều kiện gì thêm.
+          echo "count=$(ls release/ | wc -l | tr -d ' ')" >> "$GITHUB_OUTPUT"
+
       - name: GitHub Release
         uses: softprops/action-gh-release@v3
         with:
@@ -82,6 +120,11 @@ jobs:
           generate_release_notes: true
           # Thứ tự có ý nghĩa: pickZip trong core/version lấy asset .zip ĐẦU TIÊN
           # có url, nên zip Chrome phải đứng trước — số đông dùng Chrome.
+          # Thứ tự có ý nghĩa cho ZIP: pickZip trong core/version chọn asset theo
+          # nền tảng, nhưng zip Chrome vẫn đứng trước vì số đông dùng Chrome.
+          # `.xpi` không phải zip nên không ảnh hưởng phép chọn đó; dòng cuối
+          # dùng glob vì XPI chỉ có khi bước sign chạy được.
           files: |
             ${{ steps.pack.outputs.zip }}
             release/worklog-ext-${{ steps.pack.outputs.version }}-firefox.zip
+            release/*.xpi

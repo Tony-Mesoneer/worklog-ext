@@ -227,7 +227,7 @@ export const vi: Messages = {
     cardLog: 'Ghi giờ',
     openDashboard: 'Mở dashboard team →',
 
-    listAria: 'Worklog đã ghi trong ngày',
+    noNote: 'Không có ghi chú',
     deleteAria: (duration: string, issueKey: string, time: string): string =>
       `Xoá worklog ${duration} trên ${issueKey} lúc ${time}`,
     deleteTitle: 'Xoá worklog này',

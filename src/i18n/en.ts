@@ -244,7 +244,7 @@ export const en = {
     cardLog: 'Log time',
     openDashboard: 'Open team dashboard →',
 
-    listAria: 'Worklogs recorded today',
+    noNote: 'No note',
     deleteAria: (duration: string, issueKey: string, time: string): string =>
       `Delete the ${duration} worklog on ${issueKey} at ${time}`,
     deleteTitle: 'Delete this worklog',

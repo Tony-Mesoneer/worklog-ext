@@ -25,7 +25,6 @@ import { GearIcon } from '@/ui/shared/icons'
 import { colors, fontSize, space } from '@/ui/shared/theme'
 import { DatePopover } from './DatePopover'
 import { DayBlocks } from './DayBlocks'
-import { DayWorklogList } from './DayWorklogList'
 import { EventButtons } from './EventButtons'
 import { IssuePicker } from './IssuePicker'
 import { LogForm } from './LogForm'
@@ -427,24 +426,19 @@ export function SidePanel() {
       {/* NHÓM 2 — ngày đã trôi qua thế nào. */}
       <Card title={t.sidepanel.cardDay}>
         <div style={{ opacity: loadingDay ? 0.55 : 1, transition: 'opacity .12s ease' }}>
+          {/* Timeline vừa để ĐỌC vừa để SỬA: nút xoá nằm trong chính khối, và
+              bấm khối bạt ra chi tiết. Một danh sách riêng bên dưới lặp lại
+              cùng dữ liệu hai lần trong một panel hẹp. */}
           <DayBlocks
-            entries={entries}
+            worklogs={worklogs}
             workdayStartMinutes={parseHhMm(config.workdayStart)}
             dayEndMinutes={dayEndMinutes}
             breaks={breaks}
             selection={segments}
             meta={issueMeta}
+            busy={busy}
+            onDelete={(w) => void remove(w)}
           />
-          {/* Timeline để ĐỌC, danh sách để SỬA. Khối 15 phút trong timeline dày
-              vài pixel nên không đặt nổi nút xoá vào đó. */}
-          <div style={{ marginTop: space.x2 }}>
-            <DayWorklogList
-              worklogs={worklogs}
-              meta={issueMeta}
-              busy={busy}
-              onDelete={(w) => void remove(w)}
-            />
-          </div>
         </div>
       </Card>
 

@@ -17,33 +17,51 @@
 // tối trống gập lại thành một nút. Không hàng nào cho slot, không mốc giờ nào
 // không mang thêm thông tin.
 //
-// Thuần là cách BIỂU DIỄN — dữ liệu vẫn là `entries` sẵn có, không thêm request
-// nào, core/timeline.ts không đổi.
+// Thuần là cách BIỂU DIỄN — dữ liệu vẫn là worklog của `day/load`, không thêm
+// request nào, core/timeline.ts không đổi.
+//
+// Bổ sung sau khi bỏ danh sách worklog riêng: timeline giờ vừa để ĐỌC vừa để
+// SỬA. Nút xoá nằm trong chính khối (18px, vừa trong khối 20px thấp nhất) và
+// bấm thân khối bạt ra một dải chi tiết. Mật độ được giữ nguyên vì status,
+// summary và comment chỉ xuất hiện khi người dùng mở khối — nhồi chúng vào khối
+// sẽ phá đúng cái mật độ mà bản thiết kế này được vẽ ra để có.
 //
 // Bổ sung sau tính năng giờ nghỉ: giờ nghỉ được vẽ thành một DẢI NỀN mờ, không
 // phải một khối dữ liệu. Không có nó thì một tiếng trống lúc 12:00 đọc thành
 // "mình quên log một tiếng" chứ không phải "đó là giờ nghỉ trưa".
 import { useState } from 'react'
 import { findOverlaps, formatMinutes, type Break, type DayEntry, type Segment } from '@/core/timeline'
+import { Fragment, useId } from 'react'
+import type { Worklog } from '@/core/coverage'
 import { formatDuration } from '@/core/duration'
+import { StatusBadge } from '@/ui/shared/StatusBadge'
 import type { IssueMetaMap } from '@/core/issue-hierarchy'
 import { Button } from '@/ui/shared/Button'
 import { colors, fontSize } from '@/ui/shared/theme'
 import { useT } from '@/ui/shared/LocaleProvider'
 
 type Props = {
-  entries: DayEntry[]
+  /**
+   * Bản ghi ĐẦY ĐỦ của ngày, không phải `DayEntry`. Dải chi tiết cần `comment`
+   * và toàn bộ worklog để xoá, mà DayEntry (kiểu của core/timeline) chỉ mang
+   * đúng những gì phép tính bố cục cần. Component tự dẫn ra entries — một hàm
+   * thuần, rẻ, và không có hai prop phải giữ đồng bộ với nhau.
+   */
+  worklogs: Worklog[]
   workdayStartMinutes: number
   dayEndMinutes: number
   breaks: Break[]
   /** Các đoạn SẼ ghi — nhiều hơn một khi yêu cầu đi qua giờ nghỉ. */
   selection: Segment[]
   /**
-   * Metadata issue của ngày đang xem, đi cạnh worklog từ `day/load`. CHỈ dùng
-   * cho tooltip: khối trong timeline cố tình chỉ hiện issue key, thêm status
-   * vào chính khối sẽ phá mật độ mà bản thiết kế vừa đạt được.
+   * Metadata issue của ngày đang xem, đi cạnh worklog từ `day/load`. Dùng cho
+   * tooltip VÀ cho dải chi tiết: khối vẫn chỉ hiện issue key + thời lượng, còn
+   * status/summary chỉ xuất hiện khi người dùng mở khối ra.
    */
   meta: IssueMetaMap
+  /** Đang có request chạy — khoá nút xoá để không xoá hai lần một worklog. */
+  busy: boolean
+  onDelete: (worklog: Worklog) => void
 }
 
 // px mỗi phút — cố tình nhỏ. Một ngày kín 8h vẫn chỉ ~105px; ba worklog điển
@@ -131,7 +149,18 @@ function buildBlocks(
   return { blocks, tailFrom: Math.min(cursor, dayEnd) }
 }
 
-function BlockRow({ block, meta }: { block: Block; meta: IssueMetaMap }) {
+function BlockRow({ block, meta, worklog, open, busy, detailId, onToggle, onDelete }: {
+  block: Block
+  meta: IssueMetaMap
+  /** Bản ghi của khối này — chỉ có với khối `entry`. */
+  worklog?: Worklog | undefined
+  open?: boolean
+  busy?: boolean
+  /** id của dải chi tiết, để aria-controls trỏ đúng vào nó. */
+  detailId?: string | undefined
+  onToggle?: () => void
+  onDelete?: () => void
+}) {
   const t = useT()
   const h = heightOf(block)
   const dur = formatDuration(block.minutes * 60)
@@ -183,22 +212,117 @@ function BlockRow({ block, meta }: { block: Block; meta: IssueMetaMap }) {
     m?.parentKey ? `↳ ${m.parentKey} ${m.parentSummary ?? ''}`.trim() : null,
   ].filter((x) => x !== null).join(' · ')
 
-  return (
-    <div className={cls} style={{ height: h }} title={title}>
+  const inner = (
+    <>
       <span className="wl-blk__time" style={{ width: 32 }}>{formatMinutes(block.start)}</span>
       <span className="wl-blk__key" style={{ flex: 1 }}>
         {block.kind === 'entry' ? block.issueKey : t.sidepanel.willLogHere}
       </span>
       <span className="wl-blk__dur">{dur}</span>
+    </>
+  )
+
+  // Khối `sel` là bản xem trước của việc SẼ ghi — chưa tồn tại nên không có gì
+  // để mở ra và không có gì để xoá.
+  if (block.kind !== 'entry' || !worklog) {
+    return <div className={cls} style={{ height: h }} title={title}>{inner}</div>
+  }
+
+  return (
+    <div className={cls} style={{ height: h }}>
+      {/* Thân khối và nút xoá là HAI control cạnh nhau, không lồng nhau: nút
+          lồng nút là HTML sai và bàn phím vào đó không ra được. */}
+      <button
+        type="button"
+        className="wl-blk__main"
+        onClick={onToggle}
+        aria-expanded={open === true}
+        {...(detailId === undefined ? {} : { 'aria-controls': detailId })}
+        title={title}
+      >
+        {inner}
+      </button>
+      <button
+        type="button"
+        className="wl-blk__del"
+        onClick={onDelete}
+        disabled={busy === true}
+        // Nhãn phải nói xoá CÁI NÀO: một timeline toàn dấu ✕ giống nhau là vô
+        // dụng với screen reader.
+        aria-label={t.sidepanel.deleteAria(
+          dur, worklog.issueKey, formatMinutes(block.start),
+        )}
+        title={t.sidepanel.deleteTitle}
+      >
+        ✕
+      </button>
+    </div>
+  )
+}
+
+/**
+ * Chi tiết của khối đang mở. Nằm ngay dưới khối đó, thụt vào — nó thuộc về khối
+ * chứ không phải một hàng ngang hàng.
+ *
+ * Đây là chỗ duy nhất status/summary/comment xuất hiện trong timeline: nhồi
+ * chúng vào chính khối sẽ phá mật độ (khối 15 phút chỉ cao 20px), mà mật độ là
+ * lý do timeline này thay thế bản danh sách 44 hàng trước đó.
+ */
+function BlockDetail({ id, worklog, meta }: {
+  id: string
+  worklog: Worklog
+  meta: IssueMetaMap
+}) {
+  const t = useT()
+  const m = meta[worklog.issueKey]
+  const end = worklog.startMinutes + Math.round(worklog.timeSpentSeconds / 60)
+
+  return (
+    <div className="wl-blk-detail" id={id}>
+      <div className="wl-blk-detail__row">
+        <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+          {formatMinutes(worklog.startMinutes)}–{formatMinutes(end)}
+        </span>
+        <span>·</span>
+        <span>{formatDuration(worklog.timeSpentSeconds)}</span>
+        {m && m.statusName !== '' && (
+          <StatusBadge name={m.statusName} category={m.statusCategory} />
+        )}
+      </div>
+      {worklog.issueSummary !== '' && (
+        <div className="wl-blk-detail__note">{worklog.issueSummary}</div>
+      )}
+      {m?.parentKey && (
+        <div>{t.sidepanel.parentOf(m.parentKey, m.parentSummary ?? '')}</div>
+      )}
+      <div className={worklog.comment === '' ? undefined : 'wl-blk-detail__note'}>
+        {worklog.comment === '' ? t.sidepanel.noNote : worklog.comment}
+      </div>
     </div>
   )
 }
 
 export function DayBlocks({
-  entries, workdayStartMinutes, dayEndMinutes, breaks, selection, meta,
+  worklogs, workdayStartMinutes, dayEndMinutes, breaks, selection, meta,
+  busy, onDelete,
 }: Props) {
   const t = useT()
   const [showTail, setShowTail] = useState(false)
+  // MỘT khối mở tại một thời điểm: panel hẹp, mở nhiều dải cùng lúc là đẩy phần
+  // còn lại của ngày ra ngoài vùng nhìn.
+  const [openId, setOpenId] = useState<string | null>(null)
+  // Prefix ổn định cho id của dải chi tiết: nhiều panel trên một trang (side
+  // panel + dashboard cùng mở) không được sinh id trùng nhau.
+  const idPrefix = useId()
+
+  const byId = new Map(worklogs.map((w) => [w.id, w]))
+  const entries: DayEntry[] = worklogs.map((w) => ({
+    id: w.id,
+    issueKey: w.issueKey,
+    startMinutes: w.startMinutes,
+    durationMinutes: Math.round(w.timeSpentSeconds / 60),
+  }))
+
   const { blocks, tailFrom } = buildBlocks(
     entries, workdayStartMinutes, dayEndMinutes, breaks, selection,
   )
@@ -212,9 +336,27 @@ export function DayBlocks({
         </p>
       )}
 
-      {blocks.map((b, i) => (
-        <BlockRow key={`${b.kind}-${b.start}-${i}`} block={b} meta={meta} />
-      ))}
+      {blocks.map((b, i) => {
+        const w = b.kind === 'entry' ? byId.get(b.id) : undefined
+        const open = w !== undefined && openId === w.id
+        return (
+          <Fragment key={`${b.kind}-${b.start}-${i}`}>
+            <BlockRow
+              block={b}
+              meta={meta}
+              worklog={w}
+              open={open}
+              busy={busy}
+              detailId={w === undefined ? undefined : `${idPrefix}-${w.id}`}
+              onToggle={() => setOpenId(open ? null : (w?.id ?? null))}
+              onDelete={() => { if (w) onDelete(w) }}
+            />
+            {open && w && (
+              <BlockDetail id={`${idPrefix}-${w.id}`} worklog={w} meta={meta} />
+            )}
+          </Fragment>
+        )
+      })}
 
       {tailMinutes > 0 && (
         showTail ? (

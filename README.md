@@ -30,9 +30,14 @@ GitHub Actions, hai workflow:
 
 | Workflow | Trigger | Việc làm |
 | --- | --- | --- |
-| [`ci.yml`](.github/workflows/ci.yml) | mọi push, mọi PR | check version sync → `tsc --noEmit` → `vitest run` → `vite build` → zip, upload artifact |
+| [`ci.yml`](.github/workflows/ci.yml) | mọi PR (không chạy trên push) | version sync → `tsc --noEmit` → `vitest run` → build Chrome + Firefox → `web-ext lint` → zip, upload artifact |
 | [`auto-version.yml`](.github/workflows/auto-version.yml) | push/merge vào `main` | đọc conventional commits → bump version → commit + tag → gọi `release.yml` |
-| [`release.yml`](.github/workflows/release.yml) | tag `v*`, được gọi từ `auto-version.yml`, hoặc chạy tay | check tag khớp `manifest.json` → typecheck → test → build → GitHub Release kèm `worklog-ext-<version>.zip` |
+| [`release.yml`](.github/workflows/release.yml) | tag `v*`, được gọi từ `auto-version.yml`, hoặc chạy tay | check tag khớp `manifest.json` → typecheck → test → build cả hai target → lint → sign XPI (nếu có secrets) → GitHub Release kèm zip Chrome + zip Firefox |
+
+`ci.yml` **không** bắt event `push`: có cả `push` và `pull_request` thì mỗi lần
+push chạy CI hai lần, và sau khi merge thì `push: main` lặp lại đúng công việc
+mà `release.yml` đã làm. `pull_request` là cái được giữ vì nó build trên merge
+commit — bắt được xung đột nghĩa khi `main` đi tiếp trong lúc PR nằm chờ.
 
 Không cần secret nào — release chỉ ra file zip. Upload lên Chrome Web Store vẫn làm thủ công (kéo file zip từ Release vào Developer Dashboard).
 
@@ -168,9 +173,32 @@ không telemetry.
 - Total Cookie Protection có thể chặn session cookie Jira trong fetch từ
   background. Nếu vỡ thì rơi về đường API token (Options → mục 2), tức UX
   Firefox có thể là "bắt buộc nhập token".
-- Chưa có bước sign AMO trong CI. Release chỉ ra zip; muốn Firefox **tự cập
-  nhật thật** (điều Chrome không làm được với bản unpacked) thì cần
-  `web-ext sign` + `gecko.update_url` trỏ vào một `updates.json`.
+- Bước sign AMO đã có trong CI nhưng **chưa từng chạy** — cần secrets, xem dưới.
+
+### Sign XPI qua AMO
+
+Không sign thì Firefox chỉ load được dạng "Temporary Add-on", mất khi đóng
+browser. Release đã có bước sign, nó **tự bỏ qua** khi chưa có credential — nên
+bản Chrome vẫn release được bình thường.
+
+Bật một lần:
+
+1. Vào [addons.mozilla.org/developers/addon/api/key](https://addons.mozilla.org/en-US/developers/addon/api/key/)
+   lấy JWT issuer + secret.
+2. Đặt hai secret của repo: `AMO_JWT_ISSUER`, `AMO_JWT_SECRET`.
+
+Release sau đó sẽ đính thêm một `.xpi` đã sign. Kênh là `unlisted` (tự phát
+hành, không đăng lên AMO công khai) — đúng cho một công cụ nội bộ.
+
+Hai điều đáng biết trước:
+
+- **AMO không nhận lại cùng một version.** Chạy lại release cho một tag đã sign
+  sẽ fail ở bước đó. Bước sign có `continue-on-error` chính vì vậy: một release
+  bị chặn hoàn toàn vì AMO là đánh đổi tệ hơn một release thiếu XPI.
+- **`.xpi` không ảnh hưởng tính năng check-update.** Nó chọn asset `.zip` theo
+  nền tảng; `.xpi` không phải zip nên nằm ngoài phép chọn đó. Muốn Firefox tự
+  cập nhật thật thì còn cần `gecko.update_url` trỏ vào một `updates.json` —
+  chưa làm.
 
 ## Cập nhật extension
 
