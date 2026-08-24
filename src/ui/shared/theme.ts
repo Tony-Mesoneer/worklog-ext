@@ -49,6 +49,20 @@ export const fontSize = {
   xxl: 22,
 } as const
 
+// Thang tầng xếp lớp — khớp với --z-* trong theme.css.
+//
+// Vì sao cần khai chung: CellDetail là `position: fixed` mà KHÔNG có z-index,
+// nên header sticky của bảng (z-index 1) vẽ trùm lên nó. Element có z-index
+// dương luôn lên trên element `z-index: auto`, bất kể thứ tự DOM — nên "render
+// sau" không cứu được. Có thang thì so sánh được, không phải đoán.
+export const zLayer = {
+  sticky: 1,
+  stickyCorner: 2,
+  popover: 20,
+  /** Panel trượt (CellDetail) — phải trên MỌI thứ trong nội dung trang. */
+  panel: 30,
+} as const
+
 export const radii = {
   panel: 12, // card, bảng, banner
   input: 8, // input, button

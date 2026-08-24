@@ -70,6 +70,9 @@ describe('bộ ngôn ngữ', () => {
       'dashboard.dayOffShort', 'dashboard.colIssue', 'dashboard.colAssignee',
       'dashboard.colStatus', 'dashboard.colPoints',
       'sidepanel.logButton', 'sidepanel.listJoin', 'sidepanel.eventDisabled',
+      // "Log" là động từ UI tiếng Việt đã dùng sẵn (nút Log ở side panel) —
+      // dịch thành "Ghi" ở đây sẽ lệch với chính nút kia.
+      'dashboard.addSubmit',
     ])
     const enMap = new Map(enEntries)
     for (const [path, value] of viEntries) {

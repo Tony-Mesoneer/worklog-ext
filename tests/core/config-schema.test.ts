@@ -272,3 +272,31 @@ describe('locale', () => {
     }
   })
 })
+
+describe('ghi đè giờ làm việc KHÔNG đi theo CONFIG_VERSION', () => {
+  // Đây là cái bẫy mà việc đưa giờ làm việc vào Options mở ra: nếu điều kiện
+  // migration là `< CONFIG_VERSION` thì lần bump version sau sẽ XOÁ giờ người
+  // dùng tự đặt. Test này chết ngay nếu ai đổi lại thành CONFIG_VERSION.
+  it('config ĐÚNG v3 giữ nguyên giờ đã đặt, không bị ghi đè', () => {
+    const c = migrateConfig({
+      version: 3,
+      workdayStart: '09:15',
+      workdayEnd: '17:45',
+      breaks: [{ start: '12:00', end: '13:00' }],
+    })
+    expect(c.workdayStart).toBe('09:15')
+    expect(c.workdayEnd).toBe('17:45')
+    expect(c.breaks).toEqual([{ start: '12:00', end: '13:00' }])
+  })
+
+  it('config version CAO HƠN v3 cũng giữ nguyên', () => {
+    // Mô phỏng tương lai: CONFIG_VERSION lên 4 vì một lý do không liên quan.
+    const c = migrateConfig({ version: 99, workdayStart: '10:00' })
+    expect(c.workdayStart).toBe('10:00')
+  })
+
+  it('config CŨ HƠN v3 vẫn bị ghi đè — migration lịch sử không đổi', () => {
+    const c = migrateConfig({ version: 2, workdayStart: '09:15' })
+    expect(c.workdayStart).toBe('08:30')
+  })
+})

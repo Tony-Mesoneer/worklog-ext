@@ -33,7 +33,7 @@ export const en = {
   },
 
   language: {
-    title: '7. Language',
+    title: '8. Language',
     hint: 'Applies to the side panel, dashboard and this page. The extension name in Chrome follows your browser language and cannot be changed here.',
     label: 'Language',
     // Tên ngôn ngữ KHÔNG dịch: người đang mắc kẹt trong một ngôn ngữ họ không
@@ -169,8 +169,29 @@ export const en = {
       issueKeyPlaceholder: 'CAG-123',
     },
 
+    hours: {
+      title: '6. Working hours',
+      hint:
+        'The two halves of the workday. A new worklog gets its start time from these, and '
+        + 'no worklog is ever written across the gap between them.',
+      throughLunch:
+        'Working through lunch? Set "Morning ends" and "Afternoon starts" to the same '
+        + 'time — that removes the break entirely and lets one worklog span midday.',
+      morningStart: 'Morning starts',
+      morningEnd: 'Morning ends',
+      afternoonStart: 'Afternoon starts',
+      afternoonEnd: 'Afternoon ends',
+      breakNote: (from: string, to: string): string => `Break: ${from}–${to}.`,
+      noBreakNote: 'No break — worklogs can run straight through midday.',
+      invalidTime: 'Use HH:MM, e.g. 08:30.',
+      morningOrder: 'Morning must end after it starts.',
+      middayOrder: 'Afternoon cannot start before morning ends.',
+      afternoonOrder: 'Afternoon must end after it starts.',
+      save: 'Save hours',
+    },
+
     update: {
-      title: '6. Updates',
+      title: '7. Updates',
       hint:
         'The extension is installed via "Load unpacked", so Chrome cannot update it '
         + 'automatically. This only checks whether the repo has a newer release; download '
@@ -188,6 +209,12 @@ export const en = {
         `Version ${version} is available${published === '' ? '' : ` (${published})`}.`,
       download: 'Download update',
       failed: (reason: string): string => `Could not check: ${reason}`,
+      reload: 'Restart extension',
+      reloadHint:
+        'Already unpacked a new version over the folder you load from? This restarts the '
+        + 'extension so it re-reads those files — no download, and no trip to '
+        + 'chrome://extensions. This page reloads itself, and anything being written to '
+        + 'Jira right now is interrupted.',
     },
   },
 
@@ -365,6 +392,15 @@ export const en = {
     markDayOff: 'Mark as a day off',
     unmarkDayOff: 'Unmark day off',
     noWorklogs: 'No worklogs.',
+    // Panel chi tiết của dashboard chỉ cho sửa giờ CỦA MÌNH: Jira đặt author
+    // của worklog = người đang xác thực, nên không thể ghi hộ ai; và xoá giờ
+    // của người khác cần quyền project admin nên gần như luôn 403.
+    othersReadOnly: 'You can only edit your own hours here.',
+    addHere: 'Log time on this day',
+    addIssuePlaceholder: 'Issue key, e.g. CAG-123',
+    addStartsAt: (time: string): string => `Will start at ${time}`,
+    addSubmit: 'Log',
+    dayFull: 'No free time left on this day.',
 
     loadingPoints: 'Loading…',
     noSprintIssues: 'The current sprint has no issues.',

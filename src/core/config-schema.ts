@@ -10,7 +10,20 @@ import { DEFAULT_LOCALE, isLocale, type Locale } from '@/i18n/locale'
 // default cũ, ghi đè là an toàn. Không bump version thì người đang dùng giữ
 // nguyên 12:00–13:00 và vẫn bị log vào 13:00 — đúng triệu chứng đã báo, và đổi
 // default một mình không sửa được gì cho họ.
+//
+// TỪ v3 TRỞ ĐI KHÔNG CÒN GHI ĐÈ NỮA. Giờ bắt đầu buổi sáng và buổi chiều đã có
+// UI ở Options, nên lập luận "giá trị đang lưu chỉ có thể là default cũ" đã
+// chết: nó có thể là giờ người dùng tự đặt. Điều kiện bên dưới vì vậy ghim ở
+// `< 3`, KHÔNG phải `< CONFIG_VERSION` — để lần bump version sau không xoá cấu
+// hình của người dùng.
 export const CONFIG_VERSION = 3
+
+/**
+ * Version cuối cùng mà việc ghi đè workdayStart/workdayEnd/breaks còn hợp lý.
+ * Tách thành hằng số riêng để nó KHÔNG đi theo CONFIG_VERSION — đó chính là chỗ
+ * dễ sai: bump version cho một lý do khác rồi vô tình xoá giờ làm việc đã đặt.
+ */
+const LAST_WORKDAY_OVERWRITE_VERSION = 3
 
 // `matchSummary` là TÊN sub-task ceremony trong sprint đang mở ("Daily Scrum").
 // Có nó thì issue key được tra tại runtime, nên sprint mới có sub-task mới là
@@ -129,11 +142,12 @@ export function migrateConfig(raw: unknown): Config {
   const r = isRecord(raw) ? raw : {}
   const d = defaultConfig
 
-  // version < CONFIG_VERSION: ba field workdayStart/workdayEnd/breaks chưa từng
-  // có UI để người dùng tự sửa, nên giá trị đang lưu — nếu có — chắc chắn chỉ là
-  // default của một bản trước. Ghi đè, KHÔNG đọc từ `r` cho ba field đó.
+  // Chỉ config CŨ HƠN v3 mới bị ghi đè ba field workdayStart/workdayEnd/breaks:
+  // trước v3 chúng không có UI nên giá trị đang lưu chắc chắn là default của một
+  // bản trước. Từ v3 người dùng đặt được ở Options, nên ghi đè là xoá dữ liệu
+  // của họ — xem LAST_WORKDAY_OVERWRITE_VERSION.
   const rawVersion = typeof r['version'] === 'number' ? r['version'] : 0
-  const needsWorkdayMigration = rawVersion < CONFIG_VERSION
+  const needsWorkdayMigration = rawVersion < LAST_WORKDAY_OVERWRITE_VERSION
 
   const seenAccountIds = new Set<string>()
   const members: ConfigMember[] = (Array.isArray(r['members']) ? r['members'] : [])

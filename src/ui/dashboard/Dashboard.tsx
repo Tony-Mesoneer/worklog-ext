@@ -6,6 +6,7 @@ import type { Config } from '@/core/config-schema'
 import type { Worklog } from '@/core/coverage'
 import type { IssueMetaMap } from '@/core/issue-hierarchy'
 import { buildCoverage, enumerateDates } from '@/core/coverage'
+import { nextFreeStart, normalizeBreaks, parseHhMm } from '@/core/timeline'
 import { buildCoverageByProject } from '@/core/coverage-by-project'
 import { UNKNOWN_PROJECT } from '@/core/issue-hierarchy'
 import { todayInZone, addDays } from '@/core/jiraTime'
@@ -57,6 +58,9 @@ export function Dashboard() {
   // `project` của detail: null = mở từ bảng gộp (mọi project), còn lại là card
   // của đúng project đó — panel phải hiện đúng tập worklog mà ô người dùng vừa
   // bấm đã cộng ra, không phải cả ngày trên mọi project.
+  // Đang có request ghi/xoá chạy — khoá control trong panel chi tiết để không
+  // gửi hai lần cùng một việc.
+  const [busy, setBusy] = useState(false)
   const [detail, setDetail] = useState<
     { accountId: string; date: string; project: string | null } | null
   >(null)
@@ -119,6 +123,40 @@ export function Dashboard() {
     void load(scope, false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scope, load])
+
+  // Sau khi ghi/xoá, PHẢI force refresh: `worklog/delete` có dọn snapshot nhưng
+  // `worklog/add` thì không (nó không có issueSummary để patch — xem
+  // store/snapshot), nên không force thì ô vừa sửa còn số cũ tới hết TTL 5 phút.
+  const afterWrite = async () => {
+    if (scope) await load(scope, true)
+  }
+
+  const removeWorklog = async (worklog: Worklog) => {
+    setBusy(true)
+    try {
+      await send({
+        type: 'worklog/delete', issueKey: worklog.issueKey, worklogId: worklog.id,
+      })
+      await afterWrite()
+    } catch (e) {
+      setError(toUiError(e))
+    } finally { setBusy(false) }
+  }
+
+  const addWorklog = async (
+    date: string, startMinutes: number,
+    issueKey: string, timeSpentSeconds: number, comment: string,
+  ) => {
+    setBusy(true)
+    try {
+      await send({
+        type: 'worklog/add', issueKey, date, startMinutes, timeSpentSeconds, comment,
+      })
+      await afterWrite()
+    } catch (e) {
+      setError(toUiError(e))
+    } finally { setBusy(false) }
+  }
 
   const toggleDayOff = async (accountId: string, date: string) => {
     if (!config) return
@@ -207,6 +245,35 @@ export function Dashboard() {
   })
 
   const detailMember = detail ? config.members.find((m) => m.accountId === detail.accountId) : null
+
+  // Worklog của đúng ô đang mở. Tách ra biến vì cả panel VÀ phép tính giờ bắt
+  // đầu đều cần cùng một tập.
+  const detailWorklogs = detail === null ? [] : (shown ?? []).filter(
+    (w) => w.authorAccountId === detail.accountId
+      && w.date === detail.date
+      && (detail.project === null
+        || (issueMeta[w.issueKey]?.projectKey ?? UNKNOWN_PROJECT) === detail.project),
+  )
+
+  // Giờ bắt đầu cho worklog mới, suy ra ĐÚNG như side panel làm: người dùng
+  // không chọn giờ trong panel này.
+  //
+  // Tính trên TOÀN BỘ worklog của ngày, không phải `detailWorklogs`: khi đang
+  // lọc theo project, giờ đã log ở project khác vẫn là giờ ĐÃ CHIẾM — bỏ qua
+  // chúng sẽ đề xuất một mốc trùng với worklog đang tồn tại.
+  const dayEntries = detail === null ? [] : (worklogs ?? [])
+    .filter((w) => w.authorAccountId === detail.accountId && w.date === detail.date)
+    .map((w) => ({
+      id: w.id, issueKey: w.issueKey, startMinutes: w.startMinutes,
+      durationMinutes: Math.round(w.timeSpentSeconds / 60),
+    }))
+  const dayEndMinutes = parseHhMm(config.workdayEnd)
+  const nextStart = detail === null ? null : nextFreeStart(
+    dayEntries, parseHhMm(config.workdayStart), config.slotMinutes,
+    dayEndMinutes, normalizeBreaks(config.breaks),
+  )
+  // nextFreeStart trả về mốc cuối ngày khi không còn chỗ — coi đó là "kín".
+  const nextStartMinutes = nextStart === null || nextStart >= dayEndMinutes ? null : nextStart
 
   return page(
     <>
@@ -305,12 +372,18 @@ export function Dashboard() {
           date={detail.date}
           dayOff={(config.daysOff[detail.accountId] ?? []).includes(detail.date)}
           onToggleDayOff={() => void toggleDayOff(detail.accountId, detail.date)}
-          worklogs={(shown ?? []).filter(
-            (w) => w.authorAccountId === detail.accountId
-              && w.date === detail.date
-              && (detail.project === null
-                || (issueMeta[w.issueKey]?.projectKey ?? UNKNOWN_PROJECT) === detail.project),
-          )}
+          worklogs={detailWorklogs}
+          // Jira đặt author = người đang xác thực, nên chỉ hàng của mình mới
+          // sửa được. myAccountId rỗng (chưa probe auth lần nào) → không hàng
+          // nào là "của mình", đúng hơn là đoán bừa.
+          isMine={config.myAccountId !== '' && detail.accountId === config.myAccountId}
+          nextStartMinutes={nextStartMinutes}
+          busy={busy}
+          onDelete={(w) => void removeWorklog(w)}
+          onAdd={(issueKey, secs, comment) => {
+            if (nextStartMinutes === null) return
+            void addWorklog(detail.date, nextStartMinutes, issueKey, secs, comment)
+          }}
           onClose={() => setDetail(null)}
         />
       )}

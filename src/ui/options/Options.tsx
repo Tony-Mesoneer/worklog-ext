@@ -13,8 +13,13 @@ import { toUiError } from '@/ui/shared/errors'
 import { colors, fontSize, radii, space } from '@/ui/shared/theme'
 import { useUpdate } from '@/ui/shared/useUpdate'
 import { intlLocale, useLocale, useT } from '@/ui/shared/LocaleProvider'
-import { LOCALES, type Locale } from '@/i18n'
+import { LOCALES, type Locale, type Messages } from '@/i18n'
 import { isRepoSlug } from '@/core/version'
+import { parseHhMm } from '@/core/timeline'
+
+// Cùng biểu thức mà config-schema dùng để hợp lệ hoá giờ — nếu hai chỗ lệch
+// nhau thì UI nhận một giá trị mà migrateConfig sẽ âm thầm thay bằng default.
+const HH_MM = /^([01]?\d|2[0-3]):([0-5]\d)$/
 import { ext } from '@/platform/ext'
 
 // Dòng giải thích dưới tiêu đề section — cùng một kiểu ở cả sáu khối.
@@ -149,6 +154,7 @@ export function Options() {
       <BoardSection config={config} save={save} />
       <MembersSection config={config} save={save} setError={setError} />
       <EventsSection config={config} save={save} />
+      <HoursSection config={config} save={save} />
       <UpdateSection config={config} save={save} />
       <LanguageSection config={config} save={save} />
     </div>
@@ -870,6 +876,21 @@ function UpdateSection({ config, save }: SectionProps) {
           )}
         </div>
 
+        {/* Khởi động lại KHÔNG tải gì — nó chỉ nạp lại file đã có trên đĩa. Vì
+            vậy nó nằm ở đây với câu chữ nói rõ điều đó, chứ không nằm trong
+            banner "có bản mới": bấm ở đó rồi thấy version không đổi sẽ đọc ra
+            như một nút hỏng.
+            runtime.reload() đọc lại file từ đĩa cho extension unpacked và không
+            cần permission nào. */}
+        <div style={{ display: 'grid', gap: space.x2 }}>
+          <Hint>{t.options.update.reloadHint}</Hint>
+          <div>
+            <Button variant="secondary" onClick={() => ext.runtime.reload()}>
+              {t.options.update.reload}
+            </Button>
+          </div>
+        </div>
+
         {error && <Banner kind="error">{error}</Banner>}
 
         {status?.state === 'current' && (
@@ -932,6 +953,144 @@ function LanguageSection({ config, save }: SectionProps) {
             ))}
           </select>
         </div>
+      </div>
+    </Card>
+  )
+}
+
+// Bốn mốc giờ của một ngày làm việc.
+//
+// Chỉ HAI trong bốn là field thật trong config; hai cái còn lại là hai đầu của
+// khoảng nghỉ:
+//
+//   Buổi sáng bắt đầu   → workdayStart
+//   Buổi sáng kết thúc  → breaks[0].start
+//   Buổi chiều bắt đầu  → breaks[0].end
+//   Buổi chiều kết thúc → workdayEnd
+//
+// LÀM XUYÊN TRƯA: đặt "sáng kết thúc" bằng "chiều bắt đầu" thì khoảng nghỉ có độ
+// dài 0. migrateConfig lọc bỏ mọi khoảng có `end <= start`, và nó CỐ Ý giữ
+// nguyên mảng rỗng như một lựa chọn hợp lệ ("ngày làm việc không có giờ nghỉ"),
+// nên kết quả là không còn giờ nghỉ nào và một worklog ghi được xuyên giữa ngày.
+// Không cần thêm cờ nào cho trường hợp này.
+//
+// MỘT nút Lưu cho cả card, KHÔNG lưu-khi-blur từng ô: bốn giá trị ràng buộc chéo
+// nhau (sáng < sáng-kết, sáng-kết ≤ chiều, chiều < chiều-kết). Lưu từng ô thì
+// muốn đổi từ 12:00–13:30 sang 13:00–14:00 sẽ bị kẹt — ô nào sửa trước cũng tạo
+// ra một trạng thái vô hiệu và bị chặn. Gom lại một lần lưu thì không có thứ tự
+// nào bị kẹt.
+//
+// Chỉ ghi `breaks[0]`; khoảng nghỉ thứ hai (chỉ tạo được bằng cách sửa storage
+// tay) được giữ nguyên.
+type HoursDraft = { morningStart: string; morningEnd: string; afternoonStart: string; afternoonEnd: string }
+
+const draftFrom = (config: Config): HoursDraft => ({
+  morningStart: config.workdayStart,
+  // Không có giờ nghỉ (đang làm xuyên trưa) → hai ô giữa bằng nhau, và bằng giờ
+  // tan làm là vô nghĩa. Lấy giờ tan làm cho cả hai để chúng bằng nhau mà vẫn
+  // đọc ra được, và người dùng sửa lại nếu muốn có giờ nghỉ.
+  morningEnd: config.breaks[0]?.start ?? config.workdayEnd,
+  afternoonStart: config.breaks[0]?.end ?? config.workdayEnd,
+  afternoonEnd: config.workdayEnd,
+})
+
+/** Lỗi của từng ô + lỗi thứ tự. null = hợp lệ. */
+function validateHours(d: HoursDraft, t: Messages): Partial<Record<keyof HoursDraft, string>> {
+  const bad: Partial<Record<keyof HoursDraft, string>> = {}
+  for (const k of Object.keys(d) as (keyof HoursDraft)[]) {
+    if (!HH_MM.test(d[k])) bad[k] = t.options.hours.invalidTime
+  }
+  if (Object.keys(bad).length > 0) return bad
+
+  const ms = parseHhMm(d.morningStart)
+  const me = parseHhMm(d.morningEnd)
+  const as = parseHhMm(d.afternoonStart)
+  const ae = parseHhMm(d.afternoonEnd)
+
+  if (me <= ms) bad.morningEnd = t.options.hours.morningOrder
+  // `<` chứ không phải `<=`: bằng nhau là hợp lệ, đó chính là làm xuyên trưa.
+  if (as < me) bad.afternoonStart = t.options.hours.middayOrder
+  if (ae <= as) bad.afternoonEnd = t.options.hours.afternoonOrder
+  return bad
+}
+
+function HoursSection({ config, save }: SectionProps) {
+  const t = useT()
+  const ids: Record<keyof HoursDraft, string> = {
+    morningStart: useId(), morningEnd: useId(),
+    afternoonStart: useId(), afternoonEnd: useId(),
+  }
+
+  const saved = draftFrom(config)
+  const [draft, setDraft] = useState<HoursDraft>(saved)
+
+  // Config đổi từ chỗ khác (tab Options thứ hai) thì draft phải theo, không thì
+  // ô hiện giá trị đã cũ. So bằng chuỗi ghép để không phụ thuộc identity của
+  // object — `config.breaks` là mảng mới sau mỗi lần save.
+  const savedKey = Object.values(saved).join('|')
+  useEffect(() => { setDraft(draftFrom(config)) }, [savedKey])
+
+  const bad = validateHours(draft, t)
+  const valid = Object.keys(bad).length === 0
+  const dirty = Object.values(draft).join('|') !== savedKey
+
+  const commit = () => {
+    if (!valid || !dirty) return
+    const [, ...rest] = config.breaks
+    const noBreak = draft.morningEnd === draft.afternoonStart
+    void save({
+      workdayStart: draft.morningStart,
+      workdayEnd: draft.afternoonEnd,
+      breaks: noBreak
+        ? rest
+        : [{ start: draft.morningEnd, end: draft.afternoonStart }, ...rest],
+    })
+  }
+
+  const field = (key: keyof HoursDraft, label: string) => (
+    <div className="wl-field">
+      <label className="wl-field__label" htmlFor={ids[key]}>{label}</label>
+      <input
+        id={ids[key]}
+        value={draft[key]}
+        style={{ width: 96 }}
+        inputMode="numeric"
+        placeholder="08:30"
+        onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
+        onKeyDown={(e) => { if (e.key === 'Enter') commit() }}
+        aria-invalid={bad[key] !== undefined}
+      />
+      {bad[key] !== undefined && (
+        <p role="alert" style={{ margin: 0, fontSize: fontSize.md, color: colors.danger }}>
+          {bad[key]}
+        </p>
+      )}
+    </div>
+  )
+
+  const hasBreak = config.breaks[0] !== undefined
+
+  return (
+    <Card title={t.options.hours.title}>
+      <div style={{ display: 'grid', gap: space.x3 }}>
+        <Hint>{t.options.hours.hint}</Hint>
+        <div style={{ display: 'flex', gap: space.x4, flexWrap: 'wrap' }}>
+          {field('morningStart', t.options.hours.morningStart)}
+          {field('morningEnd', t.options.hours.morningEnd)}
+          {field('afternoonStart', t.options.hours.afternoonStart)}
+          {field('afternoonEnd', t.options.hours.afternoonEnd)}
+        </div>
+        <div>
+          <Button variant="primary" onClick={commit} disabled={!valid || !dirty}>
+            {t.options.hours.save}
+          </Button>
+        </div>
+        <Hint>
+          {hasBreak
+            ? t.options.hours.breakNote(config.breaks[0]!.start, config.breaks[0]!.end)
+            : t.options.hours.noBreakNote}
+        </Hint>
+        <Hint>{t.options.hours.throughLunch}</Hint>
       </div>
     </Card>
   )

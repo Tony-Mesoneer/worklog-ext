@@ -65,6 +65,26 @@ thì phải in ra worklog id và issue key để bạn xoá tay trong Jira.
       banner cảnh báo, **không** được ra bảng 0h đỏ toàn bộ.
 - [ ] Click phải một ô để đánh dấu ngày nghỉ → capacity giảm, reload vẫn giữ.
 - [ ] Click một ô → panel chi tiết hiện đúng worklog của member đó ngày đó.
+- [ ] Panel chi tiết nằm TRÊN header sticky của bảng, không bị header che.
+      (Lỗi cũ: CellDetail là `position: fixed` mà không có z-index, nên header
+      `z-index: 1` vẽ trùm lên — `fixed` không tự nâng tầng.)
+- [ ] Cuộn bảng ngang/dọc trong lúc panel đang mở: panel vẫn nằm trên, cột
+      Member dính bên trái vẫn không đè lên nó.
+
+### 5g. Sửa worklog từ dashboard
+
+- [ ] Ô của **chính mình**: có nút Xoá trên từng worklog, và form "Ghi giờ vào
+      ngày này" ở cuối panel.
+- [ ] Ô của **người khác**: KHÔNG có nút xoá, không có form, và có dòng giải
+      thích. Jira đặt author = người đang xác thực nên không ghi hộ được, còn
+      xoá giờ người khác cần quyền project admin.
+- [ ] Form nói trước giờ sẽ ghi ("Sẽ ghi từ 14:30"), và giờ đó tính trên TOÀN BỘ
+      worklog của ngày — không phải chỉ worklog của project đang lọc. Kiểm:
+      lọc project A, mở ô có giờ ở cả A và B → mốc đề xuất phải tránh cả hai.
+- [ ] Thời lượng gõ sai ("abc") → hiện lỗi, nút Log bị khoá.
+- [ ] Log xong: số trong ô đổi NGAY, không phải chờ 5 phút. (Sau khi ghi/xoá
+      dashboard force refresh, vì `worklog/add` không patch snapshot.)
+- [ ] Ngày đã kín giờ → hiện "Ngày này không còn giờ trống", không có form.
 
 ### 5b. Gom nhóm theo project
 
@@ -109,6 +129,28 @@ Phần này KHÔNG có test tự động (thuần hiển thị) — chỉ có ty
 - [ ] Xoá xong mở dashboard (không bấm Làm mới) → worklog đã xoá **không** còn
       hiện, kể cả khi snapshot chưa hết TTL.
 
+### 5c-bis. Giờ làm việc (Options mục 6)
+
+Bốn ô: sáng bắt đầu/kết thúc, chiều bắt đầu/kết thúc. Hai ô giữa là hai đầu của
+khoảng nghỉ; hai ô ngoài là `workdayStart`/`workdayEnd`.
+
+- [ ] Đổi "Buổi sáng bắt đầu" thành `09:00` → dropdown "Bắt đầu" ở side panel
+      không còn slot nào trước 09:00.
+- [ ] Đổi "Buổi chiều bắt đầu" thành `13:00` → log 2h từ 11:00 cắt thành
+      11:00–12:00 và 13:00–14:00.
+- [ ] Đổi "Buổi chiều kết thúc" thành `17:00` → cảnh báo "quá giờ tan làm" xuất
+      hiện sớm hơn tương ứng, và không còn slot nào sau 17:00.
+- [ ] Dòng ghi chú cập nhật theo: "Giờ nghỉ: 12:00–13:00".
+- [ ] **Làm xuyên trưa**: đặt "sáng kết thúc" = "chiều bắt đầu" (vd cả hai
+      `12:00`) → ghi chú đổi thành "Không có giờ nghỉ", timeline không còn dải
+      nghỉ trưa, và log 4h từ 10:00 ra ĐÚNG MỘT worklog không bị cắt.
+- [ ] **Thứ tự sửa không bị kẹt**: từ 12:00–13:30 đổi sang 13:00–14:00. Sửa ô
+      nào trước cũng được vì cả card lưu một lần — nếu bị chặn thì đó là bug.
+- [ ] Gõ `25:00` hoặc `abc` → lỗi ngay tại ô, nút Lưu bị khoá.
+- [ ] Đặt "chiều bắt đầu" trước "sáng kết thúc" → lỗi thứ tự, không lưu.
+- [ ] Reload extension → cả bốn giá trị VẪN CÒN (đây là chỗ migration cũ sẽ xoá
+      nếu ai đổi điều kiện về `< CONFIG_VERSION`).
+
 ### 5d. Ngôn ngữ
 
 - [ ] Options mục 7 đổi sang Tiếng Việt → toàn bộ Options đổi ngay, không reload.
@@ -116,6 +158,15 @@ Phần này KHÔNG có test tự động (thuần hiển thị) — chỉ có ty
 - [ ] Ngày/giờ ở mục 6 đổi định dạng theo ngôn ngữ (`21/08/2026` ↔ `8/21/2026`).
 - [ ] Dropdown ngôn ngữ luôn hiện "English" và "Tiếng Việt" bằng chính ngôn ngữ
       đó, ở cả hai chế độ.
+
+### 5f. Khởi động lại extension
+
+- [ ] `npm run build` ghi đè `dist/` → Options mục 6 → "Khởi động lại extension"
+      → version trong mục 6 hiện đúng bản mới, KHÔNG cần vào `chrome://extensions`.
+- [ ] Side panel đang mở lúc bấm: nó đóng lại (extension restart) và mở lại được
+      bằng `Cmd+Shift+L`.
+- [ ] Bấm khi KHÔNG có file mới → version không đổi. Đúng: nút chỉ nạp lại đĩa,
+      không tải gì.
 - [ ] Side panel đổi ngay khi đang mở, kể cả khi đổi từ Options ở tab khác.
 - [ ] Dashboard: header ngày đổi thứ tự (`21/08` ở vi ↔ `08/21` ở en), giờ "cập
       nhật lúc" đổi 24h ↔ 12h AM/PM, tên tháng trong lịch đổi theo ngôn ngữ.
@@ -160,11 +211,13 @@ Firefox thật**. Load bằng `about:debugging#/runtime/this-firefox` →
   tính là ngày làm việc — cả ở capacity dashboard lẫn lối tắt lấp giờ thiếu.
   Config không có nguồn ngày lễ. Thêm một danh sách ngày lễ là việc nhỏ nếu
   team có lịch cố định.
-- **Giờ làm việc và giờ nghỉ trưa không có UI** (tính năng "ẩn" theo yêu cầu).
-  Sửa bằng cách viết trực tiếp vào `storage.local`. Default: 08:30–18:00, nghỉ
-  12:00–13:30. Vì không có UI, mọi lần đổi default đều đi kèm bump
-  `CONFIG_VERSION` để config đang lưu được ghi đè — không bump thì người đang
-  dùng giữ giá trị cũ và không thấy gì thay đổi.
+- **Khoảng nghỉ thứ hai không có UI.** `breaks` là một danh sách; Options mục 6
+  chỉ sửa `breaks[0]`. Muốn thêm một khoảng nghỉ nữa (vd tea break 15:00) thì
+  phải viết trực tiếp vào `storage.local` — và mục 6 sẽ giữ nguyên nó.
+- Từ v3, `migrateConfig` **không còn ghi đè** giờ làm việc khi bump version
+  (ghim ở `< 3`, không phải `< CONFIG_VERSION`). Trước đây nó ghi đè vì ba field
+  đó không có UI; giờ có UI rồi nên ghi đè là xoá dữ liệu người dùng. Có test
+  khoá điều này.
 - **Kết quả ô search issue không có badge trạng thái**: `/issue/picker` chỉ trả
   key và summary. Đánh đổi có chủ ý — picker xếp theo issue bạn vừa xem, thứ
   JQL không làm được.

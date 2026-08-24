@@ -23,7 +23,7 @@ export const vi: Messages = {
   },
 
   language: {
-    title: '7. Ngôn ngữ',
+    title: '8. Ngôn ngữ',
     hint: 'Áp dụng cho side panel, dashboard và trang này. Tên extension trong Chrome đi theo ngôn ngữ của browser, không đổi được ở đây.',
     label: 'Ngôn ngữ',
     en: 'English',
@@ -157,8 +157,29 @@ export const vi: Messages = {
       issueKeyPlaceholder: 'CAG-123',
     },
 
+    hours: {
+      title: '6. Giờ làm việc',
+      hint:
+        'Hai nửa của ngày làm việc. Worklog mới lấy giờ bắt đầu từ đây, và không worklog '
+        + 'nào được ghi vắt qua khoảng giữa hai nửa.',
+      throughLunch:
+        'Làm xuyên trưa? Đặt "Buổi sáng kết thúc" và "Buổi chiều bắt đầu" bằng nhau — '
+        + 'khoảng nghỉ biến mất hoàn toàn và một worklog ghi được xuyên qua giữa ngày.',
+      morningStart: 'Buổi sáng bắt đầu',
+      morningEnd: 'Buổi sáng kết thúc',
+      afternoonStart: 'Buổi chiều bắt đầu',
+      afternoonEnd: 'Buổi chiều kết thúc',
+      breakNote: (from: string, to: string): string => `Giờ nghỉ: ${from}–${to}.`,
+      noBreakNote: 'Không có giờ nghỉ — worklog ghi được xuyên qua giữa ngày.',
+      invalidTime: 'Nhập dạng HH:MM, vd. 08:30.',
+      morningOrder: 'Buổi sáng phải kết thúc sau khi bắt đầu.',
+      middayOrder: 'Buổi chiều không thể bắt đầu trước khi buổi sáng kết thúc.',
+      afternoonOrder: 'Buổi chiều phải kết thúc sau khi bắt đầu.',
+      save: 'Lưu giờ làm việc',
+    },
+
     update: {
-      title: '6. Cập nhật',
+      title: '7. Cập nhật',
       hint:
         'Extension cài bằng "Load unpacked" nên Chrome không tự cập nhật. Ở đây chỉ kiểm '
         + 'tra xem repo đã có release mới hơn chưa; tải zip, giải nén thay thư mục đang '
@@ -175,6 +196,12 @@ export const vi: Messages = {
         `Có bản ${version}${published === '' ? '' : ` (${published})`}.`,
       download: 'Tải bản mới',
       failed: (reason: string): string => `Chưa kiểm tra được: ${reason}`,
+      reload: 'Khởi động lại extension',
+      reloadHint:
+        'Đã giải nén bản mới đè lên thư mục đang load? Nút này khởi động lại extension để '
+        + 'nó đọc lại đúng những file đó — không tải gì, và không phải vào '
+        + 'chrome://extensions. Trang này sẽ tự tải lại, và việc đang ghi vào Jira (nếu '
+        + 'có) sẽ bị cắt ngang.',
     },
   },
 
@@ -347,6 +374,12 @@ export const vi: Messages = {
     markDayOff: 'Đánh dấu ngày nghỉ',
     unmarkDayOff: 'Bỏ đánh dấu ngày nghỉ',
     noWorklogs: 'Không có worklog nào.',
+    othersReadOnly: 'Ở đây bạn chỉ sửa được giờ của chính mình.',
+    addHere: 'Ghi giờ vào ngày này',
+    addIssuePlaceholder: 'Issue key, vd. CAG-123',
+    addStartsAt: (time: string): string => `Sẽ ghi từ ${time}`,
+    addSubmit: 'Log',
+    dayFull: 'Ngày này không còn giờ trống.',
 
     loadingPoints: 'Đang tải…',
     noSprintIssues: 'Sprint hiện tại không có issue nào.',
