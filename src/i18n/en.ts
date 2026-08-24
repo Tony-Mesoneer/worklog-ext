@@ -33,7 +33,7 @@ export const en = {
   },
 
   language: {
-    title: '7. Language',
+    title: '8. Language',
     hint: 'Applies to the side panel, dashboard and this page. The extension name in Chrome follows your browser language and cannot be changed here.',
     label: 'Language',
     // Tên ngôn ngữ KHÔNG dịch: người đang mắc kẹt trong một ngôn ngữ họ không
@@ -169,8 +169,26 @@ export const en = {
       issueKeyPlaceholder: 'CAG-123',
     },
 
+    hours: {
+      title: '6. Working hours',
+      hint:
+        'When each half of the day starts. The extension derives the start time of a new '
+        + 'worklog from these, and never writes a worklog across the lunch break.',
+      morning: 'Morning starts',
+      afternoon: 'Afternoon starts',
+      lunchNote: (from: string, to: string): string =>
+        `Lunch break is ${from}–${to}, derived from these two values.`,
+      afternoonTooEarly: (lunchStart: string): string =>
+        `Afternoon must start after lunch begins (${lunchStart}).`,
+      morningTooLate: (lunchStart: string): string =>
+        `Morning must start before lunch begins (${lunchStart}).`,
+      invalidTime: 'Use HH:MM, e.g. 08:30.',
+      dayEndNote: (end: string): string =>
+        `The workday still ends at ${end}; that value has no field yet.`,
+    },
+
     update: {
-      title: '6. Updates',
+      title: '7. Updates',
       hint:
         'The extension is installed via "Load unpacked", so Chrome cannot update it '
         + 'automatically. This only checks whether the repo has a newer release; download '

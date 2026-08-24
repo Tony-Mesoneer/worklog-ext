@@ -15,6 +15,11 @@ import { useUpdate } from '@/ui/shared/useUpdate'
 import { intlLocale, useLocale, useT } from '@/ui/shared/LocaleProvider'
 import { LOCALES, type Locale } from '@/i18n'
 import { isRepoSlug } from '@/core/version'
+import { parseHhMm } from '@/core/timeline'
+
+// Cùng biểu thức mà config-schema dùng để hợp lệ hoá giờ — nếu hai chỗ lệch
+// nhau thì UI nhận một giá trị mà migrateConfig sẽ âm thầm thay bằng default.
+const HH_MM = /^([01]?\d|2[0-3]):([0-5]\d)$/
 import { ext } from '@/platform/ext'
 
 // Dòng giải thích dưới tiêu đề section — cùng một kiểu ở cả sáu khối.
@@ -149,6 +154,7 @@ export function Options() {
       <BoardSection config={config} save={save} />
       <MembersSection config={config} save={save} setError={setError} />
       <EventsSection config={config} save={save} />
+      <HoursSection config={config} save={save} />
       <UpdateSection config={config} save={save} />
       <LanguageSection config={config} save={save} />
     </div>
@@ -947,6 +953,103 @@ function LanguageSection({ config, save }: SectionProps) {
             ))}
           </select>
         </div>
+      </div>
+    </Card>
+  )
+}
+
+// Giờ bắt đầu của hai nửa ngày.
+//
+// "Buổi chiều bắt đầu" CHÍNH LÀ `breaks[0].end` — không phải một field mới. Giờ
+// nghỉ trưa được suy ra: từ `breaks[0].start` (12:00, chưa có ô sửa) tới giá trị
+// này. Nên đặt buổi chiều muộn hơn = nghỉ trưa dài hơn, và đó đúng là điều người
+// dùng muốn nói khi họ đổi nó.
+//
+// Chỉ sửa `breaks[0]`. `breaks` là một DANH SÁCH và cấu hình có thể có khoảng
+// nghỉ thứ hai (chỉ tạo được bằng cách sửa storage tay); những khoảng đó được
+// giữ nguyên chứ không bị xoá.
+//
+// Draft cục bộ + chỉ commit khi blur/Enter: lưu ngay từng phím gõ thì một trạng
+// thái nửa vời như "1" hoặc "08:" sẽ bị migrateConfig loại và ghi đè bằng
+// default, tức ô tự nhảy về 08:30 giữa lúc đang gõ.
+function HoursSection({ config, save }: SectionProps) {
+  const t = useT()
+  const morningId = useId()
+  const afternoonId = useId()
+
+  const lunchStart = config.breaks[0]?.start ?? '12:00'
+  const afternoonSaved = config.breaks[0]?.end ?? '13:30'
+
+  const [morning, setMorning] = useState(config.workdayStart)
+  const [afternoon, setAfternoon] = useState(afternoonSaved)
+
+  // Config đổi từ chỗ khác (đổi ngôn ngữ, một tab Options thứ hai) thì draft
+  // phải theo, không thì ô hiện giá trị đã cũ.
+  useEffect(() => { setMorning(config.workdayStart) }, [config.workdayStart])
+  useEffect(() => { setAfternoon(afternoonSaved) }, [afternoonSaved])
+
+  const err = (value: string, kind: 'morning' | 'afternoon'): string | null => {
+    if (!HH_MM.test(value)) return t.options.hours.invalidTime
+    const mins = parseHhMm(value)
+    const lunch = parseHhMm(lunchStart)
+    if (kind === 'morning' && mins >= lunch) return t.options.hours.morningTooLate(lunchStart)
+    if (kind === 'afternoon' && mins <= lunch) return t.options.hours.afternoonTooEarly(lunchStart)
+    return null
+  }
+
+  const morningErr = err(morning, 'morning')
+  const afternoonErr = err(afternoon, 'afternoon')
+
+  const commitMorning = () => {
+    if (morningErr !== null || morning === config.workdayStart) return
+    void save({ workdayStart: morning })
+  }
+
+  const commitAfternoon = () => {
+    if (afternoonErr !== null || afternoon === afternoonSaved) return
+    const [first, ...rest] = config.breaks
+    void save({
+      breaks: [{ start: first?.start ?? lunchStart, end: afternoon }, ...rest],
+    })
+  }
+
+  const field = (
+    id: string, label: string, value: string, error: string | null,
+    onChange: (v: string) => void, commit: () => void,
+  ) => (
+    <div className="wl-field">
+      <label className="wl-field__label" htmlFor={id}>{label}</label>
+      <input
+        id={id}
+        value={value}
+        style={{ width: 96 }}
+        inputMode="numeric"
+        placeholder="08:30"
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === 'Enter') commit() }}
+        aria-invalid={error !== null}
+      />
+      {error !== null && (
+        <p role="alert" style={{ margin: 0, fontSize: fontSize.md, color: colors.danger }}>
+          {error}
+        </p>
+      )}
+    </div>
+  )
+
+  return (
+    <Card title={t.options.hours.title}>
+      <div style={{ display: 'grid', gap: space.x3 }}>
+        <Hint>{t.options.hours.hint}</Hint>
+        <div style={{ display: 'flex', gap: space.x4, flexWrap: 'wrap' }}>
+          {field(morningId, t.options.hours.morning, morning, morningErr,
+            setMorning, commitMorning)}
+          {field(afternoonId, t.options.hours.afternoon, afternoon, afternoonErr,
+            setAfternoon, commitAfternoon)}
+        </div>
+        <Hint>{t.options.hours.lunchNote(lunchStart, afternoonSaved)}</Hint>
+        <Hint>{t.options.hours.dayEndNote(config.workdayEnd)}</Hint>
       </div>
     </Card>
   )

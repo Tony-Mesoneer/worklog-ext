@@ -129,6 +129,20 @@ Phần này KHÔNG có test tự động (thuần hiển thị) — chỉ có ty
 - [ ] Xoá xong mở dashboard (không bấm Làm mới) → worklog đã xoá **không** còn
       hiện, kể cả khi snapshot chưa hết TTL.
 
+### 5c-bis. Giờ làm việc (Options mục 6)
+
+- [ ] Đổi "Buổi sáng bắt đầu" thành `09:00` → dropdown "Bắt đầu" ở side panel
+      không còn slot nào trước 09:00.
+- [ ] Đổi "Buổi chiều bắt đầu" thành `13:00` → log 2h từ 11:00 cắt thành
+      11:00–12:00 và 13:00–14:00 (trước đó là 13:30).
+- [ ] Dòng ghi chú cập nhật theo: "Giờ nghỉ trưa là 12:00–13:00".
+- [ ] Gõ `25:00` hoặc `abc` → hiện lỗi, KHÔNG lưu. Gõ dở (`08:`) rồi blur cũng
+      không lưu và không làm ô nhảy về default.
+- [ ] Đặt buổi chiều `11:00` (trước 12:00) → lỗi "phải bắt đầu sau lúc nghỉ
+      trưa", không lưu.
+- [ ] Reload extension → hai giá trị vừa đặt VẪN CÒN (đây là chỗ migration cũ
+      sẽ xoá nếu ai đổi điều kiện về `< CONFIG_VERSION`).
+
 ### 5d. Ngôn ngữ
 
 - [ ] Options mục 7 đổi sang Tiếng Việt → toàn bộ Options đổi ngay, không reload.
@@ -189,11 +203,13 @@ Firefox thật**. Load bằng `about:debugging#/runtime/this-firefox` →
   tính là ngày làm việc — cả ở capacity dashboard lẫn lối tắt lấp giờ thiếu.
   Config không có nguồn ngày lễ. Thêm một danh sách ngày lễ là việc nhỏ nếu
   team có lịch cố định.
-- **Giờ làm việc và giờ nghỉ trưa không có UI** (tính năng "ẩn" theo yêu cầu).
-  Sửa bằng cách viết trực tiếp vào `storage.local`. Default: 08:30–18:00, nghỉ
-  12:00–13:30. Vì không có UI, mọi lần đổi default đều đi kèm bump
-  `CONFIG_VERSION` để config đang lưu được ghi đè — không bump thì người đang
-  dùng giữ giá trị cũ và không thấy gì thay đổi.
+- **Giờ tan làm và giờ BẮT ĐẦU nghỉ trưa vẫn không có UI.** Options mục 6 đặt
+  được giờ bắt đầu buổi sáng và buổi chiều; `workdayEnd` (18:00) và
+  `breaks[0].start` (12:00) vẫn phải sửa trực tiếp trong `storage.local`.
+- Từ v3, `migrateConfig` **không còn ghi đè** giờ làm việc khi bump version
+  (ghim ở `< 3`, không phải `< CONFIG_VERSION`). Trước đây nó ghi đè vì ba field
+  đó không có UI; giờ có UI rồi nên ghi đè là xoá dữ liệu người dùng. Có test
+  khoá điều này.
 - **Kết quả ô search issue không có badge trạng thái**: `/issue/picker` chỉ trả
   key và summary. Đánh đổi có chủ ý — picker xếp theo issue bạn vừa xem, thứ
   JQL không làm được.

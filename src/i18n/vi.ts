@@ -23,7 +23,7 @@ export const vi: Messages = {
   },
 
   language: {
-    title: '7. Ngôn ngữ',
+    title: '8. Ngôn ngữ',
     hint: 'Áp dụng cho side panel, dashboard và trang này. Tên extension trong Chrome đi theo ngôn ngữ của browser, không đổi được ở đây.',
     label: 'Ngôn ngữ',
     en: 'English',
@@ -157,8 +157,26 @@ export const vi: Messages = {
       issueKeyPlaceholder: 'CAG-123',
     },
 
+    hours: {
+      title: '6. Giờ làm việc',
+      hint:
+        'Mỗi nửa ngày bắt đầu lúc nào. Extension suy ra giờ bắt đầu của worklog mới từ '
+        + 'đây, và không bao giờ ghi worklog đi qua giờ nghỉ trưa.',
+      morning: 'Buổi sáng bắt đầu',
+      afternoon: 'Buổi chiều bắt đầu',
+      lunchNote: (from: string, to: string): string =>
+        `Giờ nghỉ trưa là ${from}–${to}, suy ra từ hai giá trị này.`,
+      afternoonTooEarly: (lunchStart: string): string =>
+        `Buổi chiều phải bắt đầu sau lúc nghỉ trưa (${lunchStart}).`,
+      morningTooLate: (lunchStart: string): string =>
+        `Buổi sáng phải bắt đầu trước lúc nghỉ trưa (${lunchStart}).`,
+      invalidTime: 'Nhập dạng HH:MM, vd. 08:30.',
+      dayEndNote: (end: string): string =>
+        `Giờ tan làm vẫn là ${end}; giá trị đó chưa có ô để sửa.`,
+    },
+
     update: {
-      title: '6. Cập nhật',
+      title: '7. Cập nhật',
       hint:
         'Extension cài bằng "Load unpacked" nên Chrome không tự cập nhật. Ở đây chỉ kiểm '
         + 'tra xem repo đã có release mới hơn chưa; tải zip, giải nén thay thư mục đang '
