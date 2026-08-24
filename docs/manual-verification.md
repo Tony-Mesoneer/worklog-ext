@@ -131,17 +131,25 @@ Phần này KHÔNG có test tự động (thuần hiển thị) — chỉ có ty
 
 ### 5c-bis. Giờ làm việc (Options mục 6)
 
+Bốn ô: sáng bắt đầu/kết thúc, chiều bắt đầu/kết thúc. Hai ô giữa là hai đầu của
+khoảng nghỉ; hai ô ngoài là `workdayStart`/`workdayEnd`.
+
 - [ ] Đổi "Buổi sáng bắt đầu" thành `09:00` → dropdown "Bắt đầu" ở side panel
       không còn slot nào trước 09:00.
 - [ ] Đổi "Buổi chiều bắt đầu" thành `13:00` → log 2h từ 11:00 cắt thành
-      11:00–12:00 và 13:00–14:00 (trước đó là 13:30).
-- [ ] Dòng ghi chú cập nhật theo: "Giờ nghỉ trưa là 12:00–13:00".
-- [ ] Gõ `25:00` hoặc `abc` → hiện lỗi, KHÔNG lưu. Gõ dở (`08:`) rồi blur cũng
-      không lưu và không làm ô nhảy về default.
-- [ ] Đặt buổi chiều `11:00` (trước 12:00) → lỗi "phải bắt đầu sau lúc nghỉ
-      trưa", không lưu.
-- [ ] Reload extension → hai giá trị vừa đặt VẪN CÒN (đây là chỗ migration cũ
-      sẽ xoá nếu ai đổi điều kiện về `< CONFIG_VERSION`).
+      11:00–12:00 và 13:00–14:00.
+- [ ] Đổi "Buổi chiều kết thúc" thành `17:00` → cảnh báo "quá giờ tan làm" xuất
+      hiện sớm hơn tương ứng, và không còn slot nào sau 17:00.
+- [ ] Dòng ghi chú cập nhật theo: "Giờ nghỉ: 12:00–13:00".
+- [ ] **Làm xuyên trưa**: đặt "sáng kết thúc" = "chiều bắt đầu" (vd cả hai
+      `12:00`) → ghi chú đổi thành "Không có giờ nghỉ", timeline không còn dải
+      nghỉ trưa, và log 4h từ 10:00 ra ĐÚNG MỘT worklog không bị cắt.
+- [ ] **Thứ tự sửa không bị kẹt**: từ 12:00–13:30 đổi sang 13:00–14:00. Sửa ô
+      nào trước cũng được vì cả card lưu một lần — nếu bị chặn thì đó là bug.
+- [ ] Gõ `25:00` hoặc `abc` → lỗi ngay tại ô, nút Lưu bị khoá.
+- [ ] Đặt "chiều bắt đầu" trước "sáng kết thúc" → lỗi thứ tự, không lưu.
+- [ ] Reload extension → cả bốn giá trị VẪN CÒN (đây là chỗ migration cũ sẽ xoá
+      nếu ai đổi điều kiện về `< CONFIG_VERSION`).
 
 ### 5d. Ngôn ngữ
 
@@ -203,9 +211,9 @@ Firefox thật**. Load bằng `about:debugging#/runtime/this-firefox` →
   tính là ngày làm việc — cả ở capacity dashboard lẫn lối tắt lấp giờ thiếu.
   Config không có nguồn ngày lễ. Thêm một danh sách ngày lễ là việc nhỏ nếu
   team có lịch cố định.
-- **Giờ tan làm và giờ BẮT ĐẦU nghỉ trưa vẫn không có UI.** Options mục 6 đặt
-  được giờ bắt đầu buổi sáng và buổi chiều; `workdayEnd` (18:00) và
-  `breaks[0].start` (12:00) vẫn phải sửa trực tiếp trong `storage.local`.
+- **Khoảng nghỉ thứ hai không có UI.** `breaks` là một danh sách; Options mục 6
+  chỉ sửa `breaks[0]`. Muốn thêm một khoảng nghỉ nữa (vd tea break 15:00) thì
+  phải viết trực tiếp vào `storage.local` — và mục 6 sẽ giữ nguyên nó.
 - Từ v3, `migrateConfig` **không còn ghi đè** giờ làm việc khi bump version
   (ghim ở `< 3`, không phải `< CONFIG_VERSION`). Trước đây nó ghi đè vì ba field
   đó không có UI; giờ có UI rồi nên ghi đè là xoá dữ liệu người dùng. Có test

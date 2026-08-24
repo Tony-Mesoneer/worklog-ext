@@ -13,7 +13,7 @@ import { toUiError } from '@/ui/shared/errors'
 import { colors, fontSize, radii, space } from '@/ui/shared/theme'
 import { useUpdate } from '@/ui/shared/useUpdate'
 import { intlLocale, useLocale, useT } from '@/ui/shared/LocaleProvider'
-import { LOCALES, type Locale } from '@/i18n'
+import { LOCALES, type Locale, type Messages } from '@/i18n'
 import { isRepoSlug } from '@/core/version'
 import { parseHhMm } from '@/core/timeline'
 
@@ -958,98 +958,139 @@ function LanguageSection({ config, save }: SectionProps) {
   )
 }
 
-// Giờ bắt đầu của hai nửa ngày.
+// Bốn mốc giờ của một ngày làm việc.
 //
-// "Buổi chiều bắt đầu" CHÍNH LÀ `breaks[0].end` — không phải một field mới. Giờ
-// nghỉ trưa được suy ra: từ `breaks[0].start` (12:00, chưa có ô sửa) tới giá trị
-// này. Nên đặt buổi chiều muộn hơn = nghỉ trưa dài hơn, và đó đúng là điều người
-// dùng muốn nói khi họ đổi nó.
+// Chỉ HAI trong bốn là field thật trong config; hai cái còn lại là hai đầu của
+// khoảng nghỉ:
 //
-// Chỉ sửa `breaks[0]`. `breaks` là một DANH SÁCH và cấu hình có thể có khoảng
-// nghỉ thứ hai (chỉ tạo được bằng cách sửa storage tay); những khoảng đó được
-// giữ nguyên chứ không bị xoá.
+//   Buổi sáng bắt đầu   → workdayStart
+//   Buổi sáng kết thúc  → breaks[0].start
+//   Buổi chiều bắt đầu  → breaks[0].end
+//   Buổi chiều kết thúc → workdayEnd
 //
-// Draft cục bộ + chỉ commit khi blur/Enter: lưu ngay từng phím gõ thì một trạng
-// thái nửa vời như "1" hoặc "08:" sẽ bị migrateConfig loại và ghi đè bằng
-// default, tức ô tự nhảy về 08:30 giữa lúc đang gõ.
+// LÀM XUYÊN TRƯA: đặt "sáng kết thúc" bằng "chiều bắt đầu" thì khoảng nghỉ có độ
+// dài 0. migrateConfig lọc bỏ mọi khoảng có `end <= start`, và nó CỐ Ý giữ
+// nguyên mảng rỗng như một lựa chọn hợp lệ ("ngày làm việc không có giờ nghỉ"),
+// nên kết quả là không còn giờ nghỉ nào và một worklog ghi được xuyên giữa ngày.
+// Không cần thêm cờ nào cho trường hợp này.
+//
+// MỘT nút Lưu cho cả card, KHÔNG lưu-khi-blur từng ô: bốn giá trị ràng buộc chéo
+// nhau (sáng < sáng-kết, sáng-kết ≤ chiều, chiều < chiều-kết). Lưu từng ô thì
+// muốn đổi từ 12:00–13:30 sang 13:00–14:00 sẽ bị kẹt — ô nào sửa trước cũng tạo
+// ra một trạng thái vô hiệu và bị chặn. Gom lại một lần lưu thì không có thứ tự
+// nào bị kẹt.
+//
+// Chỉ ghi `breaks[0]`; khoảng nghỉ thứ hai (chỉ tạo được bằng cách sửa storage
+// tay) được giữ nguyên.
+type HoursDraft = { morningStart: string; morningEnd: string; afternoonStart: string; afternoonEnd: string }
+
+const draftFrom = (config: Config): HoursDraft => ({
+  morningStart: config.workdayStart,
+  // Không có giờ nghỉ (đang làm xuyên trưa) → hai ô giữa bằng nhau, và bằng giờ
+  // tan làm là vô nghĩa. Lấy giờ tan làm cho cả hai để chúng bằng nhau mà vẫn
+  // đọc ra được, và người dùng sửa lại nếu muốn có giờ nghỉ.
+  morningEnd: config.breaks[0]?.start ?? config.workdayEnd,
+  afternoonStart: config.breaks[0]?.end ?? config.workdayEnd,
+  afternoonEnd: config.workdayEnd,
+})
+
+/** Lỗi của từng ô + lỗi thứ tự. null = hợp lệ. */
+function validateHours(d: HoursDraft, t: Messages): Partial<Record<keyof HoursDraft, string>> {
+  const bad: Partial<Record<keyof HoursDraft, string>> = {}
+  for (const k of Object.keys(d) as (keyof HoursDraft)[]) {
+    if (!HH_MM.test(d[k])) bad[k] = t.options.hours.invalidTime
+  }
+  if (Object.keys(bad).length > 0) return bad
+
+  const ms = parseHhMm(d.morningStart)
+  const me = parseHhMm(d.morningEnd)
+  const as = parseHhMm(d.afternoonStart)
+  const ae = parseHhMm(d.afternoonEnd)
+
+  if (me <= ms) bad.morningEnd = t.options.hours.morningOrder
+  // `<` chứ không phải `<=`: bằng nhau là hợp lệ, đó chính là làm xuyên trưa.
+  if (as < me) bad.afternoonStart = t.options.hours.middayOrder
+  if (ae <= as) bad.afternoonEnd = t.options.hours.afternoonOrder
+  return bad
+}
+
 function HoursSection({ config, save }: SectionProps) {
   const t = useT()
-  const morningId = useId()
-  const afternoonId = useId()
-
-  const lunchStart = config.breaks[0]?.start ?? '12:00'
-  const afternoonSaved = config.breaks[0]?.end ?? '13:30'
-
-  const [morning, setMorning] = useState(config.workdayStart)
-  const [afternoon, setAfternoon] = useState(afternoonSaved)
-
-  // Config đổi từ chỗ khác (đổi ngôn ngữ, một tab Options thứ hai) thì draft
-  // phải theo, không thì ô hiện giá trị đã cũ.
-  useEffect(() => { setMorning(config.workdayStart) }, [config.workdayStart])
-  useEffect(() => { setAfternoon(afternoonSaved) }, [afternoonSaved])
-
-  const err = (value: string, kind: 'morning' | 'afternoon'): string | null => {
-    if (!HH_MM.test(value)) return t.options.hours.invalidTime
-    const mins = parseHhMm(value)
-    const lunch = parseHhMm(lunchStart)
-    if (kind === 'morning' && mins >= lunch) return t.options.hours.morningTooLate(lunchStart)
-    if (kind === 'afternoon' && mins <= lunch) return t.options.hours.afternoonTooEarly(lunchStart)
-    return null
+  const ids: Record<keyof HoursDraft, string> = {
+    morningStart: useId(), morningEnd: useId(),
+    afternoonStart: useId(), afternoonEnd: useId(),
   }
 
-  const morningErr = err(morning, 'morning')
-  const afternoonErr = err(afternoon, 'afternoon')
+  const saved = draftFrom(config)
+  const [draft, setDraft] = useState<HoursDraft>(saved)
 
-  const commitMorning = () => {
-    if (morningErr !== null || morning === config.workdayStart) return
-    void save({ workdayStart: morning })
-  }
+  // Config đổi từ chỗ khác (tab Options thứ hai) thì draft phải theo, không thì
+  // ô hiện giá trị đã cũ. So bằng chuỗi ghép để không phụ thuộc identity của
+  // object — `config.breaks` là mảng mới sau mỗi lần save.
+  const savedKey = Object.values(saved).join('|')
+  useEffect(() => { setDraft(draftFrom(config)) }, [savedKey])
 
-  const commitAfternoon = () => {
-    if (afternoonErr !== null || afternoon === afternoonSaved) return
-    const [first, ...rest] = config.breaks
+  const bad = validateHours(draft, t)
+  const valid = Object.keys(bad).length === 0
+  const dirty = Object.values(draft).join('|') !== savedKey
+
+  const commit = () => {
+    if (!valid || !dirty) return
+    const [, ...rest] = config.breaks
+    const noBreak = draft.morningEnd === draft.afternoonStart
     void save({
-      breaks: [{ start: first?.start ?? lunchStart, end: afternoon }, ...rest],
+      workdayStart: draft.morningStart,
+      workdayEnd: draft.afternoonEnd,
+      breaks: noBreak
+        ? rest
+        : [{ start: draft.morningEnd, end: draft.afternoonStart }, ...rest],
     })
   }
 
-  const field = (
-    id: string, label: string, value: string, error: string | null,
-    onChange: (v: string) => void, commit: () => void,
-  ) => (
+  const field = (key: keyof HoursDraft, label: string) => (
     <div className="wl-field">
-      <label className="wl-field__label" htmlFor={id}>{label}</label>
+      <label className="wl-field__label" htmlFor={ids[key]}>{label}</label>
       <input
-        id={id}
-        value={value}
+        id={ids[key]}
+        value={draft[key]}
         style={{ width: 96 }}
         inputMode="numeric"
         placeholder="08:30"
-        onChange={(e) => onChange(e.target.value)}
-        onBlur={commit}
+        onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
         onKeyDown={(e) => { if (e.key === 'Enter') commit() }}
-        aria-invalid={error !== null}
+        aria-invalid={bad[key] !== undefined}
       />
-      {error !== null && (
+      {bad[key] !== undefined && (
         <p role="alert" style={{ margin: 0, fontSize: fontSize.md, color: colors.danger }}>
-          {error}
+          {bad[key]}
         </p>
       )}
     </div>
   )
+
+  const hasBreak = config.breaks[0] !== undefined
 
   return (
     <Card title={t.options.hours.title}>
       <div style={{ display: 'grid', gap: space.x3 }}>
         <Hint>{t.options.hours.hint}</Hint>
         <div style={{ display: 'flex', gap: space.x4, flexWrap: 'wrap' }}>
-          {field(morningId, t.options.hours.morning, morning, morningErr,
-            setMorning, commitMorning)}
-          {field(afternoonId, t.options.hours.afternoon, afternoon, afternoonErr,
-            setAfternoon, commitAfternoon)}
+          {field('morningStart', t.options.hours.morningStart)}
+          {field('morningEnd', t.options.hours.morningEnd)}
+          {field('afternoonStart', t.options.hours.afternoonStart)}
+          {field('afternoonEnd', t.options.hours.afternoonEnd)}
         </div>
-        <Hint>{t.options.hours.lunchNote(lunchStart, afternoonSaved)}</Hint>
-        <Hint>{t.options.hours.dayEndNote(config.workdayEnd)}</Hint>
+        <div>
+          <Button variant="primary" onClick={commit} disabled={!valid || !dirty}>
+            {t.options.hours.save}
+          </Button>
+        </div>
+        <Hint>
+          {hasBreak
+            ? t.options.hours.breakNote(config.breaks[0]!.start, config.breaks[0]!.end)
+            : t.options.hours.noBreakNote}
+        </Hint>
+        <Hint>{t.options.hours.throughLunch}</Hint>
       </div>
     </Card>
   )

@@ -160,19 +160,22 @@ export const vi: Messages = {
     hours: {
       title: '6. Giờ làm việc',
       hint:
-        'Mỗi nửa ngày bắt đầu lúc nào. Extension suy ra giờ bắt đầu của worklog mới từ '
-        + 'đây, và không bao giờ ghi worklog đi qua giờ nghỉ trưa.',
-      morning: 'Buổi sáng bắt đầu',
-      afternoon: 'Buổi chiều bắt đầu',
-      lunchNote: (from: string, to: string): string =>
-        `Giờ nghỉ trưa là ${from}–${to}, suy ra từ hai giá trị này.`,
-      afternoonTooEarly: (lunchStart: string): string =>
-        `Buổi chiều phải bắt đầu sau lúc nghỉ trưa (${lunchStart}).`,
-      morningTooLate: (lunchStart: string): string =>
-        `Buổi sáng phải bắt đầu trước lúc nghỉ trưa (${lunchStart}).`,
+        'Hai nửa của ngày làm việc. Worklog mới lấy giờ bắt đầu từ đây, và không worklog '
+        + 'nào được ghi vắt qua khoảng giữa hai nửa.',
+      throughLunch:
+        'Làm xuyên trưa? Đặt "Buổi sáng kết thúc" và "Buổi chiều bắt đầu" bằng nhau — '
+        + 'khoảng nghỉ biến mất hoàn toàn và một worklog ghi được xuyên qua giữa ngày.',
+      morningStart: 'Buổi sáng bắt đầu',
+      morningEnd: 'Buổi sáng kết thúc',
+      afternoonStart: 'Buổi chiều bắt đầu',
+      afternoonEnd: 'Buổi chiều kết thúc',
+      breakNote: (from: string, to: string): string => `Giờ nghỉ: ${from}–${to}.`,
+      noBreakNote: 'Không có giờ nghỉ — worklog ghi được xuyên qua giữa ngày.',
       invalidTime: 'Nhập dạng HH:MM, vd. 08:30.',
-      dayEndNote: (end: string): string =>
-        `Giờ tan làm vẫn là ${end}; giá trị đó chưa có ô để sửa.`,
+      morningOrder: 'Buổi sáng phải kết thúc sau khi bắt đầu.',
+      middayOrder: 'Buổi chiều không thể bắt đầu trước khi buổi sáng kết thúc.',
+      afternoonOrder: 'Buổi chiều phải kết thúc sau khi bắt đầu.',
+      save: 'Lưu giờ làm việc',
     },
 
     update: {

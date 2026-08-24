@@ -172,19 +172,22 @@ export const en = {
     hours: {
       title: '6. Working hours',
       hint:
-        'When each half of the day starts. The extension derives the start time of a new '
-        + 'worklog from these, and never writes a worklog across the lunch break.',
-      morning: 'Morning starts',
-      afternoon: 'Afternoon starts',
-      lunchNote: (from: string, to: string): string =>
-        `Lunch break is ${from}–${to}, derived from these two values.`,
-      afternoonTooEarly: (lunchStart: string): string =>
-        `Afternoon must start after lunch begins (${lunchStart}).`,
-      morningTooLate: (lunchStart: string): string =>
-        `Morning must start before lunch begins (${lunchStart}).`,
+        'The two halves of the workday. A new worklog gets its start time from these, and '
+        + 'no worklog is ever written across the gap between them.',
+      throughLunch:
+        'Working through lunch? Set "Morning ends" and "Afternoon starts" to the same '
+        + 'time — that removes the break entirely and lets one worklog span midday.',
+      morningStart: 'Morning starts',
+      morningEnd: 'Morning ends',
+      afternoonStart: 'Afternoon starts',
+      afternoonEnd: 'Afternoon ends',
+      breakNote: (from: string, to: string): string => `Break: ${from}–${to}.`,
+      noBreakNote: 'No break — worklogs can run straight through midday.',
       invalidTime: 'Use HH:MM, e.g. 08:30.',
-      dayEndNote: (end: string): string =>
-        `The workday still ends at ${end}; that value has no field yet.`,
+      morningOrder: 'Morning must end after it starts.',
+      middayOrder: 'Afternoon cannot start before morning ends.',
+      afternoonOrder: 'Afternoon must end after it starts.',
+      save: 'Save hours',
     },
 
     update: {
