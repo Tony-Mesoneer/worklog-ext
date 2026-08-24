@@ -188,6 +188,12 @@ export const en = {
         `Version ${version} is available${published === '' ? '' : ` (${published})`}.`,
       download: 'Download update',
       failed: (reason: string): string => `Could not check: ${reason}`,
+      reload: 'Restart extension',
+      reloadHint:
+        'Already unpacked a new version over the folder you load from? This restarts the '
+        + 'extension so it re-reads those files — no download, and no trip to '
+        + 'chrome://extensions. This page reloads itself, and anything being written to '
+        + 'Jira right now is interrupted.',
     },
   },
 

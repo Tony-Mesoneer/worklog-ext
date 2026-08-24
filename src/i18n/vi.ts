@@ -175,6 +175,12 @@ export const vi: Messages = {
         `Có bản ${version}${published === '' ? '' : ` (${published})`}.`,
       download: 'Tải bản mới',
       failed: (reason: string): string => `Chưa kiểm tra được: ${reason}`,
+      reload: 'Khởi động lại extension',
+      reloadHint:
+        'Đã giải nén bản mới đè lên thư mục đang load? Nút này khởi động lại extension để '
+        + 'nó đọc lại đúng những file đó — không tải gì, và không phải vào '
+        + 'chrome://extensions. Trang này sẽ tự tải lại, và việc đang ghi vào Jira (nếu '
+        + 'có) sẽ bị cắt ngang.',
     },
   },
 

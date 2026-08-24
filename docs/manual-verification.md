@@ -116,6 +116,15 @@ Phần này KHÔNG có test tự động (thuần hiển thị) — chỉ có ty
 - [ ] Ngày/giờ ở mục 6 đổi định dạng theo ngôn ngữ (`21/08/2026` ↔ `8/21/2026`).
 - [ ] Dropdown ngôn ngữ luôn hiện "English" và "Tiếng Việt" bằng chính ngôn ngữ
       đó, ở cả hai chế độ.
+
+### 5f. Khởi động lại extension
+
+- [ ] `npm run build` ghi đè `dist/` → Options mục 6 → "Khởi động lại extension"
+      → version trong mục 6 hiện đúng bản mới, KHÔNG cần vào `chrome://extensions`.
+- [ ] Side panel đang mở lúc bấm: nó đóng lại (extension restart) và mở lại được
+      bằng `Cmd+Shift+L`.
+- [ ] Bấm khi KHÔNG có file mới → version không đổi. Đúng: nút chỉ nạp lại đĩa,
+      không tải gì.
 - [ ] Side panel đổi ngay khi đang mở, kể cả khi đổi từ Options ở tab khác.
 - [ ] Dashboard: header ngày đổi thứ tự (`21/08` ở vi ↔ `08/21` ở en), giờ "cập
       nhật lúc" đổi 24h ↔ 12h AM/PM, tên tháng trong lịch đổi theo ngôn ngữ.

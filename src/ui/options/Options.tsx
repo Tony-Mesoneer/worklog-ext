@@ -870,6 +870,21 @@ function UpdateSection({ config, save }: SectionProps) {
           )}
         </div>
 
+        {/* Khởi động lại KHÔNG tải gì — nó chỉ nạp lại file đã có trên đĩa. Vì
+            vậy nó nằm ở đây với câu chữ nói rõ điều đó, chứ không nằm trong
+            banner "có bản mới": bấm ở đó rồi thấy version không đổi sẽ đọc ra
+            như một nút hỏng.
+            runtime.reload() đọc lại file từ đĩa cho extension unpacked và không
+            cần permission nào. */}
+        <div style={{ display: 'grid', gap: space.x2 }}>
+          <Hint>{t.options.update.reloadHint}</Hint>
+          <div>
+            <Button variant="secondary" onClick={() => ext.runtime.reload()}>
+              {t.options.update.reload}
+            </Button>
+          </div>
+        </div>
+
         {error && <Banner kind="error">{error}</Banner>}
 
         {status?.state === 'current' && (

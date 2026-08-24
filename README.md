@@ -226,9 +226,28 @@ file vẫn là thao tác tay.
 
 **Cách cập nhật khi có bản mới**
 
+Nếu bạn có repo (đường ngắn nhất — không tải gì):
+
+```bash
+git pull && npm run build      # ghi đè dist/ tại chỗ
+```
+
+rồi Options → mục 6 → **Khởi động lại extension**. Đang sửa code thì
+`npm run dev` có HMR, không cần bước nào.
+
+Nếu bạn cài từ zip:
+
 1. Tải `worklog-ext-<version>.zip` từ banner (hoặc từ trang Releases).
 2. Giải nén, thay nội dung thư mục bạn đang trỏ "Load unpacked" vào.
-3. Mở `chrome://extensions` → bấm Reload trên thẻ Worklog.
+3. Options → mục 6 → **Khởi động lại extension**.
+
+`chrome.runtime.reload()` đọc lại file từ đĩa cho extension unpacked và không
+cần permission nào, nên bước "vào `chrome://extensions` bấm Reload" bỏ được.
+Bước giải nén thì **không** bỏ được: extension không có quyền ghi file.
+
+Muốn hết hẳn việc tải và bấm thì phải qua Chrome Web Store (unlisted vẫn được)
+— đó là đường duy nhất Chrome tự cập nhật im lặng. Firefox thì cần XPI đã sign
++ `gecko.update_url`.
 
 Cấu hình (Jira URL, member, sprint event) nằm trong `chrome.storage.local` nên
 không mất khi reload.
