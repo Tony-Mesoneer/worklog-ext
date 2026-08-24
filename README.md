@@ -2,6 +2,9 @@
 
 Chrome extension để log worklog Jira nhanh, và theo dõi giờ log của team.
 
+**[tony-mesoneer.github.io/worklog-ext](https://tony-mesoneer.github.io/worklog-ext/)**
+— trang giới thiệu, nguồn ở [`docs/index.html`](docs/index.html).
+
 - Side panel: log worklog với start time tự suy ra từ timeline trong ngày,
   duration chọn từ preset, sprint event log bằng một cú bấm.
 - Dashboard: bảng giờ của team theo ngày (ai thiếu giờ), story points vs giờ thực.

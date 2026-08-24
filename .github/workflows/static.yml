@@ -36,8 +36,14 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # Upload entire repository
-          path: '.'
+          # `docs`, KHÔNG phải `.`: với `path: '.'` thì gốc site là gốc repo, mà
+          # gốc repo không có index.html — nên https://…/worklog-ext/ trả 404 và
+          # landing page chỉ tới được ở /docs/. Một trang quảng cáo mà URL hiển
+          # nhiên lại 404 thì coi như không tồn tại.
+          #
+          # Trỏ vào `docs` thì gốc site CHÍNH LÀ docs/index.html. Kèm theo đó là
+          # không còn publish cả cây source lên làm website nữa.
+          path: 'docs'
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
