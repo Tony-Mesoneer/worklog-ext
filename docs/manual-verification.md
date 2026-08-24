@@ -65,6 +65,26 @@ thì phải in ra worklog id và issue key để bạn xoá tay trong Jira.
       banner cảnh báo, **không** được ra bảng 0h đỏ toàn bộ.
 - [ ] Click phải một ô để đánh dấu ngày nghỉ → capacity giảm, reload vẫn giữ.
 - [ ] Click một ô → panel chi tiết hiện đúng worklog của member đó ngày đó.
+- [ ] Panel chi tiết nằm TRÊN header sticky của bảng, không bị header che.
+      (Lỗi cũ: CellDetail là `position: fixed` mà không có z-index, nên header
+      `z-index: 1` vẽ trùm lên — `fixed` không tự nâng tầng.)
+- [ ] Cuộn bảng ngang/dọc trong lúc panel đang mở: panel vẫn nằm trên, cột
+      Member dính bên trái vẫn không đè lên nó.
+
+### 5g. Sửa worklog từ dashboard
+
+- [ ] Ô của **chính mình**: có nút Xoá trên từng worklog, và form "Ghi giờ vào
+      ngày này" ở cuối panel.
+- [ ] Ô của **người khác**: KHÔNG có nút xoá, không có form, và có dòng giải
+      thích. Jira đặt author = người đang xác thực nên không ghi hộ được, còn
+      xoá giờ người khác cần quyền project admin.
+- [ ] Form nói trước giờ sẽ ghi ("Sẽ ghi từ 14:30"), và giờ đó tính trên TOÀN BỘ
+      worklog của ngày — không phải chỉ worklog của project đang lọc. Kiểm:
+      lọc project A, mở ô có giờ ở cả A và B → mốc đề xuất phải tránh cả hai.
+- [ ] Thời lượng gõ sai ("abc") → hiện lỗi, nút Log bị khoá.
+- [ ] Log xong: số trong ô đổi NGAY, không phải chờ 5 phút. (Sau khi ghi/xoá
+      dashboard force refresh, vì `worklog/add` không patch snapshot.)
+- [ ] Ngày đã kín giờ → hiện "Ngày này không còn giờ trống", không có form.
 
 ### 5b. Gom nhóm theo project
 

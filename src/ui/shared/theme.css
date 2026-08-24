@@ -56,6 +56,18 @@
 
   /* Thang spacing 4px. Trước đây mọi khoảng cách là 6/8/10 rời rạc nên không có
    * nhịp nào phân biệt "trong một nhóm" với "giữa hai nhóm". */
+  /* Thang tầng xếp lớp. Trước đây các số này rải rác dưới dạng số ma thuật
+   * (sticky 1, ô góc 2, popover 20) và CellDetail thì KHÔNG có z-index nào —
+   * nên header sticky vẽ trùm lên panel chi tiết: element có z-index dương luôn
+   * lên trên element `z-index: auto`, bất kể thứ tự DOM.
+   *
+   * Khai một chỗ để so sánh được với nhau. Mọi tầng mới phải thêm vào đây, chứ
+   * không viết một số vào chỗ dùng. Khớp với `zLayer` trong theme.ts. */
+  --z-sticky: 1;
+  --z-sticky-corner: 2;
+  --z-popover: 20;
+  --z-panel: 30;
+
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -454,7 +466,7 @@ button:hover:not(:disabled) {
 .wl-table th[scope="col"] {
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: var(--z-sticky);
   background: var(--surface-alt);
   font-size: var(--text-xs);
   font-weight: 600;
@@ -784,7 +796,7 @@ button:hover:not(:disabled) {
   position: absolute;
   top: calc(100% + var(--space-1));
   left: 0;
-  z-index: 20;
+  z-index: var(--z-popover);
   background: var(--surface-alt);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-panel);

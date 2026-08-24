@@ -13,7 +13,7 @@ import { formatDuration } from '@/core/duration'
 import { ProgressBar } from '@/ui/shared/ProgressBar'
 import type { ProjectCoverage } from '@/core/coverage-by-project'
 import { cellLabel, dayMonthLabel, hoursLabel } from '@/ui/shared/format'
-import { colors, table as tableColors } from '@/ui/shared/theme'
+import { colors, table as tableColors, zLayer } from '@/ui/shared/theme'
 import { useLocale, useT } from '@/ui/shared/LocaleProvider'
 import type { Messages } from '@/i18n'
 
@@ -95,7 +95,7 @@ function IssueRow({
         style={{
           paddingLeft: indent,
           fontWeight: 400,
-          position: 'sticky', left: 0, background: colors.bg, zIndex: 1,
+          position: 'sticky', left: 0, background: colors.bg, zIndex: zLayer.sticky,
         }}
       >
         {/* Nội dung chảy theo dòng chữ bình thường (không flex): ở viewport hẹp
@@ -154,7 +154,7 @@ function ProjectHeaderRow({ row, dates, off, projectKey }: {
         style={{
           paddingLeft: INDENT_PROJECT,
           fontWeight: 600,
-          position: 'sticky', left: 0, background: tableColors.groupRowBg, zIndex: 1,
+          position: 'sticky', left: 0, background: tableColors.groupRowBg, zIndex: zLayer.sticky,
         }}
       >
         <span style={{ whiteSpace: 'nowrap' }}>{projectLabel(t, projectKey)}</span>
@@ -273,7 +273,7 @@ function GroupHeaderRow({ label, table, dates }: {
       <th
         scope="row"
         style={{
-          position: 'sticky', left: 0, zIndex: 1,
+          position: 'sticky', left: 0, zIndex: zLayer.sticky,
           background: tableColors.footerBg,
           fontWeight: 700, letterSpacing: '.02em',
         }}
@@ -340,7 +340,7 @@ export function CoverageTable({
     return (
       <Fragment key={rowKey}>
         <tr>
-          <th scope="row" style={{ position: 'sticky', left: 0, background: tableColors.groupRowBg, zIndex: 1 }}>
+          <th scope="row" style={{ position: 'sticky', left: 0, background: tableColors.groupRowBg, zIndex: zLayer.sticky }}>
             <button
               type="button"
               className="wl-btn wl-btn--ghost wl-btn--sm"
@@ -436,7 +436,7 @@ export function CoverageTable({
         </caption>
         <thead>
           <tr>
-            <th scope="col" style={{ textAlign: 'left', minWidth: 190, position: 'sticky', left: 0, zIndex: 2 }}>
+            <th scope="col" style={{ textAlign: 'left', minWidth: 190, position: 'sticky', left: 0, zIndex: zLayer.stickyCorner }}>
               {t.dashboard.memberIssue}
             </th>
             {data.dates.map((d) => (
@@ -486,7 +486,7 @@ export function CoverageTable({
         </tbody>
         <tfoot>
           <tr>
-            <th scope="row" style={{ position: 'sticky', left: 0, zIndex: 1, background: tableColors.footerBg }}>
+            <th scope="row" style={{ position: 'sticky', left: 0, zIndex: zLayer.sticky, background: tableColors.footerBg }}>
               {t.dashboard.totalTeam}
             </th>
             {data.dates.map((d) => (

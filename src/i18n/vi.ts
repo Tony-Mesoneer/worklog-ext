@@ -353,6 +353,12 @@ export const vi: Messages = {
     markDayOff: 'Đánh dấu ngày nghỉ',
     unmarkDayOff: 'Bỏ đánh dấu ngày nghỉ',
     noWorklogs: 'Không có worklog nào.',
+    othersReadOnly: 'Ở đây bạn chỉ sửa được giờ của chính mình.',
+    addHere: 'Ghi giờ vào ngày này',
+    addIssuePlaceholder: 'Issue key, vd. CAG-123',
+    addStartsAt: (time: string): string => `Sẽ ghi từ ${time}`,
+    addSubmit: 'Log',
+    dayFull: 'Ngày này không còn giờ trống.',
 
     loadingPoints: 'Đang tải…',
     noSprintIssues: 'Sprint hiện tại không có issue nào.',

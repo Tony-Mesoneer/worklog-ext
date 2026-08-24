@@ -371,6 +371,15 @@ export const en = {
     markDayOff: 'Mark as a day off',
     unmarkDayOff: 'Unmark day off',
     noWorklogs: 'No worklogs.',
+    // Panel chi tiết của dashboard chỉ cho sửa giờ CỦA MÌNH: Jira đặt author
+    // của worklog = người đang xác thực, nên không thể ghi hộ ai; và xoá giờ
+    // của người khác cần quyền project admin nên gần như luôn 403.
+    othersReadOnly: 'You can only edit your own hours here.',
+    addHere: 'Log time on this day',
+    addIssuePlaceholder: 'Issue key, e.g. CAG-123',
+    addStartsAt: (time: string): string => `Will start at ${time}`,
+    addSubmit: 'Log',
+    dayFull: 'No free time left on this day.',
 
     loadingPoints: 'Loading…',
     noSprintIssues: 'The current sprint has no issues.',
