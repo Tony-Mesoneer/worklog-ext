@@ -19,3 +19,18 @@ export function GearIcon() {
     </svg>
   )
 }
+
+// Mũi tên xoay — "tải lại dữ liệu từ Jira". Dùng ở side panel, cạnh bánh răng.
+export function RefreshIcon() {
+  return (
+    <svg
+      width="16" height="16" viewBox="0 0 24 24"
+      fill="none" stroke="currentColor" strokeWidth={2}
+      strokeLinecap="round" strokeLinejoin="round"
+      aria-hidden="true" focusable="false"
+    >
+      <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+      <path d="M21 3v6h-6" />
+    </svg>
+  )
+}

@@ -243,6 +243,7 @@ export const en = {
 
   sidepanel: {
     settings: 'Settings',
+    refresh: 'Reload data from Jira',
     prevDay: 'Previous day',
     nextDay: 'Next day',
     noJira: 'Jira is not configured yet.',
