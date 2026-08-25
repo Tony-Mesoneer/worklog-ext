@@ -60,7 +60,23 @@ const replaceTopLevelVersion = (raw, value) => {
   return raw.replace(re, `$1${value}$2`)
 }
 
-const targets = ['package.json', 'manifest.json', 'package-lock.json']
+// Landing page không phải JSON: version nằm trong text của những phần tử mang
+// attribute `data-version`. Thay token vX.Y.Z bên trong chúng, không đụng số
+// version nào khác trên trang (vd tên file zip trong hướng dẫn cài).
+// Regex dựng MỚI mỗi lần gọi, không dùng chung một hằng: một regex /g giữ
+// `lastIndex` giữa các lần .test(), nên dùng lại nó là mời một bug im lặng.
+const htmlVersionRe = () => /(<[^>]*\bdata-version\b[^>]*>[^<]*?)v\d+\.\d+\.\d+/g
+const replaceHtmlVersion = (raw, value) => {
+  if (!htmlVersionRe().test(raw)) {
+    throw new Error('Không tìm thấy phần tử data-version nào trong docs/index.html')
+  }
+  return raw.replace(htmlVersionRe(), `$1v${value}`)
+}
+
+// docs/index.html nằm trong danh sách vì trang này ĐANG nói version cho người
+// dùng đọc. Trước đây nó không được bump, nên landing page đứng yên ở v0.5.0
+// suốt tới v0.10.0 — quảng cáo sai một bản đã cũ 5 release.
+const targets = ['package.json', 'manifest.json', 'package-lock.json', 'docs/index.html']
 const tag = `v${next}`
 
 console.log(`${current} → ${next}`)
@@ -75,7 +91,9 @@ for (const file of targets) {
   const raw = readFileSync(path, 'utf8')
   // package-lock.json có version ở cả gói gốc và packages[""].
   const updated =
-    file === 'package-lock.json'
+    file === 'docs/index.html'
+      ? replaceHtmlVersion(raw, next)
+      : file === 'package-lock.json'
       ? replaceTopLevelVersion(raw, next).replace(
           /("":\s*\{\s*\n\s*"name":[^\n]*\n\s*"version":\s*")[^"]*(")/,
           `$1${next}$2`,

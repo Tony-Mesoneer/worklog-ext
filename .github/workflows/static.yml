@@ -6,8 +6,26 @@ on:
   push:
     branches: ["main"]
 
+  # Được auto-version.yml gọi NGAY SAU khi nó bump và tag. Bắt buộc phải gọi
+  # trực tiếp: commit `chore(release):` do job đó push đi bằng GITHUB_TOKEN, mà
+  # push bằng token mặc định KHÔNG kích hoạt workflow khác — nên trigger `push`
+  # ở trên không bao giờ thấy nó. Thiếu đường này thì landing page chỉ bắt kịp
+  # version ở lần merge thường tiếp theo, tức luôn trễ một nhịp đúng vào lúc
+  # release. Đây cùng là lý do auto-version phải `uses:` release.yml.
+  workflow_call:
+    inputs:
+      ref:
+        description: 'Ref để deploy (vd: v0.10.0). Bỏ trống thì lấy ref của event.'
+        required: false
+        type: string
+
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Ref để deploy lại (vd: v0.10.0). Bỏ trống thì lấy main.'
+        required: false
+        type: string
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
@@ -31,6 +49,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Khi được auto-version gọi, `github.ref` vẫn trỏ commit merge TRƯỚC
+          # khi bump — deploy nó là publish lại đúng version cũ. Tag vừa tạo mới
+          # là thứ chứa docs/index.html đã bump.
+          ref: ${{ inputs.ref || github.ref }}
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Upload artifact
