@@ -385,7 +385,11 @@ footer {
     <div class="brand">
       <span class="brand__mark" aria-hidden="true">M.</span>
       <span class="brand__name">Worklog</span>
-      <span class="brand__ver">v0.5.0</span>
+      <!-- data-version: bump-version.mjs ghi đè token vX.Y.Z trong MỌI phần tử
+           mang attribute này, và check-version-sync.mjs fail nếu nó lệch
+           manifest.json. Bỏ attribute đi là trang lại âm thầm đứng yên ở một
+           version cũ như trước. -->
+      <span class="brand__ver" data-version>v0.10.0</span>
     </div>
 
     <div class="hero__grid">
@@ -613,7 +617,7 @@ footer {
 <footer>
   <div class="wrap">
     <div class="footer__row">
-      <span class="brand__name">Worklog v0.5.0</span>
+      <span class="brand__name" data-version>Worklog v0.10.0</span>
       <a href="https://github.com/Tony-Mesoneer/worklog-ext">GitHub</a>
       <a href="https://github.com/Tony-Mesoneer/worklog-ext/releases">Releases</a>
       <a href="https://github.com/Tony-Mesoneer/worklog-ext/issues">Báo lỗi</a>

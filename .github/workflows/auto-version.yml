@@ -66,3 +66,21 @@ jobs:
     uses: ./.github/workflows/release.yml
     with:
       tag: ${{ needs.bump.outputs.tag }}
+
+  pages:
+    name: Deploy landing page
+    needs: bump
+    if: needs.bump.outputs.tag != ''
+    # Cùng lý do với `release` ở trên: commit bump được push bằng GITHUB_TOKEN
+    # nên trigger `push: branches: [main]` của static.yml không thấy nó. Không
+    # gọi trực tiếp thì trang đứng ở version cũ tới lần merge sau.
+    #
+    # Deploy TAG chứ không phải `main`: main có thể đã chạy tiếp, còn tag là
+    # đúng cái vừa release.
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/static.yml
+    with:
+      ref: ${{ needs.bump.outputs.tag }}

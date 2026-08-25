@@ -75,8 +75,12 @@ bên dưới vẫn chạy nguyên vẹn.
 
 ### Version thủ công
 
-Version sống ở `package.json`, `package-lock.json` và `manifest.json`; cả ba phải khớp
-nhau, CI fail nếu lệch. Đừng sửa tay — dùng script:
+Version sống ở `package.json`, `package-lock.json`, `manifest.json` và
+`docs/index.html`; cả bốn phải khớp nhau, CI fail nếu lệch. Landing page có mặt
+trong danh sách vì nó nói version cho người dùng đọc — trước đây nó không được
+bump nên đứng yên ở v0.5.0 suốt tới v0.10.0. Trên trang, version nằm trong text
+của những phần tử mang attribute `data-version`; thêm chỗ hiện version mới thì
+gắn attribute đó, đừng gõ số vào. Đừng sửa tay — dùng script:
 
 ```bash
 npm run bump -- patch          # 0.2.0 → 0.2.1
@@ -86,7 +90,7 @@ npm run bump -- 1.4.2          # đặt version cụ thể
 npm run bump -- patch --dry-run   # xem trước, không sửa gì
 ```
 
-Script bump cả ba file, commit `chore(release): vX.Y.Z` và tạo tag `vX.Y.Z`. Nó
+Script bump cả bốn file, commit `chore(release): vX.Y.Z` và tạo tag `vX.Y.Z`. Nó
 đòi working tree sạch. Chrome chỉ nhận version dạng số nên chỉ hỗ trợ `x.y.z`,
 không có prerelease.
 
