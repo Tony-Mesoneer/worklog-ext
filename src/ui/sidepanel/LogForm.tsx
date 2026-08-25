@@ -2,7 +2,7 @@
 import { useId } from 'react'
 import { parseDuration, formatDuration } from '@/core/duration'
 import {
-  buildSlots, occupiedBy, formatMinutes,
+  breakAt, buildSlots, occupiedBy, formatMinutes,
   type Break, type DayEntry, type Segment,
 } from '@/core/timeline'
 import { Button } from '@/ui/shared/Button'
@@ -44,9 +44,10 @@ const segmentText = (s: Segment): string =>
 export function LogForm(p: Props) {
   const t = useT()
   const seconds = parseDuration(p.durationInput)
-  // Lưới bỏ hẳn các mốc nằm trong giờ nghỉ: dropdown không được mời người dùng
-  // bắt đầu một worklog vào giữa bữa trưa.
-  const slots = buildSlots(p.workdayStartMinutes, p.dayEndMinutes, p.slotMinutes, p.breaks)
+  // Lưới GIỮ cả các mốc nằm trong giờ nghỉ, chỉ gắn nhãn chúng: hôm nào làm
+  // xuyên trưa thì người dùng vẫn phải chọn được 12:15. Cái né giờ nghỉ là giá
+  // trị mặc định (nextFreeStart ở SidePanel), không phải danh sách này.
+  const slots = buildSlots(p.workdayStartMinutes, p.dayEndMinutes, p.slotMinutes)
   const startId = useId()
   const freeId = useId()
   const noteId = useId()
@@ -69,9 +70,12 @@ export function LogForm(p: Props) {
         >
           {slots.map((s) => {
             const busy = occupiedBy(p.entries, s, p.slotMinutes)
+            // Nhãn giờ nghỉ đứng trước nhãn issue: nó nói về chính mốc thời
+            // gian, còn issue chỉ nói ô lưới đó đã có việc.
+            const note = breakAt(s, p.breaks) ? t.sidepanel.breakShort : busy?.issueKey
             return (
               <option key={s} value={s}>
-                {formatMinutes(s)}{busy ? ` — ${busy.issueKey}` : ''}
+                {formatMinutes(s)}{note ? ` — ${note}` : ''}
               </option>
             )
           })}
