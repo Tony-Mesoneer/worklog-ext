@@ -2,7 +2,7 @@
 import { useId } from 'react'
 import { parseDuration, formatDuration } from '@/core/duration'
 import {
-  buildSlots, occupiedBy, formatMinutes,
+  breakAt, buildSlots, occupiedBy, formatMinutes,
   type Break, type DayEntry, type Segment,
 } from '@/core/timeline'
 import { Button } from '@/ui/shared/Button'
@@ -44,9 +44,10 @@ const segmentText = (s: Segment): string =>
 export function LogForm(p: Props) {
   const t = useT()
   const seconds = parseDuration(p.durationInput)
-  // Lưới bỏ hẳn các mốc nằm trong giờ nghỉ: dropdown không được mời người dùng
-  // bắt đầu một worklog vào giữa bữa trưa.
-  const slots = buildSlots(p.workdayStartMinutes, p.dayEndMinutes, p.slotMinutes, p.breaks)
+  // Lưới GIỮ cả các mốc nằm trong giờ nghỉ, chỉ gắn nhãn chúng: hôm nào làm
+  // xuyên trưa thì người dùng vẫn phải chọn được 12:15. Cái né giờ nghỉ là giá
+  // trị mặc định (nextFreeStart ở SidePanel), không phải danh sách này.
+  const slots = buildSlots(p.workdayStartMinutes, p.dayEndMinutes, p.slotMinutes)
   const startId = useId()
   const freeId = useId()
   const noteId = useId()
@@ -69,9 +70,12 @@ export function LogForm(p: Props) {
         >
           {slots.map((s) => {
             const busy = occupiedBy(p.entries, s, p.slotMinutes)
+            // Nhãn giờ nghỉ đứng trước nhãn issue: nó nói về chính mốc thời
+            // gian, còn issue chỉ nói ô lưới đó đã có việc.
+            const note = breakAt(s, p.breaks) ? t.sidepanel.breakShort : busy?.issueKey
             return (
               <option key={s} value={s}>
-                {formatMinutes(s)}{busy ? ` — ${busy.issueKey}` : ''}
+                {formatMinutes(s)}{note ? ` — ${note}` : ''}
               </option>
             )
           })}
@@ -80,12 +84,17 @@ export function LogForm(p: Props) {
 
       <div className="wl-field">
         <span className="wl-field__label">{t.sidepanel.durationLabel}</span>
-        <div style={{ display: 'flex', gap: space.x2, flexWrap: 'wrap', alignItems: 'center' }}>
+        {/* nowrap + minWidth:0 — hàng này phải nằm trên MỘT dòng. Trước đây
+            flexWrap:'wrap' đẩy ô nhập tay xuống dòng dưới ngay khi panel hẹp,
+            và người dùng thấy hai hàng rời nhau thay vì một hàng duration. Chỗ
+            co lại là nhóm chip (nó cuộn ngang bên trong), không phải ô nhập. */}
+        <div style={{ display: 'flex', gap: space.x2, flexWrap: 'nowrap', alignItems: 'center', minWidth: 0 }}>
           {/* mode="toggle": có thể không chip nào được chọn (gõ tay "1h30"), nên
               aria-selected của tablist là sai nghĩa ở đây. */}
           <SegmentedControl
             label={t.sidepanel.durationPresets}
             mode="toggle"
+            nowrap
             items={p.presets.map((m) => ({ value: m, label: formatDuration(m * 60) }))}
             value={p.presets.find((m) => m * 60 === seconds) ?? null}
             onChange={(m) => p.onDurationChange(presetText(m))}

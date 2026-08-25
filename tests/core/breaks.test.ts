@@ -106,11 +106,22 @@ describe('splitAroundBreaks', () => {
     expect(show(splitAroundBreaks(at('11:00'), 61, LUNCH))).toEqual(['11:00+60', '13:00+1'])
   })
 
-  // Mốc bắt đầu nằm TRONG giờ nghỉ: đẩy TIẾN tới hết giờ nghỉ. Không lùi lại —
-  // lùi là tự khai giờ làm sớm hơn người dùng nói và dễ chồng worklog buổi sáng.
-  it('bắt đầu TRONG giờ nghỉ → dồn hết sang sau giờ nghỉ, một đoạn', () => {
-    expect(show(splitAroundBreaks(at('12:15'), 120, LUNCH))).toEqual(['13:00+120'])
-    expect(show(splitAroundBreaks(at('12:00'), 60, LUNCH))).toEqual(['13:00+60'])
+  // Mốc bắt đầu nằm TRONG giờ nghỉ = "hôm nay làm xuyên trưa": giữ nguyên mốc,
+  // bỏ hẳn khoảng nghỉ đó. Dropdown có mời mốc này nên chọn nó là có chủ ý;
+  // đẩy sang 13:00 là ghi khác điều người dùng vừa khai.
+  it('bắt đầu TRONG giờ nghỉ → làm xuyên khoảng đó, không bị đẩy đi', () => {
+    expect(show(splitAroundBreaks(at('12:15'), 120, LUNCH))).toEqual(['12:15+120'])
+    expect(show(splitAroundBreaks(at('12:00'), 60, LUNCH))).toEqual(['12:00+60'])
+  })
+
+  it('làm xuyên trưa vẫn cắt ở các khoảng nghỉ SAU đó', () => {
+    const breaks: Break[] = [
+      { startMinutes: at('12:00'), endMinutes: at('13:00') },
+      { startMinutes: at('15:00'), endMinutes: at('15:15') },
+    ]
+    // Bắt đầu 12:30: bỏ khoảng trưa, nhưng tea break 15:00 vẫn cắt.
+    expect(show(splitAroundBreaks(at('12:30'), 180, breaks)))
+      .toEqual(['12:30+150', '15:15+30'])
   })
 
   it('đuôi vượt giờ tan làm: đoạn vẫn đúng, không có gì bị chặn ở tầng core', () => {
@@ -148,8 +159,10 @@ describe('splitAroundBreaks', () => {
     expect(splitAroundBreaks(at('11:00'), -30, LUNCH)).toEqual([])
   })
 
+  // Chỉ những mốc bắt đầu NGOÀI giờ nghỉ mới có bất biến "không đoạn nào giao
+  // giờ nghỉ" — bắt đầu bên trong là cố ý làm xuyên, xem test ở trên.
   it('mọi đoạn đều có thời lượng > 0 và không đoạn nào giao giờ nghỉ', () => {
-    for (const start of [at('08:30'), at('11:45'), at('12:00'), at('12:59'), at('13:00'), at('17:00')]) {
+    for (const start of [at('08:30'), at('11:45'), at('13:00'), at('17:00')]) {
       for (const dur of [15, 30, 45, 60, 90, 120, 240, 480, 600]) {
         const segs = splitAroundBreaks(start, dur, LUNCH)
         expect(segs.reduce((s, x) => s + x.durationMinutes, 0), `${start}/${dur}`).toBe(dur)
@@ -168,16 +181,14 @@ describe('splitAroundBreaks', () => {
 })
 
 describe('buildSlots có giờ nghỉ', () => {
-  it('không mời người dùng bắt đầu vào giữa bữa trưa', () => {
-    const slots = buildSlots(START, END, 15, LUNCH)
-    expect(slots).toContain(at('11:45'))  // 11:45 vẫn hợp lệ — nó sẽ bị CẮT, không bị cấm
-    expect(slots).not.toContain(at('12:00'))
-    expect(slots).not.toContain(at('12:45'))
+  // Lưới KHÔNG loại giờ nghỉ: ai làm xuyên trưa vẫn phải chọn được 12:00.
+  // Việc né giờ nghỉ là của nextFreeStart (giá trị mặc định), xem describe dưới.
+  it('vẫn mời cả các mốc trong giờ nghỉ', () => {
+    const slots = buildSlots(START, END, 15)
+    expect(slots).toContain(at('11:45'))
+    expect(slots).toContain(at('12:00'))
+    expect(slots).toContain(at('12:45'))
     expect(slots).toContain(at('13:00'))
-  })
-
-  it('không truyền breaks → lưới y như trước', () => {
-    expect(buildSlots(START, END, 15)).toContain(at('12:00'))
   })
 
   it('slotMinutes <= 0 → rỗng thay vì treo vòng lặp', () => {
@@ -193,8 +204,8 @@ describe('nextFreeStart có giờ nghỉ', () => {
     expect(nextFreeStart([entry('a', START, 225)], START, 15, END, LUNCH)).toBe(at('13:00'))
   })
 
-  it('kết quả LUÔN là một slot của buildSlots có cùng giờ nghỉ', () => {
-    const slots = buildSlots(START, END, 15, LUNCH)
+  it('kết quả LUÔN là một slot của buildSlots', () => {
+    const slots = buildSlots(START, END, 15)
     for (const dur of [0, 20, 90, 209, 210, 211, 225, 300, 570, 600, 900]) {
       const got = nextFreeStart(
         dur === 0 ? [] : [entry('a', START, dur)], START, 15, END, LUNCH,

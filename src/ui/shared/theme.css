@@ -377,6 +377,21 @@ button:hover:not(:disabled) {
   max-width: 100%;
 }
 
+/* Một dòng, không xuống hàng: hàng duration ở side panel đứng cạnh ô nhập tay,
+ * chip rớt xuống dòng làm hàng vỡ làm đôi. Chật thì cuộn ngang — chip bị cắt
+ * một nửa ở mép chính là dấu hiệu "còn nữa", nên không cần thanh cuộn 4px cao
+ * chen vào giữa form. */
+.wl-seg--nowrap {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  min-width: 0;
+  scrollbar-width: none;
+}
+
+.wl-seg--nowrap::-webkit-scrollbar {
+  display: none;
+}
+
 .wl-seg__item {
   appearance: none;
   background: transparent;

@@ -59,9 +59,9 @@ export function mergeBreaks(breaks: Break[]): Break[] {
   return out
 }
 
-// Khoảng nghỉ chứa MỐC THỜI GIAN này, hoặc null. Dùng cho mốc bắt đầu (dropdown
-// "Bắt đầu", nextFreeStart) — không phải cho một khoảng thời lượng: một worklog
-// bắt đầu 11:45 là hợp lệ dù nó sẽ bị cắt ở 12:00.
+// Khoảng nghỉ chứa MỐC THỜI GIAN này, hoặc null. Dùng cho mốc bắt đầu (nhãn
+// trong dropdown "Bắt đầu", nextFreeStart) — không phải cho một khoảng thời
+// lượng: một worklog bắt đầu 11:45 là hợp lệ dù nó sẽ bị cắt ở 12:00.
 export function breakAt(minutes: number, breaks: Break[]): Break | null {
   for (const b of breaks) {
     if (minutes >= b.startMinutes && minutes < b.endMinutes) return b
@@ -73,25 +73,24 @@ export function breakAt(minutes: number, breaks: Break[]): Break | null {
 // nghỉ, GIỮ NGUYÊN TỔNG THỜI LƯỢNG: phần bị giờ nghỉ chặn lại được đẩy sang sau
 // giờ nghỉ chứ không bị mất.
 //
-// Quyết định cho trường hợp mốc bắt đầu nằm TRONG giờ nghỉ (vd 12:15, có thể
-// đến từ config cũ hoặc value gõ tay): đẩy TIẾN tới hết giờ nghỉ (13:00), không
-// lùi về trước. Lý do: lùi lại là tự ý khai giờ làm việc sớm hơn người dùng
-// nói, và rất dễ chồng lên worklog đã có trước bữa trưa; đẩy tiến giữ đúng tổng
-// thời lượng và chỉ dịch đúng phần thời gian mà chính người dùng đã khai là
-// không làm việc.
+// Quyết định cho trường hợp mốc bắt đầu nằm TRONG giờ nghỉ (vd 12:15): coi đó
+// là "hôm nay làm xuyên trưa" và BỎ HẲN khoảng nghỉ đó khỏi phép cắt — không
+// đẩy tiến tới 13:00, không lùi về trước. Lý do: dropdown "Bắt đầu" có mời mốc
+// này (xem buildSlots), nên chọn 12:15 là một khai báo có chủ ý của người dùng,
+// và dịch nó đi là ghi khác điều họ vừa nói. Các khoảng nghỉ SAU đó vẫn cắt
+// bình thường: chỉ đúng khoảng mà người dùng bước vào mới bị bỏ qua.
 export function splitAroundBreaks(
   startMinutes: number,
   durationMinutes: number,
   breaks: Break[],
 ): Segment[] {
   if (durationMinutes <= 0) return []
-  const bs = mergeBreaks(breaks)
+  const merged = mergeBreaks(breaks)
+  // Bắt đầu trong giờ nghỉ → làm xuyên khoảng đó: bỏ nó khỏi danh sách.
+  const inside = breakAt(startMinutes, merged)
+  const bs = inside ? merged.filter((b) => b !== inside) : merged
 
   let cursor = startMinutes
-  // Bắt đầu trong giờ nghỉ → đẩy tới hết giờ nghỉ đó.
-  const inside = breakAt(cursor, bs)
-  if (inside) cursor = inside.endMinutes
-
   let remaining = durationMinutes
   const out: Segment[] = []
 
@@ -125,8 +124,8 @@ export function segmentsEnd(segments: Segment[]): number {
 // --- lưới slot -------------------------------------------------------------
 
 // Mốc slot cuối cùng mà buildSlots(workdayStart, workdayEnd, slot) sinh ra.
-// Không tính giờ nghỉ: nextFreeStart mới chọn trực tiếp từ buildSlots nên nó
-// không cần hàm này để kẹp, đây chỉ còn là tiện ích mô tả biên của lưới.
+// nextFreeStart chọn trực tiếp từ buildSlots nên nó không cần hàm này để kẹp,
+// đây chỉ còn là tiện ích mô tả biên của lưới.
 export function lastSlotStart(
   workdayStartMinutes: number,
   slotMinutes: number,
@@ -137,26 +136,26 @@ export function lastSlotStart(
   return workdayStartMinutes + (count - 1) * slotMinutes
 }
 
-// Các mốc bắt đầu hợp lệ. `breaks` mặc định rỗng để caller cũ không đổi hành vi;
-// khi có giờ nghỉ thì mốc nằm trong giờ nghỉ bị loại khỏi lưới — dropdown không
-// được mời người dùng bắt đầu một worklog vào giữa bữa trưa.
+// Các mốc bắt đầu hợp lệ — TOÀN BỘ lưới, kể cả mốc rơi vào giờ nghỉ. Giờ nghỉ
+// không bị loại ở đây vì "làm xuyên trưa" là chuyện có thật: người dùng phải
+// chọn được 12:15 khi hôm nay họ làm qua bữa trưa. Cái mà giờ nghỉ chi phối là
+// giá trị MẶC ĐỊNH (nextFreeStart), không phải tập giá trị hợp lệ; dropdown tự
+// gắn nhãn cho những mốc này (xem LogForm) để chọn nhầm không âm thầm.
 export function buildSlots(
   fromMinutes: number,
   toMinutes: number,
   slotMinutes: number,
-  breaks: Break[] = [],
 ): number[] {
   if (slotMinutes <= 0) return []
   const slots: number[] = []
-  for (let m = fromMinutes; m < toMinutes; m += slotMinutes) {
-    if (breakAt(m, breaks)) continue
-    slots.push(m)
-  }
+  for (let m = fromMinutes; m < toMinutes; m += slotMinutes) slots.push(m)
   return slots
 }
 
 // Start time mặc định = ngay sau worklog kết thúc muộn nhất trong ngày, snap lên
-// lưới, rồi lấy mốc HỢP LỆ đầu tiên từ chính buildSlots.
+// lưới, rồi lấy mốc đầu tiên từ chính buildSlots mà KHÔNG rơi vào giờ nghỉ.
+// Mặc định không bao giờ mời người dùng bắt đầu giữa bữa trưa; muốn vậy thì họ
+// tự chọn trong dropdown.
 //
 // INVARIANT: kết quả luôn là một phần tử của buildSlots(...) với cùng tham số.
 // Đây là lý do hàm chọn từ danh sách slot thay vì tự tính rồi kẹp: dropdown chỉ
@@ -180,13 +179,16 @@ export function nextFreeStart(
   const candidate =
     workdayStartMinutes + snapUp(Math.max(0, lastEnd - workdayStartMinutes), slotMinutes)
 
-  const slots = buildSlots(workdayStartMinutes, dayEndMinutes, slotMinutes, breaks)
+  const bs = mergeBreaks(breaks)
+  // Lọc giờ nghỉ Ở ĐÂY chứ không trong buildSlots: dropdown vẫn phải có đủ lưới.
+  const free = buildSlots(workdayStartMinutes, dayEndMinutes, slotMinutes)
+    .filter((s) => !breakAt(s, bs))
   // Lưới rỗng (giờ tan làm <= giờ bắt đầu, hoặc cả ngày là giờ nghỉ): không có
   // mốc nào để trả, giữ nguyên giờ bắt đầu ngày làm việc.
-  if (slots.length === 0) return workdayStartMinutes
-  // Ngày đã kín tới cuối lưới thì kẹp về slot cuối; cảnh báo chồng giờ sẽ tự
-  // bật, đó là thông tin đúng.
-  return slots.find((s) => s >= candidate) ?? slots[slots.length - 1]!
+  if (free.length === 0) return workdayStartMinutes
+  // Ngày đã kín tới cuối lưới thì kẹp về slot làm-việc cuối; cảnh báo chồng giờ
+  // sẽ tự bật, đó là thông tin đúng.
+  return free.find((s) => s >= candidate) ?? free[free.length - 1]!
 }
 
 export function occupiedBy(
