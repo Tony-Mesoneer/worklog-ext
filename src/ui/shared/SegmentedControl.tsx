@@ -26,12 +26,18 @@ type Props<T> = {
   value: T | null
   onChange: (value: T) => void
   mode?: 'tabs' | 'toggle'
+  /**
+   * Giữ mọi item trên MỘT dòng, chật thì cuộn ngang thay vì xuống dòng. Dùng
+   * cho hàng duration ở side panel: nó đứng cạnh ô nhập tay, xuống dòng là
+   * hàng vỡ làm đôi.
+   */
+  nowrap?: boolean
   /** Nhãn cho screen reader — bắt buộc, nhóm nút không có tiêu đề nhìn thấy. */
   label: string
 }
 
 export function SegmentedControl<T extends string | number>({
-  items, value, onChange, mode = 'tabs', label,
+  items, value, onChange, mode = 'tabs', nowrap = false, label,
 }: Props<T>) {
   const ref = useRef<HTMLDivElement>(null)
 
@@ -66,7 +72,7 @@ export function SegmentedControl<T extends string | number>({
   return (
     <div
       ref={ref}
-      className="wl-seg"
+      className={nowrap ? 'wl-seg wl-seg--nowrap' : 'wl-seg'}
       role={mode === 'tabs' ? 'tablist' : 'group'}
       aria-label={label}
       onKeyDown={onKeyDown}

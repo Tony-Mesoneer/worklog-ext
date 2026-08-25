@@ -80,12 +80,17 @@ export function LogForm(p: Props) {
 
       <div className="wl-field">
         <span className="wl-field__label">{t.sidepanel.durationLabel}</span>
-        <div style={{ display: 'flex', gap: space.x2, flexWrap: 'wrap', alignItems: 'center' }}>
+        {/* nowrap + minWidth:0 — hàng này phải nằm trên MỘT dòng. Trước đây
+            flexWrap:'wrap' đẩy ô nhập tay xuống dòng dưới ngay khi panel hẹp,
+            và người dùng thấy hai hàng rời nhau thay vì một hàng duration. Chỗ
+            co lại là nhóm chip (nó cuộn ngang bên trong), không phải ô nhập. */}
+        <div style={{ display: 'flex', gap: space.x2, flexWrap: 'nowrap', alignItems: 'center', minWidth: 0 }}>
           {/* mode="toggle": có thể không chip nào được chọn (gõ tay "1h30"), nên
               aria-selected của tablist là sai nghĩa ở đây. */}
           <SegmentedControl
             label={t.sidepanel.durationPresets}
             mode="toggle"
+            nowrap
             items={p.presets.map((m) => ({ value: m, label: formatDuration(m * 60) }))}
             value={p.presets.find((m) => m * 60 === seconds) ?? null}
             onChange={(m) => p.onDurationChange(presetText(m))}
