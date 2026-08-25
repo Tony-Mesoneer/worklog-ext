@@ -226,6 +226,7 @@ export const vi: Messages = {
 
   sidepanel: {
     settings: 'Cấu hình',
+    refresh: 'Tải lại dữ liệu từ Jira',
     prevDay: 'Ngày trước',
     nextDay: 'Ngày sau',
     noJira: 'Chưa cấu hình Jira.',

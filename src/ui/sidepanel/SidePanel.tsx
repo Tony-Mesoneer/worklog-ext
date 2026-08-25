@@ -21,7 +21,7 @@ import { Button } from '@/ui/shared/Button'
 import { Card } from '@/ui/shared/Card'
 import { ProgressBar } from '@/ui/shared/ProgressBar'
 import { ErrorBanner, toUiError, type UiError } from '@/ui/shared/errors'
-import { GearIcon } from '@/ui/shared/icons'
+import { GearIcon, RefreshIcon } from '@/ui/shared/icons'
 import { colors, fontSize, space } from '@/ui/shared/theme'
 import { DatePopover } from './DatePopover'
 import { DayBlocks } from './DayBlocks'
@@ -148,6 +148,14 @@ export function SidePanel() {
   useEffect(() => {
     if (config && date) void reload(config, date)
   }, [config, date, reload])
+
+  // Tải lại thủ công. Kéo cả worklog của ngày LẪN danh sách sprint event
+  // (force=true, bỏ qua cache) — sau khi log ở nơi khác (Jira web, máy khác)
+  // thì cả hai đều có thể đã cũ, mà chỉ làm mới một nửa thì panel vẫn nói sai.
+  const refresh = useCallback(async () => {
+    if (!config || date === '') return
+    await Promise.all([reload(config, date), resolveEvents(config, true)])
+  }, [config, date, reload, resolveEvents])
 
   const pickEvent = (e: ResolvedSprintEvent) => {
     // Nút đã bị khoá khi issueKey null; chốt lại ở đây để không có đường nào
@@ -362,6 +370,15 @@ export function SidePanel() {
               onClick={() => setDate(addDays(date, 1))} disabled={busy}
             >
               →
+            </Button>
+            {/* Tải lại — đứng cạnh gear ở cụm chrome bên phải, không chen vào
+                nhóm điều hướng ngày. Khoá khi đang có request để không chồng
+                hai lần load lên cùng một ngày. */}
+            <Button
+              variant="ghost" iconOnly aria-label={t.sidepanel.refresh} title={t.sidepanel.refresh}
+              onClick={() => void refresh()} disabled={busy || loadingDay || resolving}
+            >
+              <RefreshIcon />
             </Button>
             <SettingsButton />
           </div>
