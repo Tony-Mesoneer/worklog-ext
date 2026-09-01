@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
   parseHhMm, formatMinutes, snapUp, nextFreeStart, lastSlotStart,
-  buildSlots, occupiedBy, findOverlaps, type DayEntry,
+  buildSlots, buildPickerSlots, occupiedBy, findOverlaps, type DayEntry,
+  PICKER_FLOOR_MINUTES, PICKER_CEIL_MINUTES,
 } from '@/core/timeline'
 
 // Giờ tan làm dùng cho các test cũ. Trước đây đây là hằng số DAY_END_MINUTES
@@ -154,5 +155,49 @@ describe('findOverlaps', () => {
   it('kề nhau không tính là chồng', () => {
     // 10:00–11:00 chạm đầu chạm cuối cả hai nhưng không chồng.
     expect(findOverlaps(entries, 600, 60)).toEqual([])
+  })
+})
+
+describe('buildPickerSlots', () => {
+  const at = (hhmm: string): number => parseHhMm(hhmm)
+
+  it('nới ra ngoài giờ làm việc: chọn được từ 07:30 tới 17:45', () => {
+    const slots = buildPickerSlots(at('08:30'), at('18:00'), 15)
+    expect(slots[0]).toBe(PICKER_FLOOR_MINUTES)
+    expect(slots[slots.length - 1]).toBe(PICKER_CEIL_MINUTES - 15)
+    expect(slots).toContain(at('07:45'))
+    expect(slots).toContain(at('12:15'))
+  })
+
+  it('nới cả phần đuôi khi giờ tan làm sớm hơn 18:00', () => {
+    const slots = buildPickerSlots(at('08:00'), at('16:00'), 30)
+    expect(slots[slots.length - 1]).toBe(at('17:30'))
+  })
+
+  it('giờ làm việc dài hơn biên mặc định thì không bị cắt', () => {
+    const slots = buildPickerSlots(at('07:00'), at('20:00'), 60)
+    expect(slots[0]).toBe(at('07:00'))
+    expect(slots[slots.length - 1]).toBe(at('19:00'))
+  })
+
+  // INVARIANT giống nextFreeStart: <select> có value ngoài danh sách option sẽ
+  // hiện option đầu tiên trong khi state giữ giá trị khác.
+  it('luôn chứa nextFreeStart, kể cả khi workdayStart lệch lưới', () => {
+    const cases = [
+      { start: at('08:20'), slot: 15 },
+      { start: at('09:00'), slot: 60 },
+      { start: at('07:45'), slot: 25 },
+      { start: at('06:00'), slot: 45 },
+    ]
+    for (const c of cases) {
+      const slots = buildPickerSlots(c.start, DAY_END, c.slot)
+      expect(slots).toContain(nextFreeStart([], c.start, c.slot, DAY_END))
+      expect(slots).toContain(nextFreeStart([entry('a', c.start, 200)], c.start, c.slot, DAY_END))
+      expect(slots[0]).toBeLessThanOrEqual(Math.max(PICKER_FLOOR_MINUTES, c.start))
+    }
+  })
+
+  it('slot <= 0 → rỗng', () => {
+    expect(buildPickerSlots(at('08:30'), at('18:00'), 0)).toEqual([])
   })
 })

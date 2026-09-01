@@ -281,6 +281,8 @@ export const en = {
     freeShort: (duration: string): string => `${duration} free`,
     breakTitle: 'Lunch break',
     breakShort: 'lunch',
+    // Nhãn cho mốc nằm ngoài giờ làm việc trong dropdown "Start".
+    outsideHoursShort: 'off hours',
     willLogHere: 'will log here',
     noWorklog: 'No worklogs today yet.',
     hideTail: 'Hide the end of the day',

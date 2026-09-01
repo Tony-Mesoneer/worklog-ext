@@ -2,7 +2,7 @@
 import { useId } from 'react'
 import { parseDuration, formatDuration } from '@/core/duration'
 import {
-  breakAt, buildSlots, occupiedBy, formatMinutes,
+  breakAt, buildPickerSlots, occupiedBy, formatMinutes,
   type Break, type DayEntry, type Segment,
 } from '@/core/timeline'
 import { Button } from '@/ui/shared/Button'
@@ -44,10 +44,12 @@ const segmentText = (s: Segment): string =>
 export function LogForm(p: Props) {
   const t = useT()
   const seconds = parseDuration(p.durationInput)
-  // Lưới GIỮ cả các mốc nằm trong giờ nghỉ, chỉ gắn nhãn chúng: hôm nào làm
-  // xuyên trưa thì người dùng vẫn phải chọn được 12:15. Cái né giờ nghỉ là giá
-  // trị mặc định (nextFreeStart ở SidePanel), không phải danh sách này.
-  const slots = buildSlots(p.workdayStartMinutes, p.dayEndMinutes, p.slotMinutes)
+  // Lưới GIỮ cả các mốc nằm trong giờ nghỉ VÀ các mốc ngoài giờ làm việc (sớm
+  // hơn giờ vào, muộn hơn giờ tan), chỉ gắn nhãn chúng: hôm nào làm xuyên trưa
+  // hay vào sớm lúc 07:45 thì người dùng vẫn phải chọn được. Cái né giờ nghỉ và
+  // bám giờ làm việc là giá trị MẶC ĐỊNH (nextFreeStart ở SidePanel), không
+  // phải danh sách này.
+  const slots = buildPickerSlots(p.workdayStartMinutes, p.dayEndMinutes, p.slotMinutes)
   const startId = useId()
   const freeId = useId()
   const noteId = useId()
@@ -70,9 +72,15 @@ export function LogForm(p: Props) {
         >
           {slots.map((s) => {
             const busy = occupiedBy(p.entries, s, p.slotMinutes)
-            // Nhãn giờ nghỉ đứng trước nhãn issue: nó nói về chính mốc thời
-            // gian, còn issue chỉ nói ô lưới đó đã có việc.
-            const note = breakAt(s, p.breaks) ? t.sidepanel.breakShort : busy?.issueKey
+            // Nhãn về MỐC THỜI GIAN (giờ nghỉ, ngoài giờ làm việc) đứng trước
+            // nhãn issue: chúng nói về chính mốc đó, còn issue chỉ nói ô lưới
+            // này đã có việc.
+            const outside = s < p.workdayStartMinutes || s >= p.dayEndMinutes
+            const note = breakAt(s, p.breaks)
+              ? t.sidepanel.breakShort
+              : outside
+                ? t.sidepanel.outsideHoursShort
+                : busy?.issueKey
             return (
               <option key={s} value={s}>
                 {formatMinutes(s)}{note ? ` — ${note}` : ''}

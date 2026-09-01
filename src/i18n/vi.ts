@@ -264,6 +264,8 @@ export const vi: Messages = {
     freeShort: (duration: string): string => `trống ${duration}`,
     breakTitle: 'Giờ nghỉ trưa',
     breakShort: 'nghỉ trưa',
+    // Nhãn cho mốc nằm ngoài giờ làm việc trong dropdown "Bắt đầu".
+    outsideHoursShort: 'ngoài giờ',
     willLogHere: 'sẽ ghi vào đây',
     noWorklog: 'Chưa có worklog nào trong ngày.',
     hideTail: 'Ẩn phần cuối ngày',
