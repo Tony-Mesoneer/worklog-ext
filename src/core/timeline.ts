@@ -217,3 +217,34 @@ export function findOverlaps(
     return e.startMinutes < end && eEnd > startMinutes
   })
 }
+
+// --- lưới của dropdown "Bắt đầu" -------------------------------------------
+
+// Biên của dropdown "Bắt đầu", KHÔNG phải giờ làm việc. Giờ làm việc trong
+// config quyết định giá trị MẶC ĐỊNH và các cảnh báo; hai mốc dưới đây chỉ nới
+// tập giá trị người dùng CHỌN ĐƯỢC. Lý do: đi sớm 07:30 hay ở lại tới 18:00 là
+// chuyện có thật, và trước đây dropdown chặn hẳn nên phần giờ đó không log được
+// từ panel. Cùng lối xử lý với giờ nghỉ trưa: mời chọn, gắn nhãn, không mặc định.
+export const PICKER_FLOOR_MINUTES = 7 * 60 + 30 // 07:30
+export const PICKER_CEIL_MINUTES = 18 * 60 // 18:00
+
+// Lưới cho dropdown: rộng hơn giờ làm việc, nhưng VẪN NEO VÀO workdayStart.
+//
+// Neo là bắt buộc, không phải chi tiết thẩm mỹ: nextFreeStart trả về một phần
+// tử của buildSlots(workdayStart, …), và <select> có value ngoài danh sách
+// option sẽ hiện option ĐẦU TIÊN trong khi state giữ giá trị khác. Nếu lưới này
+// bắt đầu đúng 07:30 thì với workdayStart 08:20 (slot 15) nó sẽ là 07:30/07:45/…
+// — không chứa 08:20, và panel hiện một giờ còn POST một giờ khác. Vì vậy mốc
+// đầu được lùi TỪNG SLOT từ workdayStart xuống tới khi chạm/qua sàn.
+export function buildPickerSlots(
+  workdayStartMinutes: number,
+  dayEndMinutes: number,
+  slotMinutes: number,
+  floorMinutes: number = PICKER_FLOOR_MINUTES,
+  ceilMinutes: number = PICKER_CEIL_MINUTES,
+): number[] {
+  if (slotMinutes <= 0) return []
+  const back = Math.max(0, Math.ceil((workdayStartMinutes - floorMinutes) / slotMinutes))
+  const from = workdayStartMinutes - back * slotMinutes
+  return buildSlots(from, Math.max(dayEndMinutes, ceilMinutes), slotMinutes)
+}
