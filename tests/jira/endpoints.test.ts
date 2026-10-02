@@ -1,7 +1,8 @@
 // tests/jira/endpoints.test.ts
 import { describe, it, expect, vi } from 'vitest'
 import {
-  findStoryPointsFieldId, searchIssuesWithWorklogs, searchMyIssues, getIssueWorklogs,
+  findStoryPointsFieldId, searchIssuesWithWorklogs, searchMyIssues, searchRecentIssues,
+  getIssueWorklogs,
   addWorklog, getSprintIssues, getActiveSprint, getActiveSprints,
   searchSprintSubtasks, filterKeysInSprint, pickIssues,
 } from '@/jira/endpoints'
@@ -142,6 +143,34 @@ describe('searchIssuesWithWorklogs', () => {
       accountIds: ['u1'], from: '2026-08-17', to: '2026-08-21',
     })
     expect(out.map((i) => i.key)).toEqual(['CAG-1', 'CAG-2'])
+  })
+})
+
+describe('searchRecentIssues', () => {
+  it('dựng JQL theo worklogAuthor + worklogDate, kèm project', async () => {
+    const { client, calls } = fakeClient({
+      'POST /rest/api/3/search/jql': { issues: [{ key: 'CAG-9', fields: { summary: 'S9' } }] },
+    })
+
+    const out = await searchRecentIssues(client, { projects: ['CAG'] })
+
+    const jql = (calls[0]!.body as { jql: string }).jql
+    expect(jql).toContain('worklogAuthor = currentUser()')
+    expect(jql).toContain('worklogDate >= -14d')
+    expect(jql).toContain('project in ("CAG")')
+    expect(jql).toContain('ORDER BY updated DESC')
+    // KHÔNG lọc theo sprint đang mở — đó chính là chỗ searchMyIssues bỏ sót.
+    expect(jql).not.toContain('openSprints')
+    expect(jql).not.toContain('assignee')
+    expect(out).toEqual([flatMeta('CAG-9', 'S9')])
+  })
+
+  it('nhận số ngày khác', async () => {
+    const { client, calls } = fakeClient({ 'POST /rest/api/3/search/jql': { issues: [] } })
+    await searchRecentIssues(client, { projects: [], days: 30 })
+    const jql = (calls[0]!.body as { jql: string }).jql
+    expect(jql).toContain('worklogDate >= -30d')
+    expect(jql).not.toContain('project in')
   })
 })
 

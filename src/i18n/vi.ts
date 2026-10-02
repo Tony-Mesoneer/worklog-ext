@@ -306,6 +306,9 @@ export const vi: Messages = {
     loadingMine: 'Đang tải issue của bạn…',
     noMine: 'Không có issue nào assign cho bạn trong sprint hiện tại.',
     mineLabel: 'Issue của bạn trong sprint',
+    // Issue bạn vừa log giờ vào, trừ ceremony (đã có nút riêng).
+    recentLabel: 'Gần đây',
+    noMineNoRecent: 'Không có gì để gợi ý: không có issue nào assign cho bạn trong sprint hiện tại, và hai tuần qua cũng chưa log giờ vào issue nào.',
     parentOf: (parentKey: string, parentSummary: string): string =>
       `↳ thuộc ${parentKey} — ${parentSummary}`,
 

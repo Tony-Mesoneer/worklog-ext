@@ -1,6 +1,6 @@
 // src/ui/sidepanel/IssuePicker.tsx
 import { useEffect, useId, useState } from 'react'
-import { send, type IssuesMineResult } from '@/sw/messages'
+import { send, type IssuesMineResult, type IssuesRecentResult } from '@/sw/messages'
 import type { IssueMeta } from '@/core/issue-hierarchy'
 import { StatusBadge } from '@/ui/shared/StatusBadge'
 import { ErrorBanner, toUiError, type UiError } from '@/ui/shared/errors'
@@ -71,6 +71,12 @@ export function IssuePicker({ value, onChange, projects }: Props) {
   const [mineLoading, setMineLoading] = useState(true)
   const [mineError, setMineError] = useState<UiError | null>(null)
 
+  // `recent` KHÔNG có state lỗi riêng: nó là danh sách bổ sung, và lỗi của nó
+  // gần như luôn cùng nguyên nhân với lỗi của `mine` (chưa cấu hình, hết
+  // session, Jira sập) — mà cái đó ErrorBanner của `mine` đã nói. Hai banner
+  // cùng nội dung trong một panel 320px là ồn, không phải thông tin.
+  const [recent, setRecent] = useState<IssueMeta[]>([])
+
   const keyFieldId = useId()
   const searchFieldId = useId()
 
@@ -95,6 +101,17 @@ export function IssuePicker({ value, onChange, projects }: Props) {
     return () => { cancelled = true }
   }, [projects])
 
+  // Issue vừa log giờ gần đây — bù đúng chỗ `issues/mine` bỏ sót: việc không
+  // assign cho mình, việc của sprint đã đóng, việc ngoài sprint. Ceremony đã bị
+  // service worker loại (excludeSprintEventIssues) vì chúng có nút riêng.
+  useEffect(() => {
+    let cancelled = false
+    void send<IssuesRecentResult>({ type: 'issues/recent' })
+      .then((r) => { if (!cancelled) setRecent(r) })
+      .catch(() => { if (!cancelled) setRecent([]) })
+    return () => { cancelled = true }
+  }, [projects])
+
   useEffect(() => {
     if (query.trim().length < 2) { setResults([]); return }
     let cancelled = false
@@ -108,6 +125,12 @@ export function IssuePicker({ value, onChange, projects }: Props) {
 
   const showingSearch = query.trim().length >= 2
   const hint = { fontSize: fontSize.sm, color: colors.muted }
+
+  const mineShown = mine.slice(0, MAX_SHOWN)
+  // Issue đã có ở danh sách trên thì không lặp lại: cùng một ticket hiện hai
+  // lần trong một panel hẹp làm người dùng phải đọc hai lần để biết đó là một.
+  const mineKeys = new Set(mineShown.map((r) => r.key))
+  const recentShown = recent.filter((r) => !mineKeys.has(r.key)).slice(0, MAX_SHOWN)
 
   return (
     <div style={{ display: 'grid', gap: space.x2, minWidth: 0 }}>
@@ -160,21 +183,43 @@ export function IssuePicker({ value, onChange, projects }: Props) {
         <>
           {mineLoading && <div style={hint}>{t.sidepanel.loadingMine}</div>}
           {mineError && <ErrorBanner error={mineError} />}
-          {!mineLoading && !mineError && mine.length === 0 && (
-            <div style={hint}>{t.sidepanel.noMine}</div>
+          {!mineLoading && !mineError && mineShown.length === 0 && (
+            <div style={hint}>
+              {recentShown.length === 0 ? t.sidepanel.noMineNoRecent : t.sidepanel.noMine}
+            </div>
           )}
-          {!mineLoading && !mineError && mine.length > 0 && (
-            <>
-              <span className="wl-field__label">{t.sidepanel.mineLabel}</span>
-              <ul className="wl-list" style={{ maxHeight: 132, overflowY: 'auto' }}>
-                {mine.slice(0, MAX_SHOWN).map((r) => (
-                  <IssueButton
-                    key={r.key} issue={r} meta={r} current={r.key === value}
-                    onPick={(k) => onChange(k)}
-                  />
-                ))}
-              </ul>
-            </>
+          {!mineError && (mineShown.length > 0 || recentShown.length > 0) && (
+            // MỘT vùng cuộn cho cả hai mục, không phải hai vùng cuộn cạnh nhau:
+            // hai <ul> mỗi cái cao 132px đẩy nút Log ra khỏi vùng nhìn của panel
+            // 320px, và người dùng phải cuộn hai lần để đọc một danh sách gợi ý.
+            <div style={{ display: 'grid', gap: space.x1, maxHeight: 200, overflowY: 'auto' }}>
+              {mineShown.length > 0 && (
+                <>
+                  <span className="wl-field__label">{t.sidepanel.mineLabel}</span>
+                  <ul className="wl-list">
+                    {mineShown.map((r) => (
+                      <IssueButton
+                        key={r.key} issue={r} meta={r} current={r.key === value}
+                        onPick={(k) => onChange(k)}
+                      />
+                    ))}
+                  </ul>
+                </>
+              )}
+              {recentShown.length > 0 && (
+                <>
+                  <span className="wl-field__label">{t.sidepanel.recentLabel}</span>
+                  <ul className="wl-list">
+                    {recentShown.map((r) => (
+                      <IssueButton
+                        key={r.key} issue={r} meta={r} current={r.key === value}
+                        onPick={(k) => onChange(k)}
+                      />
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
           )}
         </>
       )}

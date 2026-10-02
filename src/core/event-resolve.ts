@@ -194,3 +194,36 @@ export function ceremonyCacheKey(
 export function ceremonyKeysToDrop(allKeys: string[], keepKey: string): string[] {
   return allKeys.filter((k) => k.startsWith(CEREMONY_KEY_PREFIX) && k !== keepKey)
 }
+
+// --- loại ceremony khỏi danh sách gợi ý ------------------------------------
+
+// Issue của sprint event KHÔNG được xuất hiện trong danh sách gợi ý issue ở
+// side panel: chúng đã có nút riêng (EventButtons) với thời lượng và comment
+// mặc định, nên chọn chúng qua danh sách là đường ghi giờ thứ hai cho cùng một
+// việc — cùng issue nhưng mất mặc định, và làm loãng danh sách "gần đây" bằng
+// đúng những ticket được log mỗi ngày.
+//
+// Đối chiếu theo CẢ HAI danh tính của một event (xem SprintEvent): issueKey ghim
+// tay, HOẶC tên sub-task (matchSummary). Dùng summary chứ không đi tra key qua
+// cache ceremony là có chủ ý — summary đã nằm ngay trong kết quả search, nên
+// việc lọc không phụ thuộc vào việc tra sub-task có thành công hay không.
+export function isSprintEventIssue(
+  issue: { key: string; summary: string },
+  events: SprintEvent[],
+): boolean {
+  const key = issue.key.trim().toUpperCase()
+  const summary = normalizeSummary(issue.summary)
+  return events.some((e) => {
+    const pinned = e.issueKey.trim().toUpperCase()
+    const want = normalizeSummary(e.matchSummary)
+    return (pinned !== '' && pinned === key) || (want !== '' && want === summary)
+  })
+}
+
+export function excludeSprintEventIssues<T extends { key: string; summary: string }>(
+  issues: T[],
+  events: SprintEvent[],
+): T[] {
+  if (events.length === 0) return issues
+  return issues.filter((i) => !isSprintEventIssue(i, events))
+}

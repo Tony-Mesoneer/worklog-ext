@@ -156,6 +156,35 @@ export async function searchMyIssues(
   return res.issues.map((i) => toIssueMeta(i.key, i.fields))
 }
 
+// Issue mà CHÍNH người dùng vừa log giờ vào, gần đây nhất. Bổ sung cho
+// searchMyIssues, không thay thế: `assignee = currentUser() AND sprint in
+// openSprints()` bỏ sót đúng những ticket hay phải log nhất — việc không assign
+// cho mình, việc của sprint đã đóng còn đuôi, việc ngoài sprint. Điều kiện chọn
+// là "tôi ĐÃ TỪNG ghi giờ vào đây", vì đó là bằng chứng mạnh nhất rằng tôi sẽ
+// còn ghi tiếp.
+//
+// Vẫn lọc theo `projects` giống searchMyIssues: đó là phạm vi của cả extension,
+// một danh sách gợi ý rộng hơn phạm vi ấy sẽ tự mâu thuẫn với dashboard.
+export async function searchRecentIssues(
+  c: JiraClient, args: { projects: string[]; days?: number },
+): Promise<IssueMeta[]> {
+  const days = args.days ?? 14
+  const clauses = ['worklogAuthor = currentUser()', `worklogDate >= -${days}d`]
+  if (args.projects.length > 0) {
+    clauses.push(`project in (${args.projects.map((p) => `"${p}"`).join(',')})`)
+  }
+  const jql = `${clauses.join(' AND ')} ORDER BY updated DESC`
+
+  const res = await c.call<{
+    issues: { key: string; fields: IssueFields }[]
+  }>({
+    method: 'POST',
+    path: '/rest/api/3/search/jql',
+    body: { jql, fields: [...ISSUE_META_FIELDS], maxResults: 50 },
+  })
+  return res.issues.map((i) => toIssueMeta(i.key, i.fields))
+}
+
 export async function getIssueWorklogs(
   c: JiraClient, issueKey: string, issueSummary: string,
 ): Promise<Worklog[]> {

@@ -16,6 +16,7 @@ export type Message =
   | { type: 'worklog/delete'; issueKey: string; worklogId: string }
   | { type: 'issues/pick'; query: string }
   | { type: 'issues/mine' }
+  | { type: 'issues/recent' }
   | { type: 'users/search'; query: string }
   | { type: 'boards/load'; projectKey: string }
   | { type: 'sprint/current' }
@@ -71,6 +72,10 @@ export type PointsLoadResult = {
 // /search/jql. Đường GÕ TÌM (`issues/pick`) gộp /issue/picker với một JQL
 // key/text, chỉ trả key + summary — bất đối xứng CÓ CHỦ Ý, xem IssuePicker.
 export type IssuesMineResult = IssueMeta[]
+// Cùng hình dạng với IssuesMineResult (cùng /search/jql, cùng ISSUE_META_FIELDS),
+// nhưng ĐÃ bị loại các issue của sprint event ở service worker — xem
+// excludeSprintEventIssues.
+export type IssuesRecentResult = IssueMeta[]
 export type SprintCurrentResult = { name: string; from: string; to: string } | null
 
 // `events` song song với config.sprintEvents (cùng thứ tự, cùng độ dài).

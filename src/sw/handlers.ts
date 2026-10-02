@@ -10,7 +10,9 @@ import { cookieAuth, tokenAuth } from '@/jira/auth'
 import * as api from '@/jira/endpoints'
 import { formatStarted, offsetMinutesForZone, todayInZone } from '@/core/jiraTime'
 import { normalizeBreaks, splitAroundBreaks } from '@/core/timeline'
-import { resolveSprintEvents, type CeremonyCandidate } from '@/core/event-resolve'
+import {
+  excludeSprintEventIssues, resolveSprintEvents, type CeremonyCandidate,
+} from '@/core/event-resolve'
 import type { Config } from '@/core/config-schema'
 import type { Worklog } from '@/core/coverage'
 import type { IssueMetaMap } from '@/core/issue-hierarchy'
@@ -258,6 +260,17 @@ export async function handle(msg: Message): Promise<unknown> {
     case 'issues/mine': {
       const config = await loadConfig()
       return api.searchMyIssues(await makeClient(config), { projects: config.projects })
+    }
+
+    // Loại ceremony Ở ĐÂY chứ không ở UI: đây là chỗ duy nhất biết cả kết quả
+    // Jira lẫn config.sprintEvents, và một danh sách "gần đây" đã sạch thì mọi
+    // nơi dùng nó đều sạch.
+    case 'issues/recent': {
+      const config = await loadConfig()
+      const issues = await api.searchRecentIssues(await makeClient(config), {
+        projects: config.projects,
+      })
+      return excludeSprintEventIssues(issues, config.sprintEvents)
     }
 
     case 'users/search': {
