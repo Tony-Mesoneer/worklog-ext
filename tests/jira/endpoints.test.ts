@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest'
 import {
   findStoryPointsFieldId, searchIssuesWithWorklogs, searchMyIssues, getIssueWorklogs,
   addWorklog, getSprintIssues, getActiveSprint, getActiveSprints,
-  searchSprintSubtasks, filterKeysInSprint,
+  searchSprintSubtasks, filterKeysInSprint, pickIssues,
 } from '@/jira/endpoints'
 import type { JiraClient } from '@/jira/client'
 
@@ -489,5 +489,41 @@ describe('filterKeysInSprint', () => {
     const { client, calls } = fakeClient({})
     expect(await filterKeysInSprint(client, [], 35)).toEqual([])
     expect(calls).toHaveLength(0)
+  })
+})
+
+describe('pickIssues', () => {
+  const pickerRes = (keys: string[]) => ({
+    sections: [{ issues: keys.map((k) => ({ key: k, summaryText: `S ${k}` })) }],
+  })
+  const jqlRes = (keys: string[]) => ({
+    issues: keys.map((k) => ({ key: k, fields: { summary: `S ${k}` } })),
+  })
+
+  it('tìm cả issue chưa từng xem: gộp picker (lịch sử) với JQL, picker đứng trước, không trùng', async () => {
+    const { client, calls } = fakeClient({
+      'GET /rest/api/3/issue/picker': pickerRes(['CAG-1', 'CAG-2']),
+      'POST /rest/api/3/search/jql': jqlRes(['CAG-2', 'CAG-9']),
+    })
+    const out = await pickIssues(client, 'login', ['CAG'])
+    expect(out.map((i) => i.key)).toEqual(['CAG-1', 'CAG-2', 'CAG-9'])
+    const body = calls.find((c) => c.method === 'POST')!.body as { jql: string }
+    expect(body.jql).toBe('text ~ "login" AND project in ("CAG") ORDER BY updated DESC')
+  })
+
+  it('gõ đúng key (kể cả chữ thường) thì tra thẳng issuekey, không lọc project', async () => {
+    const { client, calls } = fakeClient({
+      'GET /rest/api/3/issue/picker': pickerRes([]),
+      'POST /rest/api/3/search/jql': jqlRes(['OTHER-42']),
+    })
+    const out = await pickIssues(client, ' other-42 ', ['CAG'])
+    expect(out).toEqual([{ key: 'OTHER-42', summary: 'S OTHER-42' }])
+    const body = calls.find((c) => c.method === 'POST')!.body as { jql: string }
+    expect(body.jql).toBe('issuekey = "OTHER-42" ORDER BY updated DESC')
+  })
+
+  it('JQL lỗi (key không tồn tại → 400) thì vẫn trả kết quả picker', async () => {
+    const { client } = fakeClient({ 'GET /rest/api/3/issue/picker': pickerRes(['CAG-1']) })
+    expect((await pickIssues(client, 'CAG-404')).map((i) => i.key)).toEqual(['CAG-1'])
   })
 })

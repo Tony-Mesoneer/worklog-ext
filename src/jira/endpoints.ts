@@ -220,23 +220,57 @@ export async function deleteWorklog(
 }
 
 // --- pickers ---------------------------------------------------------------
+const ISSUE_KEY_RE = /^[A-Z][A-Z0-9_]+-\d+$/
+
+// Gõ tìm = HAI nguồn chạy song song, gộp lại:
+// 1. /issue/picker — xếp hạng theo issue người dùng VỪA XEM, điều JQL không
+//    làm được. Nhưng KHÔNG có currentJQL nó chỉ trả mục "History Search": issue
+//    chưa từng mở (ticket của người khác, ticket mới) không bao giờ hiện, kể cả
+//    khi gõ đúng key.
+// 2. /search/jql — bù đúng lỗ đó: gõ đúng key thì tra thẳng `issuekey`, còn lại
+//    tìm full-text trong phạm vi `projects`.
+// Picker đứng trước để giữ thứ tự theo lịch sử xem; nguồn nào lỗi thì coi như
+// rỗng, nguồn kia vẫn dùng được.
 export async function pickIssues(
-  c: JiraClient, query: string,
+  c: JiraClient, query: string, projects: string[] = [],
 ): Promise<{ key: string; summary: string }[]> {
-  const res = await c.call<{
+  const q = query.trim()
+  const picker = c.call<{
     sections: { issues: { key: string; summaryText: string }[] }[]
   }>({
     method: 'GET',
-    path: `/rest/api/3/issue/picker?query=${encodeURIComponent(query)}`,
-  })
+    path: `/rest/api/3/issue/picker?query=${encodeURIComponent(q)}`,
+  }).then(
+    (res) => (res.sections ?? []).flatMap((s) =>
+      (s.issues ?? []).map((i) => ({ key: i.key, summary: i.summaryText }))),
+    () => [],
+  )
+
+  const upper = q.toUpperCase()
+  const clauses = ISSUE_KEY_RE.test(upper)
+    // Key cụ thể thì không lọc project: người dùng đã nói rõ muốn ticket nào.
+    ? [`issuekey = ${jqlString(upper)}`]
+    : [`text ~ ${jqlString(q)}`]
+  if (!ISSUE_KEY_RE.test(upper) && projects.length > 0) {
+    clauses.push(`project in (${projects.map((p) => jqlString(p)).join(',')})`)
+  }
+  // `issuekey = X` với key không tồn tại làm Jira trả 400 — đó là "không có
+  // kết quả", không phải lỗi cần báo.
+  const jql = c.call<{ issues: { key: string; fields: { summary?: string } }[] }>({
+    method: 'POST',
+    path: '/rest/api/3/search/jql',
+    body: { jql: `${clauses.join(' AND ')} ORDER BY updated DESC`, fields: ['summary'], maxResults: 20 },
+  }).then(
+    (res) => res.issues.map((i) => ({ key: i.key, summary: i.fields.summary ?? '' })),
+    () => [],
+  )
+
   const seen = new Set<string>()
   const out: { key: string; summary: string }[] = []
-  for (const section of res.sections ?? []) {
-    for (const i of section.issues ?? []) {
-      if (seen.has(i.key)) continue
-      seen.add(i.key)
-      out.push({ key: i.key, summary: i.summaryText })
-    }
+  for (const i of [...await picker, ...await jql]) {
+    if (seen.has(i.key)) continue
+    seen.add(i.key)
+    out.push(i)
   }
   return out
 }

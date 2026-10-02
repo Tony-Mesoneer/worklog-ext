@@ -19,8 +19,8 @@ const keyFromUrl = (url: string): string | null => {
 
 const MAX_SHOWN = 10
 
-// `meta` optional: kết quả GÕ TÌM đi qua /rest/api/3/issue/picker, endpoint đó
-// chỉ trả key + summary. Không có meta thì nút hiện đúng như trước — một dòng,
+// `meta` optional: kết quả GÕ TÌM (pickIssues: /issue/picker + JQL key/text)
+// chỉ có key + summary. Không có meta thì nút hiện đúng như trước — một dòng,
 // không badge, không dòng cha.
 function IssueButton({ issue, meta, current, onPick }: {
   issue: { key: string; summary: string }
@@ -139,10 +139,10 @@ export function IssuePicker({ value, onChange, projects }: Props) {
       {/* BẤT ĐỐI XỨNG CÓ CHỦ Ý: danh sách dưới (gõ tìm) không có badge trạng
           thái, danh sách "issue của bạn trong sprint" thì có.
           Gõ tìm đi qua /rest/api/3/issue/picker — endpoint duy nhất xếp hạng
-          theo issue người dùng VỪA XEM, điều JQL không làm được — và nó chỉ trả
-          key + summary. Đổi sang JQL để lấy status là mất đúng cái làm nó hữu
-          ích; bắn thêm request thứ hai để bù metadata thì mỗi lần gõ tốn hai
-          round-trip. Thiếu badge ở đây là cái giá đã cân nhắc. */}
+          theo issue người dùng VỪA XEM, điều JQL không làm được — cộng một JQL
+          key/text chạy song song để bắt issue CHƯA từng xem (xem pickIssues).
+          Picker chỉ trả key + summary; thiếu badge ở đây là cái giá đã cân
+          nhắc. */}
       {showingSearch ? (
         results.length === 0 ? (
           <div style={hint}>{t.sidepanel.noIssueMatch(query.trim())}</div>

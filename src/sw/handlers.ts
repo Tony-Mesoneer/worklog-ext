@@ -252,7 +252,7 @@ export async function handle(msg: Message): Promise<unknown> {
 
     case 'issues/pick': {
       const config = await loadConfig()
-      return api.pickIssues(await makeClient(config), msg.query)
+      return api.pickIssues(await makeClient(config), msg.query, config.projects)
     }
 
     case 'issues/mine': {

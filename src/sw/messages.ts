@@ -68,8 +68,8 @@ export type PointsLoadResult = {
   meta: IssueMetaMap
 }
 // Danh sách "issue của tôi trong sprint" mang đủ status + parent, vì nó đi qua
-// /search/jql. Đường GÕ TÌM (`issues/pick`) dùng /issue/picker và chỉ có key +
-// summary — bất đối xứng CÓ CHỦ Ý, xem IssuePicker.
+// /search/jql. Đường GÕ TÌM (`issues/pick`) gộp /issue/picker với một JQL
+// key/text, chỉ trả key + summary — bất đối xứng CÓ CHỦ Ý, xem IssuePicker.
 export type IssuesMineResult = IssueMeta[]
 export type SprintCurrentResult = { name: string; from: string; to: string } | null
 
