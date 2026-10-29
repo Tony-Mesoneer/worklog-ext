@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseDuration, formatDuration, formatHhMm } from '@/core/duration'
+import { parseDuration, formatDuration, formatHhMm, stepDurationMinutes } from '@/core/duration'
 
 describe('parseDuration', () => {
   it('parse dạng giờ + phút liền nhau', () => {
@@ -63,5 +63,23 @@ describe('formatHhMm', () => {
     expect(formatHhMm(7200)).toBe('2:00')
     expect(formatHhMm(2700)).toBe('0:45')
     expect(formatHhMm(0)).toBe('0:00')
+  })
+})
+
+describe('stepDurationMinutes', () => {
+  it('lăn lên/xuống đúng một bước 15m khi đang trên lưới', () => {
+    expect(stepDurationMinutes(60, 1)).toBe(75)
+    expect(stepDurationMinutes(60, -1)).toBe(45)
+  })
+
+  it('đang lệch lưới thì bám về mốc tròn gần nhất theo hướng lăn', () => {
+    expect(stepDurationMinutes(70, 1)).toBe(75)
+    expect(stepDurationMinutes(70, -1)).toBe(60)
+  })
+
+  it('ô trống lăn lên ra 15m; không bao giờ xuống dưới một bước', () => {
+    expect(stepDurationMinutes(0, 1)).toBe(15)
+    expect(stepDurationMinutes(15, -1)).toBe(15)
+    expect(stepDurationMinutes(0, -1)).toBe(15)
   })
 })

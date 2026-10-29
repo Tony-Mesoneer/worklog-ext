@@ -37,3 +37,15 @@ export function formatHhMm(seconds: number): string {
   const m = total % 60
   return `${h}:${String(m).padStart(2, '0')}`
 }
+
+// Tăng/giảm thời lượng một bước (lăn chuột trên ô Duration). Kết quả luôn nằm
+// TRÊN lưới `step`: 1h10 lăn lên thành 1h15 chứ không phải 1h25, lăn xuống
+// thành 1h — người dùng lăn để tới một con số tròn, không để cộng dồn số lẻ.
+// Không xuống dưới một bước: 0 phút không phải worklog hợp lệ.
+export function stepDurationMinutes(minutes: number, direction: 1 | -1, step = 15): number {
+  const cur = Math.max(0, minutes)
+  const next = direction > 0
+    ? Math.floor(cur / step) * step + step
+    : Math.ceil(cur / step) * step - step
+  return Math.max(step, next)
+}

@@ -1,6 +1,6 @@
 // src/ui/sidepanel/LogForm.tsx
-import { useId } from 'react'
-import { parseDuration, formatDuration } from '@/core/duration'
+import { useEffect, useId, useRef } from 'react'
+import { parseDuration, formatDuration, stepDurationMinutes } from '@/core/duration'
 import {
   breakAt, buildPickerSlots, occupiedBy, formatMinutes,
   type Break, type DayEntry, type Segment,
@@ -34,6 +34,9 @@ type Props = {
   onSubmit: () => void
 }
 
+// Quãng lăn (px) cho một bước ±15m ở ô Duration — xem listener wheel.
+const WHEEL_STEP_PX = 50
+
 // "60" → "1h", "90" → "90m": text mà parseDuration đọc lại đúng giá trị.
 const presetText = (m: number): string => (m >= 60 && m % 60 === 0 ? `${m / 60}h` : `${m}m`)
 
@@ -53,6 +56,35 @@ export function LogForm(p: Props) {
   const startId = useId()
   const freeId = useId()
   const noteId = useId()
+  const freeRef = useRef<HTMLInputElement>(null)
+
+  // Lăn chuột trên ô Duration = ±15m. Listener GẮN TAY với passive:false chứ
+  // không dùng onWheel của React: React gắn wheel ở dạng passive, nên
+  // preventDefault ở đó không chặn được panel cuộn theo cùng lúc. Đọc props qua
+  // ref để listener chỉ gắn một lần mà vẫn thấy giá trị mới nhất.
+  const latest = useRef({ input: p.durationInput, onChange: p.onDurationChange })
+  latest.current = { input: p.durationInput, onChange: p.onDurationChange }
+  useEffect(() => {
+    const el = freeRef.current
+    if (!el) return
+    // Cộng dồn delta tới một ngưỡng rồi mới bước: một nấc chuột (~100px) là
+    // một bước, còn trackpad bắn hàng chục event vài px mỗi lần — bước theo
+    // từng event thì vuốt nhẹ cũng nhảy cả tiếng. Firefox báo theo DÒNG
+    // (deltaMode 1), quy đổi về px trước khi cộng.
+    let acc = 0
+    const onWheel = (e: WheelEvent) => {
+      if (e.deltaY === 0) return
+      e.preventDefault()
+      acc += e.deltaMode === 1 ? e.deltaY * 33 : e.deltaMode === 2 ? e.deltaY * 400 : e.deltaY
+      if (Math.abs(acc) < WHEEL_STEP_PX) return
+      const direction = acc < 0 ? 1 : -1
+      acc = 0
+      const cur = Math.round((parseDuration(latest.current.input) ?? 0) / 60)
+      latest.current.onChange(formatDuration(stepDurationMinutes(cur, direction) * 60))
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
 
   const invalid = p.durationInput !== '' && seconds === null
   const canSubmit = seconds !== null && p.issueKey.trim() !== ''
@@ -108,6 +140,7 @@ export function LogForm(p: Props) {
             onChange={(m) => p.onDurationChange(presetText(m))}
           />
           <input
+            ref={freeRef}
             id={freeId}
             value={p.durationInput}
             onChange={(e) => p.onDurationChange(e.target.value)}
