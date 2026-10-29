@@ -293,6 +293,8 @@ export const en = {
     durationLabel: 'Duration',
     durationPresets: 'Preset durations',
     durationCustom: 'Custom duration',
+    autoFit: (until: string): string =>
+      `Auto-filled to fit the free slot until ${until} — edit to change`,
     noteLabel: 'Note',
     notePlaceholder: 'optional',
     durationUnparsed: (input: string): string =>

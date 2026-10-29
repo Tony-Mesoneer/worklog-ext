@@ -218,6 +218,39 @@ export function findOverlaps(
   })
 }
 
+// Khoảng trống liền mạch tính TỪ mốc bắt đầu: số phút tới vật cản gần nhất —
+// worklog kế tiếp, giờ nghỉ kế tiếp, hoặc giờ tan làm. Dùng để TỰ ĐIỀN ô
+// Duration sao cho worklog vừa khít khoảng trống trên timeline; người dùng sửa
+// lại được, đây chỉ là giá trị gợi ý.
+//
+// Dừng TRƯỚC giờ nghỉ chứ không đi xuyên (dù splitAroundBreaks cắt được): "vừa
+// khít khoảng trống" nghĩa là MỘT khối, không phải hai worklog mà người dùng
+// không hề yêu cầu. Riêng giờ nghỉ CHỨA mốc bắt đầu thì bỏ qua — cùng quy ước
+// "làm xuyên trưa" với splitAroundBreaks.
+//
+// 0 = không có chỗ: mốc bắt đầu nằm trong một worklog đã có, hoặc đã qua giờ
+// tan làm. Caller không điền gì trong trường hợp đó.
+export function freeGapMinutes(
+  entries: DayEntry[],
+  startMinutes: number,
+  dayEndMinutes: number,
+  breaks: Break[] = [],
+): number {
+  // Kề nhau (worklog kết thúc đúng mốc bắt đầu) không phải bị chiếm.
+  if (entries.some((e) => e.startMinutes <= startMinutes
+    && e.startMinutes + e.durationMinutes > startMinutes)) return 0
+
+  const merged = mergeBreaks(breaks)
+  const inside = breakAt(startMinutes, merged)
+  const stops = [
+    dayEndMinutes,
+    ...entries.map((e) => e.startMinutes),
+    ...merged.filter((b) => b !== inside).map((b) => b.startMinutes),
+  ].filter((m) => m > startMinutes)
+
+  return stops.length === 0 ? 0 : Math.min(...stops) - startMinutes
+}
+
 // --- lưới của dropdown "Bắt đầu" -------------------------------------------
 
 // Biên của dropdown "Bắt đầu", KHÔNG phải giờ làm việc. Giờ làm việc trong

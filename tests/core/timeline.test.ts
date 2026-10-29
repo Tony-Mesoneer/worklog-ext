@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   parseHhMm, formatMinutes, snapUp, nextFreeStart, lastSlotStart,
-  buildSlots, buildPickerSlots, occupiedBy, findOverlaps, type DayEntry,
+  buildSlots, buildPickerSlots, occupiedBy, findOverlaps, freeGapMinutes, type DayEntry,
   PICKER_FLOOR_MINUTES, PICKER_CEIL_MINUTES,
 } from '@/core/timeline'
 
@@ -199,5 +199,35 @@ describe('buildPickerSlots', () => {
 
   it('slot <= 0 → rỗng', () => {
     expect(buildPickerSlots(at('08:30'), at('18:00'), 0)).toEqual([])
+  })
+})
+
+describe('freeGapMinutes', () => {
+  const END = 18 * 60
+  const lunch = [{ startMinutes: 12 * 60, endMinutes: 13 * 60 + 30 }]
+
+  it('ngày trống: lấp tới giờ nghỉ trưa, không đi xuyên qua nó', () => {
+    expect(freeGapMinutes([], 8 * 60 + 30, END, lunch)).toBe(210) // 08:30 → 12:00
+  })
+
+  it('sau giờ nghỉ: lấp tới giờ tan làm', () => {
+    expect(freeGapMinutes([], 13 * 60 + 30, END, lunch)).toBe(270) // 13:30 → 18:00
+  })
+
+  it('dừng ở worklog kế tiếp; kề nhau không tính là bị chiếm', () => {
+    const es = [entry('a', 8 * 60 + 30, 60), entry('b', 10 * 60 + 15, 30)]
+    expect(freeGapMinutes(es, 9 * 60 + 30, END, lunch)).toBe(45) // 09:30 → 10:15
+  })
+
+  it('mốc nằm trong worklog đã có → 0', () => {
+    expect(freeGapMinutes([entry('a', 9 * 60, 60)], 9 * 60 + 15, END, lunch)).toBe(0)
+  })
+
+  it('bắt đầu trong giờ nghỉ = làm xuyên trưa: bỏ qua đúng khoảng đó', () => {
+    expect(freeGapMinutes([], 12 * 60 + 15, END, lunch)).toBe(345) // 12:15 → 18:00
+  })
+
+  it('đã qua giờ tan làm → 0', () => {
+    expect(freeGapMinutes([], END, END, lunch)).toBe(0)
   })
 })
