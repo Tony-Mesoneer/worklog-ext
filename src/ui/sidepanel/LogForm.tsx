@@ -1,6 +1,7 @@
 // src/ui/sidepanel/LogForm.tsx
-import { useId } from 'react'
-import { parseDuration, formatDuration } from '@/core/duration'
+import { useEffect, useId, useRef } from 'react'
+import { parseDuration, formatDuration, stepDurationMinutes } from '@/core/duration'
+import { createWheelStepper, DEFAULT_WHEEL_STEPPER, wheelDeltaPx } from '@/core/wheel-step'
 import {
   breakAt, buildPickerSlots, occupiedBy, formatMinutes,
   type Break, type DayEntry, type Segment,
@@ -53,6 +54,55 @@ export function LogForm(p: Props) {
   const startId = useId()
   const freeId = useId()
   const noteId = useId()
+  const freeRef = useRef<HTMLInputElement>(null)
+
+  // Lăn chuột trên ô Duration (đang focus) = ±15m. Listener GẮN TAY với passive:false chứ
+  // không dùng onWheel của React: React gắn wheel ở dạng passive, nên
+  // preventDefault ở đó không chặn được panel cuộn theo cùng lúc. Đọc props qua
+  // ref để listener chỉ gắn một lần mà vẫn thấy giá trị mới nhất.
+  const latest = useRef({ input: p.durationInput, onChange: p.onDurationChange })
+  latest.current = { input: p.durationInput, onChange: p.onDurationChange }
+  useEffect(() => {
+    const el = freeRef.current
+    if (!el) return
+    // Biến delta thành bước rời rạc ở core/wheel-step (giữ phần dư, giãn cách
+    // tối thiểu, reset khi đổi chiều/dừng) — xem đó để biết vì sao mượt.
+    const step = createWheelStepper()
+    // Giá trị của CÚ LĂN ĐANG DIỄN RA. Không đọc lại props mỗi event: nhiều
+    // event tới trước khi React kịp render lại, đọc props là đọc số CŨ và các
+    // bước bị nuốt mất — lăn nhanh mà số đứng yên chính là cái giật.
+    let pending: number | null = null
+    let frame = 0
+    let idle: ReturnType<typeof setTimeout> | undefined
+    const onWheel = (e: WheelEvent) => {
+      // Chỉ khi ô ĐANG FOCUS: cuộn panel mà con trỏ lướt ngang ô thì panel
+      // phải cuộn như thường, không được âm thầm đổi thời lượng.
+      if (e.deltaY === 0 || document.activeElement !== el) return
+      e.preventDefault()
+      clearTimeout(idle)
+      idle = setTimeout(() => { pending = null }, DEFAULT_WHEEL_STEPPER.idleResetMs)
+
+      const dir = step(wheelDeltaPx(e.deltaY, e.deltaMode), e.timeStamp)
+      if (dir === 0) return
+      const base = pending ?? Math.round((parseDuration(latest.current.input) ?? 0) / 60)
+      pending = stepDurationMinutes(base, dir)
+      // Gộp mọi bước trong cùng một frame thành MỘT lần setState: cả panel
+      // (timeline, cảnh báo) render lại theo duration, không cần làm việc đó
+      // nhiều lần mỗi frame.
+      if (frame === 0) {
+        frame = requestAnimationFrame(() => {
+          frame = 0
+          if (pending !== null) latest.current.onChange(formatDuration(pending * 60))
+        })
+      }
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => {
+      el.removeEventListener('wheel', onWheel)
+      cancelAnimationFrame(frame)
+      clearTimeout(idle)
+    }
+  }, [])
 
   const invalid = p.durationInput !== '' && seconds === null
   const canSubmit = seconds !== null && p.issueKey.trim() !== ''
@@ -108,6 +158,7 @@ export function LogForm(p: Props) {
             onChange={(m) => p.onDurationChange(presetText(m))}
           />
           <input
+            ref={freeRef}
             id={freeId}
             value={p.durationInput}
             onChange={(e) => p.onDurationChange(e.target.value)}

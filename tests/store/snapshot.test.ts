@@ -73,7 +73,7 @@ describe('store/snapshot', () => {
       'CAG-1': {
         key: 'CAG-1', summary: 'x', statusName: 'In Testing',
         statusCategory: 'indeterminate', parentKey: 'CAG-0',
-        parentSummary: 'parent', isSubtask: true, projectKey: 'CAG',
+        parentSummary: 'parent', isSubtask: true, issueTypeName: '', projectKey: 'CAG',
       },
     })
     const res = await readSnapshot(scope)
@@ -96,7 +96,7 @@ describe('store/snapshot', () => {
     await writeSnapshot(scope, [wl('1')], 1000, {
       'CAG-1': {
         key: 'CAG-1', summary: 'x', statusName: 'Open', statusCategory: 'new',
-        parentKey: null, parentSummary: null, isSubtask: false, projectKey: 'CAG',
+        parentKey: null, parentSummary: null, isSubtask: false, issueTypeName: '', projectKey: 'CAG',
       },
     })
     await patchSnapshot(scope, [wl('2')], [])

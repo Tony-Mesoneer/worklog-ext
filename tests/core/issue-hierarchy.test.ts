@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   distinctProjectKeys, groupIssueRowsByParent, groupRowsByProject,
-  mergeCoverageIssueRows, toStatusCategory, UNKNOWN_PROJECT,
+  issueTypeKind, mergeCoverageIssueRows, toStatusCategory, UNKNOWN_PROJECT,
   type IssueMeta, type IssueMetaMap,
 } from '@/core/issue-hierarchy'
 import type { CoverageIssueRow } from '@/core/coverage'
@@ -24,7 +24,7 @@ const meta = (
   projectKey: null,
   parentKey: null,
   parentSummary: null,
-  isSubtask: false,
+  isSubtask: false, issueTypeName: '',
   ...opts,
 })
 
@@ -32,7 +32,7 @@ const sub = (key: string, parentKey: string): IssueMeta =>
   meta(key, {
     parentKey,
     parentSummary: `Summary ${parentKey}`,
-    isSubtask: true,
+    isSubtask: true, issueTypeName: '',
   })
 
 const asMap = (...items: IssueMeta[]): IssueMetaMap =>
@@ -149,7 +149,7 @@ describe('groupIssueRowsByParent', () => {
   it('parentKey trỏ vào chính nó bị bỏ qua', () => {
     const groups = groupIssueRowsByParent(
       [row('CAG-1')],
-      asMap(meta('CAG-1', { parentKey: 'CAG-1', isSubtask: true })),
+      asMap(meta('CAG-1', { parentKey: 'CAG-1', isSubtask: true, issueTypeName: '' })),
       keyOf,
     )
     expect(groups).toHaveLength(1)
@@ -196,7 +196,7 @@ describe('groupRowsByProject', () => {
     projectKey,
     parentKey,
     parentSummary: parentKey === null ? null : `Summary ${parentKey}`,
-    isSubtask: parentKey !== null,
+    isSubtask: parentKey !== null, issueTypeName: '',
   })
 
   it('MỘT project → null: không thêm tầng nào, bảng vẽ phẳng như trước', () => {
@@ -303,5 +303,22 @@ describe('groupRowsByProject', () => {
     expect(first[1]!.rows.map(keyOf)).toEqual(['CAG-1', 'CAG-5'])
     // Gọi lại cùng input cho cùng kết quả.
     expect(groupRowsByProject(rows, metaMap, keyOf)).toEqual(first)
+  })
+})
+
+describe('issueTypeKind', () => {
+  it('nhận ra các type quen thuộc, không phân biệt hoa thường', () => {
+    expect(issueTypeKind('Story')).toBe('story')
+    expect(issueTypeKind('bug')).toBe('bug')
+    expect(issueTypeKind('Lỗi')).toBe('bug')
+    expect(issueTypeKind('Epic')).toBe('epic')
+    expect(issueTypeKind('Task')).toBe('task')
+    expect(issueTypeKind('Sub-task')).toBe('subtask')
+  })
+
+  it('cờ subtask thắng tên lạ; tên lạ / thiếu → other', () => {
+    expect(issueTypeKind('Kiểm thử', true)).toBe('subtask')
+    expect(issueTypeKind('Spike')).toBe('other')
+    expect(issueTypeKind(undefined)).toBe('other')
   })
 })

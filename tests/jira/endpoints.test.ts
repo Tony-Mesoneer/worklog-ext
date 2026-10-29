@@ -1,9 +1,10 @@
 // tests/jira/endpoints.test.ts
 import { describe, it, expect, vi } from 'vitest'
 import {
-  findStoryPointsFieldId, searchIssuesWithWorklogs, searchMyIssues, getIssueWorklogs,
+  findStoryPointsFieldId, searchIssuesWithWorklogs, searchMyIssues, searchRecentIssues,
+  getIssueWorklogs,
   addWorklog, getSprintIssues, getActiveSprint, getActiveSprints,
-  searchSprintSubtasks, filterKeysInSprint,
+  searchSprintSubtasks, filterKeysInSprint, pickIssues,
 } from '@/jira/endpoints'
 import type { JiraClient } from '@/jira/client'
 
@@ -25,7 +26,7 @@ const fakeClient = (routes: Record<string, unknown>) => {
 // IssueMeta mong đợi cho một issue "trơn": không parent, status không rõ.
 const flatMeta = (key: string, summary: string) => ({
   key, summary, statusName: '', statusCategory: 'new', projectKey: null,
-  parentKey: null, parentSummary: null, isSubtask: false,
+  parentKey: null, parentSummary: null, isSubtask: false, issueTypeName: '',
 })
 
 describe('findStoryPointsFieldId', () => {
@@ -99,7 +100,7 @@ describe('searchIssuesWithWorklogs', () => {
             summary: 'Implement: queue a user move',
             parent: { key: 'CAG-2969', fields: { summary: 'Allow moving user via SCIM' } },
             status: { name: 'In Testing', statusCategory: { key: 'indeterminate' } },
-            issuetype: { subtask: true },
+            issuetype: { name: 'Sub-task', subtask: true },
           },
         }],
       },
@@ -114,7 +115,7 @@ describe('searchIssuesWithWorklogs', () => {
       projectKey: null,
       parentKey: 'CAG-2969',
       parentSummary: 'Allow moving user via SCIM',
-      isSubtask: true,
+      isSubtask: true, issueTypeName: 'Sub-task',
     }])
   })
 
@@ -142,6 +143,34 @@ describe('searchIssuesWithWorklogs', () => {
       accountIds: ['u1'], from: '2026-08-17', to: '2026-08-21',
     })
     expect(out.map((i) => i.key)).toEqual(['CAG-1', 'CAG-2'])
+  })
+})
+
+describe('searchRecentIssues', () => {
+  it('dựng JQL theo worklogAuthor + worklogDate, kèm project', async () => {
+    const { client, calls } = fakeClient({
+      'POST /rest/api/3/search/jql': { issues: [{ key: 'CAG-9', fields: { summary: 'S9' } }] },
+    })
+
+    const out = await searchRecentIssues(client, { projects: ['CAG'] })
+
+    const jql = (calls[0]!.body as { jql: string }).jql
+    expect(jql).toContain('worklogAuthor = currentUser()')
+    expect(jql).toContain('worklogDate >= -14d')
+    expect(jql).toContain('project in ("CAG")')
+    expect(jql).toContain('ORDER BY updated DESC')
+    // KHÔNG lọc theo sprint đang mở — đó chính là chỗ searchMyIssues bỏ sót.
+    expect(jql).not.toContain('openSprints')
+    expect(jql).not.toContain('assignee')
+    expect(out).toEqual([flatMeta('CAG-9', 'S9')])
+  })
+
+  it('nhận số ngày khác', async () => {
+    const { client, calls } = fakeClient({ 'POST /rest/api/3/search/jql': { issues: [] } })
+    await searchRecentIssues(client, { projects: [], days: 30 })
+    const jql = (calls[0]!.body as { jql: string }).jql
+    expect(jql).toContain('worklogDate >= -30d')
+    expect(jql).not.toContain('project in')
   })
 })
 
@@ -189,7 +218,7 @@ describe('searchMyIssues', () => {
       {
         key: 'CAG-1', summary: 'Việc 1', statusName: 'Closed',
         statusCategory: 'done', projectKey: null, parentKey: null, parentSummary: null,
-        isSubtask: false,
+        isSubtask: false, issueTypeName: '',
       },
       // Field thiếu (instance cũ, quyền hạn chế) không được làm vỡ gì.
       flatMeta('CAG-2', 'Việc 2'),
@@ -337,7 +366,7 @@ describe('getSprintIssues', () => {
     expect(out.meta['CAG-3065']).toEqual({
       key: 'CAG-3065', summary: 'Daily Scrum', statusName: 'In Progress',
       statusCategory: 'indeterminate', projectKey: null, parentKey: 'CAG-3063',
-      parentSummary: 'S34 - Sprint activities', isSubtask: true,
+      parentSummary: 'S34 - Sprint activities', isSubtask: true, issueTypeName: '',
     })
     // SprintIssue KHÔNG đổi hình dạng — buildPointsTable ăn nó nguyên vẹn.
     expect(out.issues[0]!.timeSpentSeconds).toBe(900)
@@ -448,7 +477,7 @@ describe('searchSprintSubtasks', () => {
       key: 'CAG-3078', summary: 'Security Review',
       statusName: '', statusCategory: 'new', projectKey: null,
       parentKey: 'CAG-2727', parentSummary: 'SCIM user sync hardening',
-      isSubtask: true,
+      isSubtask: true, issueTypeName: '',
     })
   })
 
@@ -489,5 +518,41 @@ describe('filterKeysInSprint', () => {
     const { client, calls } = fakeClient({})
     expect(await filterKeysInSprint(client, [], 35)).toEqual([])
     expect(calls).toHaveLength(0)
+  })
+})
+
+describe('pickIssues', () => {
+  const pickerRes = (keys: string[]) => ({
+    sections: [{ issues: keys.map((k) => ({ key: k, summaryText: `S ${k}` })) }],
+  })
+  const jqlRes = (keys: string[]) => ({
+    issues: keys.map((k) => ({ key: k, fields: { summary: `S ${k}` } })),
+  })
+
+  it('tìm cả issue chưa từng xem: gộp picker (lịch sử) với JQL, picker đứng trước, không trùng', async () => {
+    const { client, calls } = fakeClient({
+      'GET /rest/api/3/issue/picker': pickerRes(['CAG-1', 'CAG-2']),
+      'POST /rest/api/3/search/jql': jqlRes(['CAG-2', 'CAG-9']),
+    })
+    const out = await pickIssues(client, 'login', ['CAG'])
+    expect(out.map((i) => i.key)).toEqual(['CAG-1', 'CAG-2', 'CAG-9'])
+    const body = calls.find((c) => c.method === 'POST')!.body as { jql: string }
+    expect(body.jql).toBe('text ~ "login" AND project in ("CAG") ORDER BY updated DESC')
+  })
+
+  it('gõ đúng key (kể cả chữ thường) thì tra thẳng issuekey, không lọc project', async () => {
+    const { client, calls } = fakeClient({
+      'GET /rest/api/3/issue/picker': pickerRes([]),
+      'POST /rest/api/3/search/jql': jqlRes(['OTHER-42']),
+    })
+    const out = await pickIssues(client, ' other-42 ', ['CAG'])
+    expect(out).toEqual([{ key: 'OTHER-42', summary: 'S OTHER-42' }])
+    const body = calls.find((c) => c.method === 'POST')!.body as { jql: string }
+    expect(body.jql).toBe('issuekey = "OTHER-42" ORDER BY updated DESC')
+  })
+
+  it('JQL lỗi (key không tồn tại → 400) thì vẫn trả kết quả picker', async () => {
+    const { client } = fakeClient({ 'GET /rest/api/3/issue/picker': pickerRes(['CAG-1']) })
+    expect((await pickIssues(client, 'CAG-404')).map((i) => i.key)).toEqual(['CAG-1'])
   })
 })

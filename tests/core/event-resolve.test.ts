@@ -2,6 +2,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   resolveSprintEvents, normalizeSummary, ceremonyCacheKey, ceremonyKeysToDrop,
+  excludeSprintEventIssues, isSprintEventIssue,
   CEREMONY_KEY_PREFIX, type CeremonyCandidate,
 } from '@/core/event-resolve'
 import type { SprintEvent } from '@/core/config-schema'
@@ -292,5 +293,48 @@ describe('ceremonyKeysToDrop', () => {
   it('không có gì để xoá → mảng rỗng', () => {
     const keep = ceremonyCacheKey(35, [], [])
     expect(ceremonyKeysToDrop(['config', keep], keep)).toEqual([])
+  })
+})
+
+describe('excludeSprintEventIssues', () => {
+  const issue = (key: string, summary: string) => ({ key, summary })
+
+  it('loại issue trùng issueKey ghim tay', () => {
+    const events = [ev({ issueKey: 'CAG-100' })]
+    const out = excludeSprintEventIssues(
+      [issue('CAG-100', 'Daily Scrum'), issue('CAG-200', 'Việc thật')], events,
+    )
+    expect(out.map((i) => i.key)).toEqual(['CAG-200'])
+  })
+
+  it('loại issue trùng TÊN sub-task, kể cả khi key sprint này khác sprint trước', () => {
+    const events = [ev({ matchSummary: 'Daily Scrum' })]
+    // Sprint mới → ceremony có key mới; lọc theo tên nên vẫn bắt được.
+    const out = excludeSprintEventIssues(
+      [issue('CAG-3064', ' daily   scrum '), issue('CAG-200', 'Việc thật')], events,
+    )
+    expect(out.map((i) => i.key)).toEqual(['CAG-200'])
+  })
+
+  it('không loại issue chỉ trùng MỘT PHẦN tên (fuzzy của Jira không lọt vào đây)', () => {
+    const events = [ev({ matchSummary: 'Sprint Review' })]
+    const out = excludeSprintEventIssues([issue('CAG-1', 'Sprint Retro')], events)
+    expect(out.map((i) => i.key)).toEqual(['CAG-1'])
+  })
+
+  it('không có event nào → trả nguyên danh sách', () => {
+    const list = [issue('CAG-1', 'A'), issue('CAG-2', 'B')]
+    expect(excludeSprintEventIssues(list, [])).toBe(list)
+  })
+
+  it('event rỗng cả hai danh tính không loại gì (không thì nó loại mọi issue)', () => {
+    const list = [issue('CAG-1', ''), issue('CAG-2', 'B')]
+    expect(excludeSprintEventIssues(list, [ev({})]).map((i) => i.key)).toEqual(['CAG-1', 'CAG-2'])
+  })
+
+  it('so key không phân biệt hoa thường và khoảng trắng', () => {
+    expect(isSprintEventIssue(
+      { key: 'cag-100', summary: 'X' }, [ev({ issueKey: ' CAG-100 ' })],
+    )).toBe(true)
   })
 })

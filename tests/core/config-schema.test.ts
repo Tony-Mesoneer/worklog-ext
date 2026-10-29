@@ -83,6 +83,14 @@ describe('migrateConfig', () => {
     expect(c.durationPresets).toEqual(defaultConfig.durationPresets)
   })
 
+  it('duration preset: bộ default cũ (có 8h) → bộ mới 30m…6h', () => {
+    const c = migrateConfig({ version: CONFIG_VERSION, durationPresets: [15, 30, 60, 240, 360, 480] })
+    expect(c.durationPresets).toEqual([30, 60, 120, 180, 240, 360])
+    // Bộ khác bộ default cũ thì giữ nguyên.
+    expect(migrateConfig({ version: CONFIG_VERSION, durationPresets: [45, 90] }).durationPresets)
+      .toEqual([45, 90])
+  })
+
   it('bỏ giá trị sai kiểu thay vì để nó lan xuống runtime', () => {
     const c = migrateConfig({ version: CONFIG_VERSION, projects: 'CAG', slotMinutes: 'nhiều' })
     expect(c.projects).toEqual(defaultConfig.projects)

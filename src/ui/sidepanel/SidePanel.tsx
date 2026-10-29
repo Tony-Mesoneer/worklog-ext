@@ -10,7 +10,7 @@ import { dayShortfall, myDailyTargetMinutes } from '@/core/deficit'
 import type { IssueMetaMap } from '@/core/issue-hierarchy'
 import { resolveSprintEvents, type ResolvedSprintEvent } from '@/core/event-resolve'
 import {
-  findOverlaps, formatMinutes, nextFreeStart, normalizeBreaks, parseHhMm, segmentsEnd,
+  findOverlaps, formatMinutes, freeGapMinutes, nextFreeStart, normalizeBreaks, parseHhMm, segmentsEnd,
   splitAroundBreaks, type DayEntry,
 } from '@/core/timeline'
 import { parseDuration, formatDuration } from '@/core/duration'
@@ -75,6 +75,10 @@ export function SidePanel() {
   const [issueKey, setIssueKey] = useState('')
   const [startMinutes, setStartMinutes] = useState(0)
   const [durationInput, setDurationInput] = useState('')
+  // false = ô Duration đang TỰ ĐIỀN vừa khoảng trống từ mốc bắt đầu (xem
+  // freeGapMinutes); true = người dùng (hoặc preset, sprint event, log-bù) đã
+  // đặt giá trị, panel không đè lên nữa. Về lại false sau khi Log xong.
+  const [durationTouched, setDurationTouched] = useState(false)
   const [comment, setComment] = useState('')
   const [busy, setBusy] = useState(false)
   const [loadingDay, setLoadingDay] = useState(false)
@@ -162,14 +166,17 @@ export function SidePanel() {
     // ghi giờ vào một issue "không xác định".
     if (e.issueKey === null) return
     setIssueKey(e.issueKey)
+    setDurationTouched(true)
     setDurationInput(e.defaultMinutes >= 60 && e.defaultMinutes % 60 === 0
       ? `${e.defaultMinutes / 60}h` : `${e.defaultMinutes}m`)
     setComment(e.comment)
   }
 
-  const submit = async () => {
+  // Nhận chuỗi duration HIỆU LỰC (gõ tay hoặc tự điền) từ lúc render, vì giá
+  // trị tự điền không nằm trong state.
+  const submit = async (durationText: string) => {
     if (!config) return
-    const seconds = parseDuration(durationInput)
+    const seconds = parseDuration(durationText)
     if (seconds === null) { setError({ message: t.sidepanel.invalidDuration, auth: false }); return }
     if (issueKey.trim() === '') { setError({ message: t.sidepanel.noIssue, auth: false }); return }
 
@@ -184,6 +191,7 @@ export function SidePanel() {
       })
       setLastAction({ kind: 'logged', ids: res.ids, issueKey: issueKey.trim() })
       setDurationInput('')
+      setDurationTouched(false)
       setComment('')
       await reload(config, date)
       // Undo hết hiệu lực sau 8 giây.
@@ -296,7 +304,15 @@ export function SidePanel() {
   const breaks = normalizeBreaks(config.breaks)
   const dayEndMinutes = parseHhMm(config.workdayEnd)
   const totalSeconds = worklogs.reduce((s, w) => s + w.timeSpentSeconds, 0)
-  const selectedMinutes = Math.round((parseDuration(durationInput) ?? 0) / 60)
+  // Chưa ai đặt duration → điền vừa khít khoảng trống trên timeline. Tính lại
+  // mỗi lần render nên đổi mốc bắt đầu hay dữ liệu ngày là giá trị theo ngay.
+  const autoGap = durationTouched
+    ? 0
+    : freeGapMinutes(entries, startMinutes, dayEndMinutes, breaks)
+  const effectiveDuration = durationTouched
+    ? durationInput
+    : autoGap > 0 ? formatDuration(autoGap * 60) : ''
+  const selectedMinutes = Math.round((parseDuration(effectiveDuration) ?? 0) / 60)
   // Các đoạn SẼ ghi. Mọi thứ hiển thị bên dưới (preview, timeline, cảnh báo
   // chồng giờ) đọc từ đây, nên panel không thể nói khác với cái sẽ POST.
   const segments = splitAroundBreaks(startMinutes, selectedMinutes, breaks)
@@ -343,6 +359,7 @@ export function SidePanel() {
     setStartMinutes(nextFreeStart(
       entries, parseHhMm(config.workdayStart), config.slotMinutes, dayEndMinutes, breaks,
     ))
+    setDurationTouched(true)
     setDurationInput(formatDuration(shortfall.fillMinutes * 60))
   }
 
@@ -483,15 +500,19 @@ export function SidePanel() {
             segments={segments}
             pastEndMinutes={pastEndMinutes}
             startMinutes={startMinutes}
-            durationInput={durationInput}
+            durationInput={effectiveDuration}
             comment={comment}
             issueKey={issueKey}
             busy={busy}
             overlapKeys={overlapKeys}
-            onStartChange={setStartMinutes}
-            onDurationChange={setDurationInput}
+            onStartChange={(m) => {
+              setStartMinutes(m)
+              // Ô đang trống thì đổi mốc bắt đầu cho tự điền trở lại.
+              if (durationInput.trim() === '') setDurationTouched(false)
+            }}
+            onDurationChange={(s) => { setDurationTouched(true); setDurationInput(s) }}
             onCommentChange={setComment}
-            onSubmit={() => void submit()}
+            onSubmit={() => void submit(effectiveDuration)}
           />
         </div>
       </Card>

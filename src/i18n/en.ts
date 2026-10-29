@@ -30,6 +30,7 @@ export const en = {
     retry: 'Retry',
     openOptions: 'Open Options',
     statusTitle: (name: string): string => `Status: ${name}`,
+    issueTypeTitle: (name: string): string => `Issue type: ${name}`,
   },
 
   language: {
@@ -324,6 +325,9 @@ export const en = {
     loadingMine: 'Loading your issues…',
     noMine: 'No issues assigned to you in the current sprint.',
     mineLabel: 'Your issues in the sprint',
+    // Issue bạn vừa log giờ vào, trừ ceremony (đã có nút riêng).
+    recentLabel: 'Recently logged',
+    noMineNoRecent: 'Nothing to suggest: no issues assigned to you in the current sprint, and no worklogs in the last two weeks.',
     parentOf: (parentKey: string, parentSummary: string): string =>
       `↳ under ${parentKey} — ${parentSummary}`,
 
@@ -412,6 +416,7 @@ export const en = {
     noEstimateCount: (count: number): string => `${count} issues without story points`,
     colIssue: 'Issue',
     colAssignee: 'Assignee',
+    colType: 'Type',
     colStatus: 'Status',
     colPoints: 'Points',
     colLogged: 'Logged',
