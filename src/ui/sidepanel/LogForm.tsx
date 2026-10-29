@@ -1,6 +1,7 @@
 // src/ui/sidepanel/LogForm.tsx
 import { useEffect, useId, useRef } from 'react'
 import { parseDuration, formatDuration, stepDurationMinutes } from '@/core/duration'
+import { createWheelStepper, DEFAULT_WHEEL_STEPPER, wheelDeltaPx } from '@/core/wheel-step'
 import {
   breakAt, buildPickerSlots, occupiedBy, formatMinutes,
   type Break, type DayEntry, type Segment,
@@ -34,9 +35,6 @@ type Props = {
   onSubmit: () => void
 }
 
-// Quãng lăn (px) cho một bước ±15m ở ô Duration — xem listener wheel.
-const WHEEL_STEP_PX = 50
-
 // "60" → "1h", "90" → "90m": text mà parseDuration đọc lại đúng giá trị.
 const presetText = (m: number): string => (m >= 60 && m % 60 === 0 ? `${m / 60}h` : `${m}m`)
 
@@ -67,23 +65,41 @@ export function LogForm(p: Props) {
   useEffect(() => {
     const el = freeRef.current
     if (!el) return
-    // Cộng dồn delta tới một ngưỡng rồi mới bước: một nấc chuột (~100px) là
-    // một bước, còn trackpad bắn hàng chục event vài px mỗi lần — bước theo
-    // từng event thì vuốt nhẹ cũng nhảy cả tiếng. Firefox báo theo DÒNG
-    // (deltaMode 1), quy đổi về px trước khi cộng.
-    let acc = 0
+    // Biến delta thành bước rời rạc ở core/wheel-step (giữ phần dư, giãn cách
+    // tối thiểu, reset khi đổi chiều/dừng) — xem đó để biết vì sao mượt.
+    const step = createWheelStepper()
+    // Giá trị của CÚ LĂN ĐANG DIỄN RA. Không đọc lại props mỗi event: nhiều
+    // event tới trước khi React kịp render lại, đọc props là đọc số CŨ và các
+    // bước bị nuốt mất — lăn nhanh mà số đứng yên chính là cái giật.
+    let pending: number | null = null
+    let frame = 0
+    let idle: ReturnType<typeof setTimeout> | undefined
     const onWheel = (e: WheelEvent) => {
       if (e.deltaY === 0) return
       e.preventDefault()
-      acc += e.deltaMode === 1 ? e.deltaY * 33 : e.deltaMode === 2 ? e.deltaY * 400 : e.deltaY
-      if (Math.abs(acc) < WHEEL_STEP_PX) return
-      const direction = acc < 0 ? 1 : -1
-      acc = 0
-      const cur = Math.round((parseDuration(latest.current.input) ?? 0) / 60)
-      latest.current.onChange(formatDuration(stepDurationMinutes(cur, direction) * 60))
+      clearTimeout(idle)
+      idle = setTimeout(() => { pending = null }, DEFAULT_WHEEL_STEPPER.idleResetMs)
+
+      const dir = step(wheelDeltaPx(e.deltaY, e.deltaMode), e.timeStamp)
+      if (dir === 0) return
+      const base = pending ?? Math.round((parseDuration(latest.current.input) ?? 0) / 60)
+      pending = stepDurationMinutes(base, dir)
+      // Gộp mọi bước trong cùng một frame thành MỘT lần setState: cả panel
+      // (timeline, cảnh báo) render lại theo duration, không cần làm việc đó
+      // nhiều lần mỗi frame.
+      if (frame === 0) {
+        frame = requestAnimationFrame(() => {
+          frame = 0
+          if (pending !== null) latest.current.onChange(formatDuration(pending * 60))
+        })
+      }
     }
     el.addEventListener('wheel', onWheel, { passive: false })
-    return () => el.removeEventListener('wheel', onWheel)
+    return () => {
+      el.removeEventListener('wheel', onWheel)
+      cancelAnimationFrame(frame)
+      clearTimeout(idle)
+    }
   }, [])
 
   const invalid = p.durationInput !== '' && seconds === null
