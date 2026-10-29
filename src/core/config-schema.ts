@@ -83,6 +83,17 @@ export type Config = {
   locale: Locale
 }
 
+// Bộ preset default CŨ. Options không có UI sửa preset, nên config đã lưu mà
+// mang đúng bộ này là default cũ được ghi xuống, không phải lựa chọn của người
+// dùng — đổi sang default mới, nếu không người dùng cũ không bao giờ thấy bộ mới.
+const LEGACY_DURATION_PRESETS = [15, 30, 60, 240, 360, 480]
+
+const migratePresets = (presets: number[]): number[] =>
+  presets.length === LEGACY_DURATION_PRESETS.length
+    && presets.every((m, i) => m === LEGACY_DURATION_PRESETS[i])
+    ? [...defaultConfig.durationPresets]
+    : presets
+
 export const defaultConfig: Config = {
   version: CONFIG_VERSION,
   jiraBaseUrl: '',
@@ -100,7 +111,7 @@ export const defaultConfig: Config = {
   workdayEnd: '18:00',
   breaks: [{ start: '12:00', end: '13:30' }],
   slotMinutes: 15,
-  durationPresets: [15, 30, 60, 240, 360, 480],
+  durationPresets: [30, 60, 120, 180, 240, 360],
   sprintEvents: [],
   // Mặc định trỏ về repo gốc. Vẫn sửa được ở Options: bản fork phải đổi chỗ
   // này, không thì nó đi hỏi update của một repo không phải của mình.
@@ -239,7 +250,7 @@ export function migrateConfig(raw: unknown): Config {
       : workdayEndOf(hhMm(r['workdayStart'], d.workdayStart), r['workdayEnd']),
     breaks,
     slotMinutes: num(r['slotMinutes'], d.slotMinutes),
-    durationPresets: numArray(r['durationPresets'], d.durationPresets),
+    durationPresets: migratePresets(numArray(r['durationPresets'], d.durationPresets)),
     sprintEvents,
     updateRepo: str(r['updateRepo'], d.updateRepo).trim(),
     // Locale lạ (config sửa tay, hoặc bản cũ chưa có field) → default.
