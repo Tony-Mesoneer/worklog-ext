@@ -56,7 +56,7 @@ export function LogForm(p: Props) {
   const noteId = useId()
   const freeRef = useRef<HTMLInputElement>(null)
 
-  // Lăn chuột trên ô Duration = ±15m. Listener GẮN TAY với passive:false chứ
+  // Lăn chuột trên ô Duration (đang focus) = ±15m. Listener GẮN TAY với passive:false chứ
   // không dùng onWheel của React: React gắn wheel ở dạng passive, nên
   // preventDefault ở đó không chặn được panel cuộn theo cùng lúc. Đọc props qua
   // ref để listener chỉ gắn một lần mà vẫn thấy giá trị mới nhất.
@@ -75,7 +75,9 @@ export function LogForm(p: Props) {
     let frame = 0
     let idle: ReturnType<typeof setTimeout> | undefined
     const onWheel = (e: WheelEvent) => {
-      if (e.deltaY === 0) return
+      // Chỉ khi ô ĐANG FOCUS: cuộn panel mà con trỏ lướt ngang ô thì panel
+      // phải cuộn như thường, không được âm thầm đổi thời lượng.
+      if (e.deltaY === 0 || document.activeElement !== el) return
       e.preventDefault()
       clearTimeout(idle)
       idle = setTimeout(() => { pending = null }, DEFAULT_WHEEL_STEPPER.idleResetMs)
