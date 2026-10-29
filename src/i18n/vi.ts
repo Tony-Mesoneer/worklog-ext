@@ -20,6 +20,7 @@ export const vi: Messages = {
     retry: 'Thử lại',
     openOptions: 'Mở Options',
     statusTitle: (name: string): string => `Trạng thái: ${name}`,
+    issueTypeTitle: (name: string): string => `Loại issue: ${name}`,
   },
 
   language: {
@@ -394,6 +395,7 @@ export const vi: Messages = {
     noEstimateCount: (count: number): string => `${count} issue chưa có story points`,
     colIssue: 'Issue',
     colAssignee: 'Assignee',
+    colType: 'Loại',
     colStatus: 'Status',
     colPoints: 'Points',
     colLogged: 'Đã log',

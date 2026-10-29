@@ -9,6 +9,7 @@ import {
   UNKNOWN_PROJECT,
 } from '@/core/issue-hierarchy'
 import { StatusBadge } from '@/ui/shared/StatusBadge'
+import { IssueTypeBadge } from '@/ui/shared/IssueTypeBadge'
 import { formatDuration } from '@/core/duration'
 import { ProgressBar } from '@/ui/shared/ProgressBar'
 import type { ProjectCoverage } from '@/core/coverage-by-project'
@@ -110,6 +111,12 @@ function IssueRow({
           <>{t.dashboard.ownOfParent}</>
         ) : (
           <>
+            {meta?.issueTypeName && (
+              <>
+                {' '}
+                <IssueTypeBadge name={meta.issueTypeName} isSubtask={meta.isSubtask} />
+              </>
+            )}
             {meta && (
               <>
                 {' '}

@@ -53,7 +53,7 @@ export async function findStoryPointsFieldId(c: JiraClient): Promise<string | nu
 //   - `parent`     → { key, fields: { summary } } trên sub-task, thiếu ở issue
 //                    cấp trên. Đây là nguồn duy nhất của quan hệ cha/con.
 //   - `status`     → tên workflow thật + statusCategory.key để chọn màu.
-//   - `issuetype`  → cờ `subtask`.
+//   - `issuetype`  → cờ `subtask` + tên type (Story, Bug…).
 //   - `project`    → { key } — project THẬT của issue. Đây là lý do không cắt
 //                    tiền tố của issue key: xem IssueMeta.projectKey.
 export const ISSUE_META_FIELDS = ['summary', 'parent', 'status', 'issuetype', 'project'] as const
@@ -62,7 +62,7 @@ type IssueFields = {
   summary?: unknown
   parent?: { key?: unknown; fields?: { summary?: unknown } } | null
   status?: { name?: unknown; statusCategory?: { key?: unknown } | null } | null
-  issuetype?: { subtask?: unknown } | null
+  issuetype?: { name?: unknown; subtask?: unknown } | null
   project?: { key?: unknown } | null
 }
 
@@ -84,6 +84,7 @@ export function toIssueMeta(key: string, fields: IssueFields | undefined): Issue
     parentKey: parentKey === '' ? null : parentKey,
     parentSummary: parentKey === '' ? null : str(f.parent?.fields?.summary),
     isSubtask: f.issuetype?.subtask === true,
+    issueTypeName: str(f.issuetype?.name),
   }
 }
 

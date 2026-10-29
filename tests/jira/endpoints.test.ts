@@ -26,7 +26,7 @@ const fakeClient = (routes: Record<string, unknown>) => {
 // IssueMeta mong đợi cho một issue "trơn": không parent, status không rõ.
 const flatMeta = (key: string, summary: string) => ({
   key, summary, statusName: '', statusCategory: 'new', projectKey: null,
-  parentKey: null, parentSummary: null, isSubtask: false,
+  parentKey: null, parentSummary: null, isSubtask: false, issueTypeName: '',
 })
 
 describe('findStoryPointsFieldId', () => {
@@ -100,7 +100,7 @@ describe('searchIssuesWithWorklogs', () => {
             summary: 'Implement: queue a user move',
             parent: { key: 'CAG-2969', fields: { summary: 'Allow moving user via SCIM' } },
             status: { name: 'In Testing', statusCategory: { key: 'indeterminate' } },
-            issuetype: { subtask: true },
+            issuetype: { name: 'Sub-task', subtask: true },
           },
         }],
       },
@@ -115,7 +115,7 @@ describe('searchIssuesWithWorklogs', () => {
       projectKey: null,
       parentKey: 'CAG-2969',
       parentSummary: 'Allow moving user via SCIM',
-      isSubtask: true,
+      isSubtask: true, issueTypeName: 'Sub-task',
     }])
   })
 
@@ -218,7 +218,7 @@ describe('searchMyIssues', () => {
       {
         key: 'CAG-1', summary: 'Việc 1', statusName: 'Closed',
         statusCategory: 'done', projectKey: null, parentKey: null, parentSummary: null,
-        isSubtask: false,
+        isSubtask: false, issueTypeName: '',
       },
       // Field thiếu (instance cũ, quyền hạn chế) không được làm vỡ gì.
       flatMeta('CAG-2', 'Việc 2'),
@@ -366,7 +366,7 @@ describe('getSprintIssues', () => {
     expect(out.meta['CAG-3065']).toEqual({
       key: 'CAG-3065', summary: 'Daily Scrum', statusName: 'In Progress',
       statusCategory: 'indeterminate', projectKey: null, parentKey: 'CAG-3063',
-      parentSummary: 'S34 - Sprint activities', isSubtask: true,
+      parentSummary: 'S34 - Sprint activities', isSubtask: true, issueTypeName: '',
     })
     // SprintIssue KHÔNG đổi hình dạng — buildPointsTable ăn nó nguyên vẹn.
     expect(out.issues[0]!.timeSpentSeconds).toBe(900)
@@ -477,7 +477,7 @@ describe('searchSprintSubtasks', () => {
       key: 'CAG-3078', summary: 'Security Review',
       statusName: '', statusCategory: 'new', projectKey: null,
       parentKey: 'CAG-2727', parentSummary: 'SCIM user sync hardening',
-      isSubtask: true,
+      isSubtask: true, issueTypeName: '',
     })
   })
 

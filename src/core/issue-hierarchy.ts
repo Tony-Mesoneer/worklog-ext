@@ -44,6 +44,29 @@ export type IssueMeta = {
   parentKey: string | null
   parentSummary: string | null
   isSubtask: boolean
+  /**
+   * Tên issue type THẬT (`fields.issuetype.name`: "Story", "Bug", "Lỗi"…).
+   * Rỗng = không biết. Snapshot cache từ trước khi có field này không mang nó,
+   * nên chỗ đọc phải coi `undefined` như rỗng.
+   */
+  issueTypeName: string
+}
+
+/**
+ * Nhóm màu của issue type. Tên type do từng instance tự đặt (và có thể dịch),
+ * nên chỉ đoán theo từ khoá quen thuộc; còn lại là 'other' — màu trung tính,
+ * cùng thái độ với toStatusCategory: không biết thì không tô màu sai.
+ */
+export type IssueTypeKind = 'story' | 'bug' | 'task' | 'epic' | 'subtask' | 'other'
+
+export function issueTypeKind(name: string | undefined, isSubtask = false): IssueTypeKind {
+  const n = (name ?? '').trim().toLowerCase()
+  if (n.includes('bug') || n.includes('lỗi') || n.includes('defect')) return 'bug'
+  if (n.includes('story')) return 'story'
+  if (n.includes('epic')) return 'epic'
+  if (isSubtask || n.includes('sub-task') || n.includes('subtask')) return 'subtask'
+  if (n.includes('task')) return 'task'
+  return 'other'
 }
 
 /** Khoá là issue key. Thiếu key = chưa biết gì về issue đó, không phải lỗi. */

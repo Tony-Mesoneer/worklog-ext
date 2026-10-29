@@ -26,7 +26,7 @@ const wl = (
 const meta = (pairs: Array<[string, string | null]>): IssueMetaMap =>
   Object.fromEntries(pairs.map(([key, projectKey]): [string, IssueMeta] => [key, {
     key, summary: `Summary ${key}`, statusName: 'To Do', statusCategory: 'new',
-    projectKey, parentKey: null, parentSummary: null, isSubtask: false,
+    projectKey, parentKey: null, parentSummary: null, isSubtask: false, issueTypeName: '',
   }]))
 
 const build = (worklogs: Worklog[], members: Member[], m: IssueMetaMap) =>

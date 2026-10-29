@@ -30,6 +30,7 @@ export const en = {
     retry: 'Retry',
     openOptions: 'Open Options',
     statusTitle: (name: string): string => `Status: ${name}`,
+    issueTypeTitle: (name: string): string => `Issue type: ${name}`,
   },
 
   language: {
@@ -415,6 +416,7 @@ export const en = {
     noEstimateCount: (count: number): string => `${count} issues without story points`,
     colIssue: 'Issue',
     colAssignee: 'Assignee',
+    colType: 'Type',
     colStatus: 'Status',
     colPoints: 'Points',
     colLogged: 'Logged',

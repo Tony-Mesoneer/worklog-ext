@@ -7,6 +7,7 @@ import {
 } from '@/core/issue-hierarchy'
 import { Card } from '@/ui/shared/Card'
 import { StatusBadge } from '@/ui/shared/StatusBadge'
+import { IssueTypeBadge } from '@/ui/shared/IssueTypeBadge'
 import { hoursLabel } from '@/ui/shared/format'
 import { ErrorBanner, toUiError, type UiError } from '@/ui/shared/errors'
 import { colors, fontSize, space, table as tableColors } from '@/ui/shared/theme'
@@ -39,6 +40,11 @@ function IssueRow({ row, meta, child }: {
       <th scope="row" style={{ fontWeight: 400, paddingLeft: child ? CHILD_INDENT : undefined }}>
         <strong>{child ? '↳ ' : ''}{row.key}</strong> {row.summary}
       </th>
+      <td style={{ textAlign: 'left' }}>
+        {meta?.issueTypeName
+          ? <IssueTypeBadge name={meta.issueTypeName} isSubtask={meta.isSubtask} />
+          : '—'}
+      </td>
       <td style={{ textAlign: 'left' }}>{row.assigneeName ?? '—'}</td>
       <td style={{ textAlign: 'left' }}>
         {meta
@@ -87,7 +93,7 @@ function ParentGroups({ rows, meta, keyPrefix }: {
               <th scope="row" style={{ fontWeight: 600, color: colors.muted }}>
                 {group.key} {group.summary}
               </th>
-              <td colSpan={5} style={{ textAlign: 'left', color: colors.muted }}>
+              <td colSpan={6} style={{ textAlign: 'left', color: colors.muted }}>
                 {t.dashboard.notInSprint}
               </td>
             </tr>
@@ -157,6 +163,7 @@ export function PointsPanel() {
             <thead>
               <tr>
                 <th scope="col" style={{ textAlign: 'left', minWidth: 240 }}>{t.dashboard.colIssue}</th>
+                <th scope="col" style={{ textAlign: 'left' }}>{t.dashboard.colType}</th>
                 <th scope="col" style={{ textAlign: 'left' }}>{t.dashboard.colAssignee}</th>
                 <th scope="col" style={{ textAlign: 'left' }}>{t.dashboard.colStatus}</th>
                 <th scope="col">{t.dashboard.colPoints}</th>
@@ -172,7 +179,7 @@ export function PointsPanel() {
                     <tr>
                       <th
                         scope="row"
-                        colSpan={6}
+                        colSpan={7}
                         style={{ fontWeight: 700, background: tableColors.groupRowBg }}
                       >
                         {projectLabel(t, pg.projectKey)}

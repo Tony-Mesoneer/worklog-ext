@@ -93,6 +93,18 @@ export const statusCategoryColors = {
   done: { bg: 'rgba(111,207,139,0.14)', fg: colors.success, border: 'rgba(111,207,139,0.35)' },
 } as const
 
+// Màu của IssueTypeBadge. Cùng hình thức nhãn (nền mờ + chữ màu) với
+// StatusBadge; Bug lấy màu danger, Story màu success để hai loại hay gặp nhất
+// tách nhau ngay. Task/Sub-task/không rõ là trung tính.
+export const issueTypeColors = {
+  story: { bg: 'rgba(111,207,139,0.14)', fg: colors.success, border: 'rgba(111,207,139,0.35)' },
+  bug: { bg: 'rgba(240,117,125,0.16)', fg: colors.danger, border: 'rgba(240,117,125,0.35)' },
+  task: { bg: 'rgba(110,168,240,0.14)', fg: '#8DB8F2', border: 'rgba(110,168,240,0.35)' },
+  epic: { bg: colors.accentSoft, fg: colors.accentRing, border: 'rgba(150,125,214,0.35)' },
+  subtask: { bg: 'rgba(155,149,168,0.12)', fg: colors.muted, border: colors.border },
+  other: { bg: 'rgba(155,149,168,0.12)', fg: colors.muted, border: colors.border },
+} as const
+
 // Không còn `statusColors`: cờ nhị phân ok/under/empty đã bị thay bằng thanh
 // tỉ lệ (ProgressBar + progressTone). `CoverageRow.status` của core vẫn nguyên,
 // chỉ là UI không tô màu theo nó nữa.
