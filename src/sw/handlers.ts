@@ -8,7 +8,7 @@ import { readCeremonyCache, writeCeremonyCache } from '@/store/ceremony'
 import { createClient, type JiraClient } from '@/jira/client'
 import { cookieAuth, tokenAuth } from '@/jira/auth'
 import * as api from '@/jira/endpoints'
-import { formatStarted, offsetMinutesForZone } from '@/core/jiraTime'
+import { formatStarted, offsetMinutesForZone, todayInZone } from '@/core/jiraTime'
 import { normalizeBreaks, splitAroundBreaks } from '@/core/timeline'
 import { resolveSprintEvents, type CeremonyCandidate } from '@/core/event-resolve'
 import type { Config } from '@/core/config-schema'
@@ -66,6 +66,13 @@ async function fetchWorklogs(
     .flat()
     .filter((w) => wanted.has(w.authorAccountId) && w.date >= from && w.date <= to)
   return { worklogs, meta: api.toIssueMetaMap(issues) }
+}
+
+// Ngày (YYYY-MM-DD) theo timeZone của một mốc ISO Jira trả về. Chuỗi rỗng hay
+// không parse được → null: sprint chưa có ngày thì không có range để hiện.
+function sprintDate(iso: string, timeZone: string): string | null {
+  const t = Date.parse(iso)
+  return Number.isNaN(t) ? null : todayInZone(timeZone, new Date(t))
 }
 
 // Xoá các worklog vừa tạo, theo thứ tự NGƯỢC. Trả về id của những cái xoá
@@ -269,11 +276,14 @@ export async function handle(msg: Message): Promise<unknown> {
       const c = await makeClient(config)
       const sprint = await api.getActiveSprint(c, config.primaryBoardId)
       if (!sprint) return null
-      return {
-        name: sprint.name,
-        from: sprint.startDate.slice(0, 10),
-        to: sprint.endDate.slice(0, 10),
-      } satisfies SprintCurrentResult
+      // Jira trả mốc UTC ("2026-10-01T17:00:00Z"); ngày của sprint là ngày
+      // theo timeZone cấu hình, KHÔNG phải 10 ký tự đầu chuỗi. Sprint kết thúc
+      // 00:00 ngày 2/10 giờ VN mà cắt chuỗi thì ra 1/10 — bảng thiếu đúng
+      // ngày thứ Sáu cuối sprint.
+      const from = sprintDate(sprint.startDate, config.timeZone)
+      const to = sprintDate(sprint.endDate, config.timeZone)
+      if (from === null || to === null) return null
+      return { name: sprint.name, from, to } satisfies SprintCurrentResult
     }
 
     case 'events/resolve': {
