@@ -501,7 +501,6 @@ export function SidePanel() {
             pastEndMinutes={pastEndMinutes}
             startMinutes={startMinutes}
             durationInput={effectiveDuration}
-            autoFitUntil={autoGap > 0 ? startMinutes + autoGap : null}
             comment={comment}
             issueKey={issueKey}
             busy={busy}

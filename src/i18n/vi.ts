@@ -276,8 +276,6 @@ export const vi: Messages = {
     durationLabel: 'Thời lượng',
     durationPresets: 'Thời lượng có sẵn',
     durationCustom: 'Thời lượng tự nhập',
-    autoFit: (until: string): string =>
-      `Tự điền vừa khoảng trống tới ${until} — sửa nếu cần`,
     noteLabel: 'Ghi chú',
     notePlaceholder: 'không bắt buộc',
     durationUnparsed: (input: string): string =>

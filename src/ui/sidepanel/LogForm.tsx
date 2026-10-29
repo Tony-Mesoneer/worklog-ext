@@ -23,11 +23,6 @@ type Props = {
   pastEndMinutes: number | null
   startMinutes: number
   durationInput: string
-  /**
-   * Mốc kết thúc khi ô Duration đang TỰ ĐIỀN vừa khoảng trống; null khi người
-   * dùng đã tự đặt giá trị (hoặc không có khoảng trống nào).
-   */
-  autoFitUntil: number | null
   comment: string
   issueKey: string
   busy: boolean
@@ -133,14 +128,6 @@ export function LogForm(p: Props) {
           placeholder={t.sidepanel.notePlaceholder}
         />
       </div>
-
-      {/* Nói rõ giá trị đang được tự điền: một con số tự xuất hiện mà không
-          giải thích thì người dùng không biết có nên tin nó hay không. */}
-      {p.autoFitUntil !== null && (
-        <span style={{ fontSize: fontSize.sm, color: colors.muted }}>
-          {t.sidepanel.autoFit(formatMinutes(p.autoFitUntil))}
-        </span>
-      )}
 
       {invalid && (
         <span role="alert" style={{ fontSize: fontSize.sm, color: colors.danger }}>
