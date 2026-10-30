@@ -14,3 +14,14 @@ export async function saveConfig(patch: Partial<Config>): Promise<Config> {
   await ext.storage.local.set({ [KEY]: next })
   return next
 }
+
+/**
+ * Thay TOÀN BỘ config — dùng cho Import. Không đi qua saveConfig vì merge sẽ
+ * giữ lại những gì file nhập không có (vd token của máy này khi file không có
+ * token), tức kết quả không còn là "đúng cái đã xuất".
+ */
+export async function replaceConfig(raw: unknown): Promise<Config> {
+  const next = migrateConfig(raw)
+  await ext.storage.local.set({ [KEY]: next })
+  return next
+}
