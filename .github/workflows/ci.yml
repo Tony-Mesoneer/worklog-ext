@@ -27,6 +27,8 @@ jobs:
   build:
     name: Typecheck, test, build
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.pack.outputs.version }}
     steps:
       - uses: actions/checkout@v7
 
@@ -68,9 +70,22 @@ jobs:
         run: |
           node scripts/pack.mjs --github-output
           node scripts/pack.mjs --target firefox
+          node scripts/pack.mjs --target windows
 
       - uses: actions/upload-artifact@v7
         with:
           name: worklog-ext-${{ github.run_number }}
           path: release/*.zip
           if-no-files-found: error
+
+  # Đóng dmg/exe và CHẠY THỬ chúng trên runner macOS/Windows thật ngay ở PR,
+  # không đợi tới lúc release: exe bung sai chỗ hay xoá nhầm thư mục mà chỉ lộ
+  # ra sau khi đã publish là đã tới tay người dùng. Repo public nên runner
+  # macOS/Windows không tính phút.
+  installers:
+    name: Gói cài macOS / Windows
+    needs: build
+    uses: ./.github/workflows/installers.yml
+    with:
+      artifact: worklog-ext-${{ github.run_number }}
+      version: ${{ needs.build.outputs.version }}
