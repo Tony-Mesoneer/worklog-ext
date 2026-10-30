@@ -19,9 +19,8 @@ on:
 permissions:
   contents: write
 
-# Ba job: `build` (zip + XPI) → `installers` (dmg + exe, trên runner macOS /
-# Windows thật) → `publish`. Tách ra vì dmg cần hdiutil (chỉ có trên macOS) và
-# exe phải được chạy thử trên Windows trước khi đưa cho ai.
+# Ba job: `build` (zip + XPI) → `dmg` (trên runner macOS) → `publish`. Tách ra
+# vì dmg cần hdiutil, chỉ có trên macOS.
 jobs:
   build:
     name: Build và đóng gói zip
@@ -113,10 +112,10 @@ jobs:
             release/*.xpi
           if-no-files-found: error
 
-  installers:
-    name: Gói cài macOS / Windows
+  dmg:
+    name: Đóng dmg (macOS)
     needs: build
-    uses: ./.github/workflows/installers.yml
+    uses: ./.github/workflows/dmg.yml
     permissions:
       contents: read
     with:
@@ -125,11 +124,11 @@ jobs:
 
   publish:
     name: Publish GitHub Release
-    needs: [build, installers]
-    # Gói cài là best-effort, cùng lý lẽ với bước sign AMO: một release bị chặn
-    # hoàn toàn vì runner macOS/Windows trục trặc là đánh đổi tệ hơn một release
-    # thiếu dmg/exe. Zip vẫn là đường chính, và check-update tự rơi về zip store
-    # khi release không có dmg / zip Windows (xem core/version pickDownload).
+    needs: [build, dmg]
+    # Dmg là best-effort, cùng lý lẽ với bước sign AMO: một release bị chặn hoàn
+    # toàn vì runner macOS trục trặc là đánh đổi tệ hơn một release thiếu dmg.
+    # Check-update tự rơi về zip store khi release không có dmg (xem core/version
+    # pickDownload).
     if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     env:
@@ -137,8 +136,8 @@ jobs:
     steps:
       - uses: actions/download-artifact@v8
         with:
-          # Gộp artifact của build (`worklog-ext-<tag>`) và của installers
-          # (`…-macos`, `…-windows`) vào cùng một thư mục.
+          # Gộp artifact của build (`worklog-ext-<tag>`) và của dmg (`…-macos`)
+          # vào cùng một thư mục.
           pattern: worklog-ext-${{ inputs.tag || github.ref_name }}*
           merge-multiple: true
           path: release
@@ -146,8 +145,8 @@ jobs:
       - name: Liệt kê file sẽ đính vào release
         run: |
           ls -la release/
-          if [ "${{ needs.installers.result }}" != "success" ]; then
-            echo "### ⚠️ Gói cài macOS/Windows lỗi — release chỉ có zip" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ needs.dmg.result }}" != "success" ]; then
+            echo "### ⚠️ Đóng dmg lỗi — release không có dmg" >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: GitHub Release
@@ -158,13 +157,12 @@ jobs:
           generate_release_notes: true
           # Thứ tự KHÔNG còn ý nghĩa cho check-update: pickDownload trong
           # core/version chọn theo hậu tố tên. Tên file thì CÓ: đổi hậu tố
-          # (`.dmg`, `-windows.zip`, `-windows.exe`, `-firefox.zip`) là phải sửa
-          # chỗ đó. Dmg/exe/XPI có thể vắng (xem `if` của job) — action chỉ
-          # cảnh báo file không khớp, không fail.
+          # (`.dmg`, `-windows.zip`, `-firefox.zip`) là phải sửa chỗ đó. Dmg/XPI
+          # có thể vắng (xem `if` của job) — action chỉ cảnh báo file không khớp,
+          # không fail.
           files: |
             release/worklog-ext-${{ env.VERSION }}.zip
             release/worklog-ext-${{ env.VERSION }}-firefox.zip
             release/worklog-ext-${{ env.VERSION }}-windows.zip
-            release/worklog-ext-${{ env.VERSION }}-windows.exe
             release/worklog-ext-${{ env.VERSION }}.dmg
             release/*.xpi

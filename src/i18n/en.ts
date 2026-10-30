@@ -209,7 +209,6 @@ export const en = {
       available: (version: string, published: string): string =>
         `Version ${version} is available${published === '' ? '' : ` (${published})`}.`,
       download: 'Download update',
-      exe: 'Download .exe',
       failed: (reason: string): string => `Could not check: ${reason}`,
       reload: 'Restart extension',
       reloadHint:
@@ -267,7 +266,6 @@ export const en = {
     howToWindows:
       'Open the zip, drag the Worklog Extension folder onto Documents (or Extract All… to '
       + 'Documents), then press "Restart extension" in Options.',
-    exe: '.exe installer',
     later: 'Later',
     download: 'Download update',
   },

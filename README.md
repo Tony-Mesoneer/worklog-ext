@@ -108,9 +108,9 @@ node scripts/pack.mjs --target windows   # → release/worklog-ext-<version>-win
 ```
 
 `manifest.json` nằm ở gốc zip store (đúng dạng Chrome Web Store yêu cầu). Zip
-`-windows` thì ngược lại: bọc đúng một thư mục `Worklog Extension`. `.dmg` và
-`.exe` chỉ đóng trong CI ([`installers.yml`](.github/workflows/installers.yml)) vì
-cần `hdiutil` của macOS và `csc.exe` của Windows. `release/` được gitignore.
+`-windows` thì ngược lại: bọc đúng một thư mục `Worklog Extension`. `.dmg` chỉ
+đóng trong CI ([`dmg.yml`](.github/workflows/dmg.yml)) vì cần `hdiutil` của
+macOS. `release/` được gitignore.
 
 ## Icon
 
@@ -256,14 +256,13 @@ Mỗi release có:
 | File | Dành cho |
 | --- | --- |
 | `worklog-ext-<v>.dmg` | macOS |
-| `worklog-ext-<v>-windows.zip` | Windows (đường chính) |
-| `worklog-ext-<v>-windows.exe` | Windows (tự cài, không ký số) |
+| `worklog-ext-<v>-windows.zip` | Windows |
 | `worklog-ext-<v>.zip` | Linux / Chrome Web Store — `manifest.json` ở gốc |
 | `worklog-ext-<v>-firefox.zip` | Firefox |
 
 Banner "có bản mới" tự đưa đúng file theo hệ điều hành
-(`runtime.getPlatformInfo()`): macOS nhận `.dmg`, Windows nhận `-windows.zip`
-kèm link phụ tới `.exe`. Release nào thiếu các file này thì rơi về zip store.
+(`runtime.getPlatformInfo()`): macOS nhận `.dmg`, Windows nhận `-windows.zip`.
+Release nào thiếu các file này thì rơi về zip store.
 
 **Chuyển đổi một lần** (từ bản cài trước khi có `key`, tức ≤ 0.12.0)
 
@@ -312,7 +311,7 @@ nhà của từng người. Nếu bật iCloud "Desktop & Documents" kèm "Optim
 Storage", macOS có thể đẩy file lên iCloud và Chrome không đọc được — khi đó
 chọn "Keep Downloaded" cho thư mục này.
 
-**Cập nhật trên Windows — zip (đường chính)**
+**Cập nhật trên Windows**
 
 Tải `worklog-ext-<v>-windows.zip` từ banner, rồi một trong hai cách:
 
@@ -328,26 +327,7 @@ Rồi Options → **7. Cập nhật → Khởi động lại extension**.
 
 Explorer **gộp** thư mục chứ không thay: file trùng tên bị ghi đè, file chỉ có
 ở bản cũ (asset mang hash cũ) vẫn nằm lại. Vô hại — `manifest.json` mới không
-trỏ tới chúng. Muốn sạch thì xoá thư mục `Worklog Extension` trước khi thả, hoặc
-dùng `.exe`.
-
-**Cập nhật trên Windows — `.exe` (tùy chọn)**
-
-`worklog-ext-<v>-windows.exe` tự bung vào `Documents\Worklog Extension`, ghi đè
-không hỏi, và **xoá nội dung cũ trước** nên không để lại file thừa. "Documents"
-ở đây là thư mục Documents thật mà Explorer hiện — kể cả khi OneDrive đã chuyển
-nó sang `OneDrive - <Công ty>\Documents`. Nó chỉ xoá khi thư mục đó trông như
-bản extension cũ (có `manifest.json`); thư mục trùng tên chứa thứ khác thì để
-nguyên và báo lỗi.
-
-File **không ký số**, nên:
-
-- SmartScreen hiện "Windows protected your PC" → **More info → Run anyway**.
-- Trên máy công ty, SmartScreen / AppLocker / antivirus có thể **chặn hẳn**
-  (không có nút Run anyway). Khi đó dùng zip.
-
-Chạy xong có hộp thoại báo đã cài vào đâu; rồi Options → **7. Cập nhật →
-Khởi động lại extension**.
+trỏ tới chúng. Muốn sạch thì xoá thư mục `Worklog Extension` trước khi thả.
 
 **Nếu bạn build từ repo**
 

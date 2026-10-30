@@ -78,14 +78,12 @@ jobs:
           path: release/*.zip
           if-no-files-found: error
 
-  # Đóng dmg/exe và CHẠY THỬ chúng trên runner macOS/Windows thật ngay ở PR,
-  # không đợi tới lúc release: exe bung sai chỗ hay xoá nhầm thư mục mà chỉ lộ
-  # ra sau khi đã publish là đã tới tay người dùng. Repo public nên runner
-  # macOS/Windows không tính phút.
-  installers:
-    name: Gói cài macOS / Windows
+  # Đóng dmg và mount thử trên runner macOS thật ngay ở PR, không đợi tới lúc
+  # release. Repo public nên runner macOS không tính phút.
+  dmg:
+    name: Đóng dmg (macOS)
     needs: build
-    uses: ./.github/workflows/installers.yml
+    uses: ./.github/workflows/dmg.yml
     with:
       artifact: worklog-ext-${{ github.run_number }}
       version: ${{ needs.build.outputs.version }}

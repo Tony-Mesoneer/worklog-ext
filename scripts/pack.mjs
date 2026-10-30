@@ -9,8 +9,8 @@
 // thêm thư mục. Zip `windows` thì NGƯỢC LẠI — bọc đúng MỘT thư mục `Worklog
 // Extension`, để kéo thư mục đó từ Explorer thả vào Documents, hoặc "Extract
 // All…" với đích Documents, đều ra `Documents\Worklog Extension` — cùng một
-// đường dẫn ở mọi lần cập nhật. Nó cũng là đầu vào của .dmg và .exe (xem
-// .github/workflows/installers.yml), nên ba gói luôn cùng nội dung.
+// đường dẫn ở mọi lần cập nhật. Nó cũng là đầu vào của .dmg (xem
+// .github/workflows/dmg.yml), nên hai gói luôn cùng nội dung.
 import { cpSync, existsSync, mkdirSync, readFileSync, appendFileSync, rmSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
@@ -47,7 +47,7 @@ rmSync(zip, { force: true })
 
 // -r đệ quy, -q im lặng, -X bỏ metadata của macOS cho zip tái lập được.
 if (target === 'windows') {
-  // Tên thư mục là hợp đồng với README, installer .exe và .dmg — đổi là người
+  // Tên thư mục là hợp đồng với README và .dmg — đổi là người
   // dùng thả bản mới vào một thư mục khác với cái Chrome đang load.
   const folder = 'Worklog Extension'
   const stage = join(outDir, '.stage-windows')

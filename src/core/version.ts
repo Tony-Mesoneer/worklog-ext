@@ -77,8 +77,6 @@ export type ReleaseInfo = {
   url: string
   downloadUrl: string | null
   downloadKind: DownloadKind | null
-  /** `.exe` tự giải nén cho Windows — lựa chọn PHỤ, chỉ có trên Windows. */
-  exeUrl: string | null
   publishedAt: string
   notes: string
 }
@@ -93,7 +91,6 @@ const str = (v: unknown): string => (typeof v === 'string' ? v : '')
 //   worklog-ext-<v>.zip           zip store, manifest ở gốc     — Chrome
 //   worklog-ext-<v>-firefox.zip   zip store                     — Firefox
 //   worklog-ext-<v>-windows.zip   MỘT thư mục `Worklog Extension` — Chrome/Windows
-//   worklog-ext-<v>-windows.exe   tự giải nén vào Documents     — Chrome/Windows
 //   worklog-ext-<v>.dmg           thư mục `Worklog Extension`   — Chrome/macOS
 //
 // Vì thế không thể lấy "cái .zip đầu tiên": làm vậy là mời người dùng Firefox
@@ -122,7 +119,6 @@ const isFirefoxZip = (n: string) => n.endsWith('.zip') && n.includes('firefox')
 const isWindowsZip = (n: string) => n.endsWith('-windows.zip')
 const isStoreZip = (n: string) => n.endsWith('.zip') && !isFirefoxZip(n) && !isWindowsZip(n)
 const isDmg = (n: string) => n.endsWith('.dmg')
-const isWindowsExe = (n: string) => n.endsWith('-windows.exe')
 
 const find = (assets: Asset[], match: (name: string) => boolean): string | null =>
   assets.find((a) => match(a.name))?.url ?? null
@@ -131,21 +127,19 @@ function pickDownload(
   assets: Asset[],
   firefox: boolean,
   os: ReleaseOs,
-): { downloadUrl: string | null; downloadKind: DownloadKind | null; exeUrl: string | null } {
-  const none = { downloadUrl: null, downloadKind: null, exeUrl: null }
+): { downloadUrl: string | null; downloadKind: DownloadKind | null } {
   if (firefox) {
     const url = find(assets, isFirefoxZip)
-    return url ? { ...none, downloadUrl: url, downloadKind: 'zip' } : none
+    return { downloadUrl: url, downloadKind: url ? 'zip' : null }
   }
-  const exeUrl = os === 'win' ? find(assets, isWindowsExe) : null
   const preferred = os === 'mac'
     ? { url: find(assets, isDmg), kind: 'dmg' as const }
     : os === 'win'
       ? { url: find(assets, isWindowsZip), kind: 'windows-zip' as const }
       : { url: null, kind: 'zip' as const }
-  if (preferred.url) return { downloadUrl: preferred.url, downloadKind: preferred.kind, exeUrl }
+  if (preferred.url) return { downloadUrl: preferred.url, downloadKind: preferred.kind }
   const store = find(assets, isStoreZip)
-  return { downloadUrl: store, downloadKind: store ? 'zip' : null, exeUrl }
+  return { downloadUrl: store, downloadKind: store ? 'zip' : null }
 }
 
 /**

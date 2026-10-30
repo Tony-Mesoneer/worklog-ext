@@ -58,7 +58,7 @@ export const isFirefox = (): boolean => 'sidebarAction' in ext
 
 /**
  * Hệ điều hành, để chọn asset trong release: macOS nhận `.dmg`, Windows nhận zip
- * có thư mục `Worklog Extension` (+ `.exe`), còn lại zip store.
+ * có thư mục `Worklog Extension`, còn lại zip store.
  *
  * runtime.getPlatformInfo có ở cả Chrome lẫn Firefox. Lỗi (API thiếu, môi
  * trường lạ) → `other`: zip store cài được ở mọi nơi, nên đoán sai theo hướng

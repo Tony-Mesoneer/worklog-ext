@@ -843,7 +843,6 @@ function UpdateSection({ config, save }: SectionProps) {
   const invalid = trimmed !== '' && !isRepoSlug(trimmed)
 
   const latest = status?.latest ?? null
-  const exeUrl = latest?.exeUrl ?? null
   const checkedAt = status && status.lastCheckedAt > 0
     ? new Date(status.lastCheckedAt).toLocaleString(intlLocale(locale))
     : null
@@ -935,14 +934,6 @@ function UpdateSection({ config, save }: SectionProps) {
               latest.publishedAt === ''
                 ? ''
                 : new Date(latest.publishedAt).toLocaleDateString(intlLocale(locale)),
-            )}
-            {exeUrl && (
-              <>
-                {' '}
-                <Button variant="ghost" size="sm" onClick={() => void ext.tabs.create({ url: exeUrl })}>
-                  {t.options.update.exe}
-                </Button>
-              </>
             )}
           </Banner>
         )}

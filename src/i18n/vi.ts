@@ -196,7 +196,6 @@ export const vi: Messages = {
       available: (version: string, published: string): string =>
         `Có bản ${version}${published === '' ? '' : ` (${published})`}.`,
       download: 'Tải bản mới',
-      exe: 'Tải bản .exe',
       failed: (reason: string): string => `Chưa kiểm tra được: ${reason}`,
       reload: 'Khởi động lại extension',
       reloadHint:
@@ -248,7 +247,6 @@ export const vi: Messages = {
     howToWindows:
       'Mở zip, kéo thư mục Worklog Extension vào Documents (hoặc Extract All… với đích '
       + 'Documents), rồi bấm "Khởi động lại extension" ở Options.',
-    exe: 'Bản .exe',
     later: 'Để sau',
     download: 'Tải bản mới',
   },

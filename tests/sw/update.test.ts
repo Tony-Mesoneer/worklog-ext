@@ -57,7 +57,6 @@ const release = (tag: string) => {
       { name: `worklog-ext-${v}.zip`, browser_download_url: 'https://x/w.zip' },
       { name: `worklog-ext-${v}-firefox.zip`, browser_download_url: 'https://x/w-ff.zip' },
       { name: `worklog-ext-${v}-windows.zip`, browser_download_url: 'https://x/w-win.zip' },
-      { name: `worklog-ext-${v}-windows.exe`, browser_download_url: 'https://x/w-win.exe' },
       { name: `worklog-ext-${v}.dmg`, browser_download_url: 'https://x/w.dmg' },
     ],
   }
@@ -225,15 +224,14 @@ describe('chọn asset theo nền tảng', () => {
     const latest = (await checkForUpdate(false)).latest
     expect(latest?.downloadUrl).toBe('https://x/w.dmg')
     expect(latest?.downloadKind).toBe('dmg')
-    expect(latest?.exeUrl).toBeNull()
   })
 
-  it('Chrome trên Windows nhận zip Windows, kèm exe', async () => {
+  it('Chrome trên Windows nhận zip Windows', async () => {
     setup({ updateRepo: 'o/r' }, '0.2.0', false, 'win')
     fetchMock.mockResolvedValue(ok(release('v0.3.0')))
     const latest = (await checkForUpdate(false)).latest
     expect(latest?.downloadUrl).toBe('https://x/w-win.zip')
-    expect(latest?.exeUrl).toBe('https://x/w-win.exe')
+    expect(latest?.downloadKind).toBe('windows-zip')
   })
 
   it('Chrome trên Linux nhận zip store', async () => {
@@ -245,9 +243,7 @@ describe('chọn asset theo nền tảng', () => {
   it('Firefox trên Windows vẫn nhận zip Firefox', async () => {
     setup({ updateRepo: 'o/r' }, '0.2.0', true, 'win')
     fetchMock.mockResolvedValue(ok(release('v0.3.0')))
-    const latest = (await checkForUpdate(false)).latest
-    expect(latest?.downloadUrl).toBe('https://x/w-ff.zip')
-    expect(latest?.exeUrl).toBeNull()
+    expect((await checkForUpdate(false)).latest?.downloadUrl).toBe('https://x/w-ff.zip')
   })
 
   it('release cũ chỉ có zip Chrome: Firefox không nhận link file nào', async () => {

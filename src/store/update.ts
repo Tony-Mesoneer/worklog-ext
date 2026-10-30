@@ -46,12 +46,11 @@ export async function readUpdateStore(): Promise<UpdateStore> {
     latest: isRecord(latest) && typeof latest['version'] === 'string'
       ? {
           ...(latest as unknown as ReleaseInfo),
-          // Cache ghi bởi bản trước khi có hai field này: thiếu → coi như chỉ có
-          // zip store, đúng như những gì bản đó từng chọn.
+          // Cache ghi bởi bản trước khi có field này: thiếu → coi như zip store,
+          // đúng như những gì bản đó từng chọn.
           downloadKind: isDownloadKind(latest['downloadKind'])
             ? latest['downloadKind']
             : typeof latest['downloadUrl'] === 'string' ? 'zip' : null,
-          exeUrl: typeof latest['exeUrl'] === 'string' ? latest['exeUrl'] : null,
         }
       : null,
     dismissedVersion:

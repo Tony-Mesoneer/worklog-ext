@@ -15,7 +15,6 @@ export function UpdateBanner() {
   if (!status || status.state !== 'available' || !status.latest) return null
 
   const { latest, currentVersion } = status
-  const { exeUrl } = latest
   // Ưu tiên link tải file; release nào chưa có asset thì mở trang release.
   const href = latest.downloadUrl ?? latest.url
   // Câu hướng dẫn đi theo LOẠI file thật sự được đưa, không theo hệ điều hành:
@@ -39,13 +38,6 @@ export function UpdateBanner() {
         <span style={{ fontSize: fontSize.xs }}>
           {howTo}
           {' '}
-          {/* .exe là đường PHỤ: zip vẫn là đường chính vì exe không ký số và có
-              thể bị SmartScreen/chính sách công ty chặn. */}
-          {exeUrl && (
-            <Button variant="ghost" size="sm" onClick={() => void ext.tabs.create({ url: exeUrl })}>
-              {t.updateBanner.exe}
-            </Button>
-          )}
           <Button variant="ghost" size="sm" onClick={() => void dismiss()}>
             {t.updateBanner.later}
           </Button>

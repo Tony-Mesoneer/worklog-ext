@@ -161,30 +161,29 @@ describe('parseRelease — chọn gói theo hệ điều hành', () => {
       { name: 'worklog-ext-0.13.0.zip', browser_download_url: 'https://x/store.zip' },
       { name: 'worklog-ext-0.13.0-firefox.zip', browser_download_url: 'https://x/ff.zip' },
       { name: 'worklog-ext-0.13.0-windows.zip', browser_download_url: 'https://x/win.zip' },
-      { name: 'worklog-ext-0.13.0-windows.exe', browser_download_url: 'https://x/win.exe' },
       { name: 'worklog-ext-0.13.0.dmg', browser_download_url: 'https://x/mac.dmg' },
     ],
   }
   const pick = (raw: unknown, opts: Parameters<typeof parseRelease>[1]) => {
     const r = parseRelease(raw, opts)
-    return { downloadUrl: r?.downloadUrl, downloadKind: r?.downloadKind, exeUrl: r?.exeUrl }
+    return { downloadUrl: r?.downloadUrl, downloadKind: r?.downloadKind }
   }
 
-  it('macOS nhận .dmg, không có exe', () => {
+  it('macOS nhận .dmg', () => {
     expect(pick(full, { os: 'mac' })).toEqual({
-      downloadUrl: 'https://x/mac.dmg', downloadKind: 'dmg', exeUrl: null,
+      downloadUrl: 'https://x/mac.dmg', downloadKind: 'dmg',
     })
   })
 
-  it('Windows nhận zip có thư mục bọc, exe là link phụ', () => {
+  it('Windows nhận zip có thư mục bọc', () => {
     expect(pick(full, { os: 'win' })).toEqual({
-      downloadUrl: 'https://x/win.zip', downloadKind: 'windows-zip', exeUrl: 'https://x/win.exe',
+      downloadUrl: 'https://x/win.zip', downloadKind: 'windows-zip',
     })
   })
 
   it('hệ điều hành khác (Linux, ChromeOS) vẫn nhận zip store', () => {
     expect(pick(full, { os: 'other' })).toEqual({
-      downloadUrl: 'https://x/store.zip', downloadKind: 'zip', exeUrl: null,
+      downloadUrl: 'https://x/store.zip', downloadKind: 'zip',
     })
   })
 
@@ -195,10 +194,10 @@ describe('parseRelease — chọn gói theo hệ điều hành', () => {
     expect(pick(winFirst, { os: 'other' }).downloadUrl).toBe('https://x/store.zip')
   })
 
-  it('Firefox trên macOS/Windows vẫn nhận zip Firefox — dmg/exe là bản Chrome', () => {
+  it('Firefox trên macOS/Windows vẫn nhận zip Firefox — dmg / zip Windows là bản Chrome', () => {
     for (const os of ['mac', 'win', 'other'] as const) {
       expect(pick(full, { firefox: true, os }), os).toEqual({
-        downloadUrl: 'https://x/ff.zip', downloadKind: 'zip', exeUrl: null,
+        downloadUrl: 'https://x/ff.zip', downloadKind: 'zip',
       })
     }
   })
@@ -212,17 +211,10 @@ describe('parseRelease — chọn gói theo hệ điều hành', () => {
       ],
     }
     expect(pick(old, { os: 'mac' })).toEqual({
-      downloadUrl: 'https://x/store.zip', downloadKind: 'zip', exeUrl: null,
+      downloadUrl: 'https://x/store.zip', downloadKind: 'zip',
     })
     expect(pick(old, { os: 'win' })).toEqual({
-      downloadUrl: 'https://x/store.zip', downloadKind: 'zip', exeUrl: null,
-    })
-  })
-
-  it('Windows: có exe mà thiếu zip Windows → zip store + exe', () => {
-    const noWinZip = { ...full, assets: full.assets.filter((a) => !a.name.endsWith('-windows.zip')) }
-    expect(pick(noWinZip, { os: 'win' })).toEqual({
-      downloadUrl: 'https://x/store.zip', downloadKind: 'zip', exeUrl: 'https://x/win.exe',
+      downloadUrl: 'https://x/store.zip', downloadKind: 'zip',
     })
   })
 
@@ -234,9 +226,9 @@ describe('parseRelease — chọn gói theo hệ điều hành', () => {
     expect(pick(uploading, { os: 'mac' }).downloadUrl).toBe('https://x/store.zip')
   })
 
-  it('không có gì dùng được → cả ba null', () => {
+  it('không có gì dùng được → cả hai null', () => {
     expect(pick({ ...payload, assets: [] }, { os: 'win' })).toEqual({
-      downloadUrl: null, downloadKind: null, exeUrl: null,
+      downloadUrl: null, downloadKind: null,
     })
   })
 })
@@ -250,7 +242,6 @@ describe('parseRelease', () => {
       url: 'https://github.com/o/r/releases/tag/v0.3.0',
       downloadUrl: 'https://x/w.zip',
       downloadKind: 'zip',
-      exeUrl: null,
       publishedAt: '2026-08-20T10:00:00Z',
       notes: 'ghi chú',
     })
