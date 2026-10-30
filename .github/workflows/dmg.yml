@@ -1,0 +1,75 @@
+name: DMG
+
+# Gói "thả vào Documents/Worklog Extension" cho macOS (.dmg), kèm kiểm thử mount
+# thật trên runner macOS — dmg cần hdiutil, chỉ có trên macOS.
+#
+# Chỉ được gọi từ workflow khác (ci.yml, release.yml). Đầu vào là artifact mà
+# job build đã upload, trong đó PHẢI có `worklog-ext-<version>-windows.zip` (xem
+# scripts/pack.mjs --target windows). Dmg đóng từ CHÍNH zip đó chứ không build
+# lại, nên hai gói luôn cùng nội dung.
+#
+# Đầu ra: artifact `<artifact>-macos` (.dmg).
+
+on:
+  workflow_call:
+    inputs:
+      artifact:
+        description: 'Tên artifact chứa worklog-ext-<version>-windows.zip'
+        required: true
+        type: string
+      version:
+        description: 'Version không có chữ v (vd: 0.13.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    name: Đóng .dmg (macOS)
+    runs-on: macos-latest
+    env:
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: installer/macos
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.artifact }}
+          path: release
+
+      - name: Tạo dmg
+        # Trong dmg: thư mục `Worklog Extension` + một file hướng dẫn. KHÔNG có
+        # symlink tới ~/Documents như kiểu symlink /Applications của dmg cài app:
+        # symlink chỉ chứa đường dẫn tuyệt đối, mà Documents nằm dưới thư mục nhà
+        # của TỪNG người (/Users/<tên>) — không có đích nào đúng cho mọi máy.
+        # Người dùng kéo vào "Documents" ở thanh bên của Finder.
+        run: |
+          stage="$RUNNER_TEMP/dmg"
+          rm -rf "$stage" && mkdir -p "$stage"
+          unzip -q "release/worklog-ext-$VERSION-windows.zip" -d "$stage"
+          cp installer/macos/how-to-install.txt "$stage/Cách cài - How to install.txt"
+          hdiutil create \
+            -volname "Worklog $VERSION" \
+            -srcfolder "$stage" \
+            -fs HFS+ -format UDZO -ov \
+            "release/worklog-ext-$VERSION.dmg"
+
+      - name: Kiểm dmg mount được và chứa đúng extension
+        run: |
+          mnt="$RUNNER_TEMP/mnt"
+          mkdir -p "$mnt"
+          hdiutil attach -nobrowse -readonly -mountpoint "$mnt" "release/worklog-ext-$VERSION.dmg"
+          trap 'hdiutil detach "$mnt"' EXIT
+          ls -la "$mnt" "$mnt/Worklog Extension"
+          grep -q "\"version\": *\"$VERSION\"" "$mnt/Worklog Extension/manifest.json"
+          grep -q '"key"' "$mnt/Worklog Extension/manifest.json"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ inputs.artifact }}-macos
+          path: release/worklog-ext-${{ inputs.version }}.dmg
+          if-no-files-found: error

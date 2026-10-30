@@ -14,12 +14,17 @@ const fetchMock = vi.fn()
 
 // `sidebarAction` có mặt = Firefox (xem platform/ext isFirefox). Nó quyết định
 // asset nào được chọn trong release, nên phải test được cả hai nhánh.
-const setup = (config: Partial<Config>, version = '0.2.0', firefox = false) => {
+// `os` = giá trị runtime.getPlatformInfo trả về; bỏ trống = API vắng mặt (môi
+// trường lạ), phải rơi về zip store chứ không làm hỏng lượt check.
+const setup = (config: Partial<Config>, version = '0.2.0', firefox = false, os?: string) => {
   store = { config: { ...defaultConfig, ...config } }
   badge = { text: '' }
   ;(globalThis as unknown as { chrome: unknown }).chrome = {
     ...(firefox ? { sidebarAction: { open: async () => {}, close: async () => {} } } : {}),
-    runtime: { getManifest: () => ({ version }) },
+    runtime: {
+      getManifest: () => ({ version }),
+      ...(os ? { getPlatformInfo: async () => ({ os, arch: 'x86-64', nacl_arch: 'x86-64' }) } : {}),
+    },
     action: {
       setBadgeText: async ({ text }: { text: string }) => { badge.text = text },
       setBadgeBackgroundColor: async ({ color }: { color: string }) => { badge.color = color },
@@ -51,6 +56,8 @@ const release = (tag: string) => {
     assets: [
       { name: `worklog-ext-${v}.zip`, browser_download_url: 'https://x/w.zip' },
       { name: `worklog-ext-${v}-firefox.zip`, browser_download_url: 'https://x/w-ff.zip' },
+      { name: `worklog-ext-${v}-windows.zip`, browser_download_url: 'https://x/w-win.zip' },
+      { name: `worklog-ext-${v}.dmg`, browser_download_url: 'https://x/w.dmg' },
     ],
   }
 }
@@ -207,6 +214,34 @@ describe('chọn asset theo nền tảng', () => {
 
   it('Firefox nhận zip Firefox', async () => {
     setup({ updateRepo: 'o/r' }, '0.2.0', true)
+    fetchMock.mockResolvedValue(ok(release('v0.3.0')))
+    expect((await checkForUpdate(false)).latest?.downloadUrl).toBe('https://x/w-ff.zip')
+  })
+
+  it('Chrome trên macOS nhận dmg', async () => {
+    setup({ updateRepo: 'o/r' }, '0.2.0', false, 'mac')
+    fetchMock.mockResolvedValue(ok(release('v0.3.0')))
+    const latest = (await checkForUpdate(false)).latest
+    expect(latest?.downloadUrl).toBe('https://x/w.dmg')
+    expect(latest?.downloadKind).toBe('dmg')
+  })
+
+  it('Chrome trên Windows nhận zip Windows', async () => {
+    setup({ updateRepo: 'o/r' }, '0.2.0', false, 'win')
+    fetchMock.mockResolvedValue(ok(release('v0.3.0')))
+    const latest = (await checkForUpdate(false)).latest
+    expect(latest?.downloadUrl).toBe('https://x/w-win.zip')
+    expect(latest?.downloadKind).toBe('windows-zip')
+  })
+
+  it('Chrome trên Linux nhận zip store', async () => {
+    setup({ updateRepo: 'o/r' }, '0.2.0', false, 'linux')
+    fetchMock.mockResolvedValue(ok(release('v0.3.0')))
+    expect((await checkForUpdate(false)).latest?.downloadUrl).toBe('https://x/w.zip')
+  })
+
+  it('Firefox trên Windows vẫn nhận zip Firefox', async () => {
+    setup({ updateRepo: 'o/r' }, '0.2.0', true, 'win')
     fetchMock.mockResolvedValue(ok(release('v0.3.0')))
     expect((await checkForUpdate(false)).latest?.downloadUrl).toBe('https://x/w-ff.zip')
   })

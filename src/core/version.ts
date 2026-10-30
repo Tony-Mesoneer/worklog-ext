@@ -57,11 +57,26 @@ export const isRepoSlug = (value: string): boolean => REPO_SLUG.test(value)
 export const releaseApiUrl = (repo: string): string =>
   `https://api.github.com/repos/${repo}/releases/latest`
 
+/**
+ * Hệ điều hành, chỉ ở độ mịn mà việc chọn asset cần. Linux/ChromeOS/BSD đều là
+ * `other`: chúng nhận zip store như trước giờ.
+ */
+export type ReleaseOs = 'mac' | 'win' | 'other'
+
+/**
+ * Loại file `downloadUrl` trỏ tới — quyết định câu hướng dẫn trên banner.
+ * `dmg`: macOS, kéo thư mục vào Documents. `windows-zip`: zip có MỘT thư mục gốc
+ * `Worklog Extension`. `zip`: zip dạng store (manifest ở gốc) — Chrome trên
+ * Linux, Firefox, hoặc release cũ chưa có hai loại trên.
+ */
+export type DownloadKind = 'dmg' | 'windows-zip' | 'zip'
+
 export type ReleaseInfo = {
   version: string
   tag: string
   url: string
   downloadUrl: string | null
+  downloadKind: DownloadKind | null
   publishedAt: string
   notes: string
 }
@@ -71,27 +86,60 @@ const isRecord = (v: unknown): v is Record<string, unknown> =>
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '')
 
-// Từ v0.6.0 mỗi release có HAI zip: bản Chrome (`worklog-ext-<v>.zip`) và bản
-// Firefox (`worklog-ext-<v>-firefox.zip`). Nên không thể lấy "cái .zip đầu tiên"
-// nữa — làm vậy là mời người dùng Firefox tải bản Chrome.
+// Tên asset trong một release (xem .github/workflows/release.yml):
+//
+//   worklog-ext-<v>.zip           zip store, manifest ở gốc     — Chrome
+//   worklog-ext-<v>-firefox.zip   zip store                     — Firefox
+//   worklog-ext-<v>-windows.zip   MỘT thư mục `Worklog Extension` — Chrome/Windows
+//   worklog-ext-<v>.dmg           thư mục `Worklog Extension`   — Chrome/macOS
+//
+// Vì thế không thể lấy "cái .zip đầu tiên": làm vậy là mời người dùng Firefox
+// tải bản Chrome, hoặc đưa zip Windows (có thư mục bọc) cho người đang dùng zip
+// store. Chọn theo HẬU TỐ tên, không theo thứ tự asset.
 //
 // Chỉ nhận asset CÓ url: asset đang upload dở vẫn xuất hiện trong payload nhưng
 // chưa có browser_download_url, và một link chết còn tệ hơn không có link.
 //
-// Không khớp được thì trả null CHỦ Ý, không rơi về zip của nền tảng khác: đưa
-// file Chrome cho người dùng Firefox tệ hơn là không đưa gì — banner sẽ rơi về
-// link trang release, nơi họ tự thấy có những gì. Release cũ (v0.2–v0.5) chỉ có
-// zip Chrome nên người dùng Firefox rơi vào đúng nhánh này.
-const pickZip = (raw: unknown, firefox: boolean): string | null => {
-  if (!Array.isArray(raw)) return null
-  for (const asset of raw) {
-    if (!isRecord(asset)) continue
-    const name = str(asset['name']).toLowerCase()
-    const url = str(asset['browser_download_url'])
-    if (!name.endsWith('.zip') || url === '') continue
-    if (name.includes('firefox') === firefox) return url
+// Firefox không khớp được thì trả null CHỦ Ý, không rơi về zip của nền tảng
+// khác: đưa file Chrome cho người dùng Firefox tệ hơn là không đưa gì — banner
+// sẽ rơi về link trang release. Còn Chrome thì có đường lùi: dmg/zip Windows
+// chỉ có từ khi các asset đó được thêm, release cũ hơn chỉ có zip store, và zip
+// store cài được trên mọi hệ điều hành.
+type Asset = { name: string; url: string }
+
+const readAssets = (raw: unknown): Asset[] => {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .filter(isRecord)
+    .map((a) => ({ name: str(a['name']).toLowerCase(), url: str(a['browser_download_url']) }))
+    .filter((a) => a.url !== '')
+}
+
+const isFirefoxZip = (n: string) => n.endsWith('.zip') && n.includes('firefox')
+const isWindowsZip = (n: string) => n.endsWith('-windows.zip')
+const isStoreZip = (n: string) => n.endsWith('.zip') && !isFirefoxZip(n) && !isWindowsZip(n)
+const isDmg = (n: string) => n.endsWith('.dmg')
+
+const find = (assets: Asset[], match: (name: string) => boolean): string | null =>
+  assets.find((a) => match(a.name))?.url ?? null
+
+function pickDownload(
+  assets: Asset[],
+  firefox: boolean,
+  os: ReleaseOs,
+): { downloadUrl: string | null; downloadKind: DownloadKind | null } {
+  if (firefox) {
+    const url = find(assets, isFirefoxZip)
+    return { downloadUrl: url, downloadKind: url ? 'zip' : null }
   }
-  return null
+  const preferred = os === 'mac'
+    ? { url: find(assets, isDmg), kind: 'dmg' as const }
+    : os === 'win'
+      ? { url: find(assets, isWindowsZip), kind: 'windows-zip' as const }
+      : { url: null, kind: 'zip' as const }
+  if (preferred.url) return { downloadUrl: preferred.url, downloadKind: preferred.kind }
+  const store = find(assets, isStoreZip)
+  return { downloadUrl: store, downloadKind: store ? 'zip' : null }
 }
 
 /**
@@ -102,10 +150,10 @@ const pickZip = (raw: unknown, firefox: boolean): string | null => {
  */
 export function parseRelease(
   raw: unknown,
-  // Mặc định Chrome: nó là số đông, và giữ mặc định này nghĩa là mọi chỗ gọi cũ
-  // không đổi hành vi. Chỗ duy nhất truyền `true` là service worker, sau khi tự
-  // phát hiện nền tảng — xem platform/ext.
-  opts: { firefox?: boolean } = {},
+  // Mặc định Chrome trên `other` (zip store): nó cài được ở mọi nơi, và giữ mặc
+  // định này nghĩa là mọi chỗ gọi cũ không đổi hành vi. Chỗ duy nhất truyền giá
+  // trị thật là service worker, sau khi tự phát hiện nền tảng — xem platform/ext.
+  opts: { firefox?: boolean; os?: ReleaseOs } = {},
 ): ReleaseInfo | null {
   if (!isRecord(raw)) return null
   const tag = str(raw['tag_name']).trim()
@@ -115,7 +163,7 @@ export function parseRelease(
     version,
     tag,
     url: str(raw['html_url']),
-    downloadUrl: pickZip(raw['assets'], opts.firefox === true),
+    ...pickDownload(readAssets(raw['assets']), opts.firefox === true, opts.os ?? 'other'),
     publishedAt: str(raw['published_at']),
     notes: str(raw['body']),
   }

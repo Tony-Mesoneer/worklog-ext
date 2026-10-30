@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react'
+import { Fragment, useEffect, useId, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { send, type AuthProbeResult, type CeremoniesListResult } from '@/sw/messages'
 import type { Config, ConfigMember, SprintEvent } from '@/core/config-schema'
@@ -15,6 +15,9 @@ import { useUpdate } from '@/ui/shared/useUpdate'
 import { intlLocale, useLocale, useT } from '@/ui/shared/LocaleProvider'
 import { LOCALES, type Locale, type Messages } from '@/i18n'
 import { isRepoSlug } from '@/core/version'
+import {
+  configExportFileName, parseConfigImport, serializeConfigExport,
+} from '@/core/config-transfer'
 import { parseHhMm } from '@/core/timeline'
 
 // Cùng biểu thức mà config-schema dùng để hợp lệ hoá giờ — nếu hai chỗ lệch
@@ -40,6 +43,10 @@ export function Options() {
   // Khối token mở khi probe fail (spec §4: "Nếu fail thì hiện form nhập
   // token"), và mở được bằng tay cho người đã biết mình cần token.
   const [showToken, setShowToken] = useState(false)
+  // Tăng sau mỗi lần Import để các section mount lại: nhiều section giữ bản nháp
+  // cục bộ khởi tạo TỪ config lúc mount, nên không remount thì chúng tiếp tục
+  // hiện giá trị trước khi nhập.
+  const [generation, setGeneration] = useState(0)
   const urlId = useId()
 
   const report = (e: unknown) => {
@@ -94,6 +101,16 @@ export function Options() {
     } catch (e) { report(e) }
   }
 
+  const imported = (c: Config) => {
+    setConfig(c)
+    setUrlDraft(c.jiraBaseUrl)
+    // Probe cũ thuộc config cũ; quyền Jira cũng phải cấp lại (xem TransferSection).
+    setProbe(null)
+    setShowToken(c.authMode === 'token')
+    setError(null)
+    setGeneration((g) => g + 1)
+  }
+
   if (!config) {
     return (
       <div style={{ padding: space.x5, color: colors.muted }}>Đang tải…</div>
@@ -143,19 +160,24 @@ export function Options() {
         </div>
       </Card>
 
-      <TokenSection
-        config={config} save={save} probeAuth={probeAuth}
-        open={showToken} setOpen={setShowToken}
-      />
+      <Fragment key={generation}>
+        <TokenSection
+          config={config} save={save} probeAuth={probeAuth}
+          open={showToken} setOpen={setShowToken}
+        />
 
-      {/* Khối 2–5 theo cùng mẫu: đọc từ `config`, ghi bằng `save({...})`.
-          Mỗi thay đổi lưu ngay — không có nút Save toàn trang. */}
-      <ProjectsSection config={config} save={save} />
-      <BoardSection config={config} save={save} />
-      <MembersSection config={config} save={save} setError={setError} />
-      <EventsSection config={config} save={save} />
-      <HoursSection config={config} save={save} />
-      <UpdateSection config={config} save={save} />
+        {/* Khối 2–5 theo cùng mẫu: đọc từ `config`, ghi bằng `save({...})`.
+            Mỗi thay đổi lưu ngay — không có nút Save toàn trang. */}
+        <ProjectsSection config={config} save={save} />
+        <BoardSection config={config} save={save} />
+        <MembersSection config={config} save={save} setError={setError} />
+        <EventsSection config={config} save={save} />
+        <HoursSection config={config} save={save} />
+        <UpdateSection config={config} save={save} />
+      </Fragment>
+      {/* Ngoài Fragment có key: section này không được remount sau khi nhập, nếu
+          không thì mất luôn dòng báo kết quả nhập. */}
+      <TransferSection config={config} onImported={imported} />
       <LanguageSection config={config} save={save} />
     </div>
   )
@@ -918,6 +940,85 @@ function UpdateSection({ config, save }: SectionProps) {
 
         {status?.state === 'unknown' && status.lastError !== null && (
           <Banner kind="warn">{t.options.update.failed(status.lastError)}</Banner>
+        )}
+      </div>
+    </Card>
+  )
+}
+
+// Xuất / nhập config ra file JSON — cầu nối cho lần đổi extension ID (xem
+// core/config-transfer). Không đi qua `save`: Import thay CẢ config, merge sẽ
+// giữ lại những field file không có.
+function TransferSection({ config, onImported }: {
+  config: Config
+  onImported: (c: Config) => void
+}) {
+  const t = useT()
+  const locale = useLocale()
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [notice, setNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
+
+  const exportFile = () => {
+    const now = new Date()
+    const text = serializeConfigExport(config, {
+      now, extensionVersion: ext.runtime.getManifest().version,
+    })
+    const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = configExportFileName(now)
+    a.click()
+    // Thu hồi ngay sau click có thể cắt ngang việc tải ở vài trình duyệt.
+    setTimeout(() => URL.revokeObjectURL(url), 10_000)
+    setNotice(null)
+  }
+
+  const importFile = async (file: File) => {
+    const result = parseConfigImport(await file.text())
+    if (!result.ok) {
+      setNotice({ kind: 'error', text: result.reason === 'json' ? t.options.transfer.notJson : t.options.transfer.notExport })
+      return
+    }
+    try {
+      const next = await send<Config>({ type: 'config/import', config: result.config })
+      onImported(next)
+      const when = result.exportedAt === '' || Number.isNaN(Date.parse(result.exportedAt))
+        ? ''
+        : new Date(result.exportedAt).toLocaleString(intlLocale(locale))
+      setNotice({ kind: 'success', text: t.options.transfer.imported(result.extensionVersion, when) })
+    } catch (e) {
+      setNotice({ kind: 'error', text: toUiError(e).message })
+    }
+  }
+
+  return (
+    <Card title={t.options.transfer.title}>
+      <div style={{ display: 'grid', gap: space.x3 }}>
+        <Hint>{t.options.transfer.hint}</Hint>
+        <Hint>{t.options.transfer.tokenWarning}</Hint>
+        <div style={{ display: 'flex', gap: space.x2, flexWrap: 'wrap' }}>
+          <Button variant="secondary" onClick={exportFile}>{t.options.transfer.export}</Button>
+          <Button variant="secondary" onClick={() => fileRef.current?.click()}>
+            {t.options.transfer.import}
+          </Button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".json,application/json"
+            hidden
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              // Reset để chọn lại đúng file đó vẫn bắn onChange.
+              e.target.value = ''
+              if (file) void importFile(file)
+            }}
+          />
+        </div>
+        {notice?.kind === 'error' && <Banner kind="error">{notice.text}</Banner>}
+        {notice?.kind === 'success' && (
+          <Banner kind="success">
+            {notice.text} {config.jiraBaseUrl !== '' && t.options.transfer.reconnect}
+          </Banner>
         )}
       </div>
     </Card>

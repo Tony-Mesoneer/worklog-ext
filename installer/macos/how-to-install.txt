@@ -1,0 +1,24 @@
+Worklog Extension — cài / cập nhật trên macOS
+
+1. Mở Finder ở cửa sổ mới, chọn "Documents" ở thanh bên trái.
+2. Kéo thư mục "Worklog Extension" từ cửa sổ này thả vào Documents.
+   Đã có bản cũ: chọn "Thay thế" (Replace) — Finder thay cả thư mục, không để
+   lại file cũ.
+3. Đã dùng từ trước: mở Options của extension → bấm "Khởi động lại extension".
+   Lần đầu: chrome://extensions → bật Developer mode → Load unpacked → chọn
+   Documents/Worklog Extension.
+
+Không có lối tắt "Documents" ngay trong cửa sổ này vì symlink trong .dmg không
+trỏ được tới thư mục nhà của từng người (nó chỉ chứa đường dẫn tuyệt đối).
+
+---
+
+Worklog Extension — install / update on macOS
+
+1. Open a new Finder window and select "Documents" in the sidebar.
+2. Drag the "Worklog Extension" folder from this window onto Documents.
+   If an older copy is there, choose "Replace" — Finder swaps the whole folder,
+   so no stale files are left behind.
+3. Existing users: open the extension's Options → "Restart extension".
+   First time: chrome://extensions → Developer mode → Load unpacked → pick
+   Documents/Worklog Extension.

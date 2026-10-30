@@ -31,8 +31,31 @@ const GECKO_ID = 'worklog-ext@tony-mesoneer.github.io'
  */
 const FIREFOX_MIN = '140.0'
 
+/**
+ * Public key (SubjectPublicKeyInfo DER, base64) để ID extension trên Chrome CỐ
+ * ĐỊNH là `iekabcpfloejabojfkmhkadbdofhehda`, bất kể "Load unpacked" trỏ vào
+ * thư mục nào.
+ *
+ * Không có key, Chrome băm ĐƯỜNG DẪN thư mục ra ID: đổi thư mục là ra extension
+ * khác, và toàn bộ chrome.storage.local (Jira URL, member, sprint event) ở lại
+ * với ID cũ. Cập nhật bằng cách thả đè vào `Documents/Worklog Extension` chỉ an
+ * toàn khi ID không phụ thuộc đường dẫn.
+ *
+ * Chỉ public key nằm trong repo. Private key KHÔNG cần cho Load unpacked (nó chỉ
+ * dùng để ký .crx), nên không commit và cũng không cần CI. Đổi chuỗi này là đổi
+ * ID — người dùng mất config như lần chuyển đầu tiên, phải Export/Import lại.
+ *
+ * Firefox không có field `key` (ID ở đó là gecko.id), nên chỉ target Chrome có.
+ */
+const CHROME_KEY =
+  'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1VNvDeDSFH2j0wkxTg7p5LXdPclUWNVIIvZ06LRng7+NBo0t'
+  + 'VDV8whNpomoxY0U7McYZc8IDbky20YwYSsBN9OF4jBxjYWmhkbC4zClYaA437bukBN/W2QEizpxVofFph94HnIbuiz1z'
+  + 'VlWFSIPW1m1sWPkswUaTijeP+a+tOE7q7yTvyDr5h0OEap+bZN6xVpcuGWkUOrzRELNdBk5xucP0rLo2gjHg7Apv8+q1'
+  + 'MwgZQsLFWHcemZpuYw/fXYXqI2rYMznMz7Z8mrD/W8HXX/2QkKzXuAacxJCc2tIqmL7Zmxoy0f4qvg5q894+3wOzhmp3'
+  + 'Qr76fwQ3OwnY1npFGQIDAQAB'
+
 export function manifestFor(target: Target) {
-  if (target === 'chrome') return base
+  if (target === 'chrome') return { ...base, key: CHROME_KEY }
 
   // Firefox không có sidePanel API lẫn side_panel manifest key — nó dùng
   // sidebar_action, và MDN nói rõ hai cái không tương thích. Giữ lại key của

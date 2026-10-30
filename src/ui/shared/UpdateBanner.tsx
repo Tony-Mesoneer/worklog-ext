@@ -15,8 +15,15 @@ export function UpdateBanner() {
   if (!status || status.state !== 'available' || !status.latest) return null
 
   const { latest, currentVersion } = status
-  // Ưu tiên link tải zip; release nào chưa có asset thì mở trang release.
+  // Ưu tiên link tải file; release nào chưa có asset thì mở trang release.
   const href = latest.downloadUrl ?? latest.url
+  // Câu hướng dẫn đi theo LOẠI file thật sự được đưa, không theo hệ điều hành:
+  // Windows mà release cũ chỉ có zip store thì vẫn là "giải nén thay thư mục".
+  const howTo = latest.downloadKind === 'dmg'
+    ? t.updateBanner.howToDmg
+    : latest.downloadKind === 'windows-zip'
+      ? t.updateBanner.howToWindows
+      : t.updateBanner.howTo
 
   return (
     <Banner
@@ -29,7 +36,7 @@ export function UpdateBanner() {
       <div style={{ display: 'grid', gap: space.x1 }}>
         <span>{t.updateBanner.available(latest.version, currentVersion)}</span>
         <span style={{ fontSize: fontSize.xs }}>
-          {t.updateBanner.howTo}
+          {howTo}
           {' '}
           <Button variant="ghost" size="sm" onClick={() => void dismiss()}>
             {t.updateBanner.later}

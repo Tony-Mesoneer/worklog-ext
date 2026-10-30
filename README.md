@@ -19,11 +19,11 @@ Implementation hoàn thành. Extension chạy local, chưa publish lên Chrome W
 
 ## Cách dùng
 
-1. **Load extension**: Mở `chrome://extensions/`, bật "Developer mode", chọn "Load unpacked" và trỏ tới thư mục `dist/`.
+1. **Load extension**: Mở `chrome://extensions/`, bật "Developer mode", chọn "Load unpacked" và trỏ tới thư mục `Documents/Worklog Extension` (cài từ release — xem [Cập nhật extension](#cập-nhật-extension)) hoặc `dist/` (build từ repo).
 2. **Cấu hình**: Mở trang Options (click icon extension → "Options"), nhập Jira URL rồi bấm "Kết nối", thêm project key, **chọn board chính** (bắt buộc cho preset sprint và tab Story points), thêm members và sprint events. Nếu session Jira không dùng được, nhập email + API token ở mục "API token (dự phòng)".
 3. **Log worklog**: Nhấn `Cmd+Shift+L` để mở side panel, chọn issue, nhập dữ liệu, click "Log" để ghi vào Jira.
 4. **Dashboard**: Xem nút "Dashboard" trong side panel để mở trang theo dõi giờ của team và so sánh story points vs giờ thực.
-5. **Cập nhật**: Extension tự kiểm tra release mới mỗi 6 giờ (mặc định trỏ về `Tony-Mesoneer/worklog-ext`; đổi hoặc để rỗng để tắt ở Options → "6. Cập nhật").
+5. **Cập nhật**: Extension tự kiểm tra release mới mỗi 6 giờ (mặc định trỏ về `Tony-Mesoneer/worklog-ext`; đổi hoặc để rỗng để tắt ở Options → "7. Cập nhật").
 
 **Lưu ý**: Extension chạy hoàn toàn local trong trình duyệt và kết nối trực tiếp với Jira Cloud. Không có backend, không lưu dữ liệu trên server.
 
@@ -104,9 +104,13 @@ git push origin HEAD --follow-tags
 
 ```bash
 npm run build && npm run pack   # → release/worklog-ext-<version>.zip
+node scripts/pack.mjs --target windows   # → release/worklog-ext-<version>-windows.zip
 ```
 
-`manifest.json` nằm ở gốc zip (đúng dạng Chrome Web Store yêu cầu). `release/` được gitignore.
+`manifest.json` nằm ở gốc zip store (đúng dạng Chrome Web Store yêu cầu). Zip
+`-windows` thì ngược lại: bọc đúng một thư mục `Worklog Extension`. `.dmg` chỉ
+đóng trong CI ([`dmg.yml`](.github/workflows/dmg.yml)) vì cần `hdiutil` của
+macOS. `release/` được gitignore.
 
 ## Icon
 
@@ -138,6 +142,7 @@ trong [`manifest.config.ts`](manifest.config.ts):
 | `background.service_worker` | `background.scripts` (Firefox MV3 không có service worker) |
 | `side_panel` + `sidePanel` API | `sidebar_action` + `sidebarAction` API |
 | permission `sidePanel` | bỏ (Firefox không biết key này) |
+| `key` (ID cố định, xem [Cập nhật extension](#cập-nhật-extension)) | — (ID là `gecko.id`) |
 | — | `gecko.id` + `data_collection_permissions: ['none']` |
 | `dist/` | `dist-firefox/` |
 
@@ -224,41 +229,126 @@ file vẫn là thao tác tay.
   là thấy ngay, không phải đợi round-trip ra GitHub. `lastCheckedAt` là thứ chặn
   việc mỗi lần mở panel lại đốt một lượt rate limit (GitHub cho 60 request/giờ/IP).
 - Có bản mới hơn: badge `↑` trên icon extension, cộng banner ở side panel và
-  dashboard kèm link tải zip. "Để sau" chỉ tắt banner cho **đúng version đó** —
+  dashboard kèm link tải gói đúng hệ điều hành. "Để sau" chỉ tắt banner cho **đúng version đó** —
   bản mới hơn nữa sẽ hiện lại. Options luôn hiện, kể cả đã tắt.
 - Chỉ tag **lớn hơn thật** mới tính là update (so theo từng nhóm số, nên
   `0.10.0 > 0.9.0`). Release bị yank rồi tag lại thấp hơn không đẩy bạn về bản cũ.
 - Lượt check tự động thất bại thì lưu lỗi rồi im lặng, và `lastCheckedAt` không
   nhích — lần mở panel sau vẫn thử lại thay vì tắt tiếng 6 tiếng.
 
-**Cách cập nhật khi có bản mới**
+**Một thư mục cố định: `Documents/Worklog Extension`**
 
-Nếu bạn có repo (đường ngắn nhất — không tải gì):
+Mọi bản release đều cài vào **cùng một thư mục** `Worklog Extension` trong
+Documents, nên cập nhật là thả bản mới đè lên thư mục đó rồi khởi động lại
+extension — không phải trỏ lại "Load unpacked".
+
+Điều này chỉ an toàn vì manifest Chrome có field `key` (xem
+[`manifest.config.ts`](manifest.config.ts)): ID extension cố định là
+`iekabcpfloejabojfkmhkadbdofhehda`, không phụ thuộc đường dẫn. Không có `key`,
+Chrome băm đường dẫn thư mục ra ID — đổi thư mục là ra extension khác, và toàn
+bộ cấu hình (Jira URL, member, sprint event) ở lại với ID cũ.
+
+Hệ quả cho người build từ repo: `dist/` và `Documents/Worklog Extension` giờ
+**cùng ID**, nên chỉ load được một trong hai cùng lúc.
+
+Mỗi release có:
+
+| File | Dành cho |
+| --- | --- |
+| `worklog-ext-<v>.dmg` | macOS |
+| `worklog-ext-<v>-windows.zip` | Windows |
+| `worklog-ext-<v>.zip` | Linux / Chrome Web Store — `manifest.json` ở gốc |
+| `worklog-ext-<v>-firefox.zip` | Firefox |
+
+Banner "có bản mới" tự đưa đúng file theo hệ điều hành
+(`runtime.getPlatformInfo()`): macOS nhận `.dmg`, Windows nhận `-windows.zip`.
+Release nào thiếu các file này thì rơi về zip store.
+
+**Chuyển đổi một lần** (từ bản cài trước khi có `key`, tức ≤ 0.12.0)
+
+Bản mới có ID khác bản đang dùng, nên mở lên với cấu hình trắng. Mang cấu hình
+sang bằng file:
+
+1. **Xuất cấu hình từ bản ĐANG dùng — trước khi gỡ nó.** Bản đó chưa có nút
+   Export, nên mở Options của nó, bấm F12 (macOS: `⌥⌘I`) → tab Console, dán
+   đoạn dưới rồi Enter (Chrome có thể bắt gõ `allow pasting` trước). Nó tải
+   xuống `worklog-config.json` đúng định dạng mà nút Import đọc được:
+
+   ```js
+   chrome.storage.local.get('config').then(({ config }) => {
+     const file = { kind: 'worklog-ext/config', exportedAt: new Date().toISOString(),
+       extensionVersion: chrome.runtime.getManifest().version, config }
+     const a = document.createElement('a')
+     a.href = URL.createObjectURL(new Blob([JSON.stringify(file, null, 2)], { type: 'application/json' }))
+     a.download = 'worklog-config.json'
+     a.click()
+   })
+   ```
+
+   Từ bản này trở đi thì dùng nút Options → **8. Chuyển cấu hình → Xuất ra
+   file**.
+2. Đặt bản mới vào `Documents/Worklog Extension` theo cách của hệ điều hành
+   (bên dưới).
+3. `chrome://extensions` → **Load unpacked** → chọn `Documents/Worklog
+   Extension`. Bản cũ vẫn còn đó cũng không sao — hai ID khác nhau.
+4. Ở Options của bản **mới** → **8. Chuyển cấu hình → Nhập từ file…** → chọn
+   file vừa xuất. Rồi **1. Jira → Kết nối** để cấp lại quyền truy cập Jira
+   (quyền gắn với ID, không đi theo file).
+5. Kiểm tra side panel chạy được, rồi **Remove** bản cũ ở `chrome://extensions`
+   và **xoá file JSON**: nó chứa cả API token nếu bạn đã lưu.
+
+**Cập nhật trên macOS**
+
+1. Tải `worklog-ext-<v>.dmg` từ banner, mở nó.
+2. Mở một cửa sổ Finder khác, chọn **Documents** ở thanh bên, rồi kéo thư mục
+   `Worklog Extension` từ cửa sổ dmg thả vào đó. Đã có bản cũ thì chọn
+   **Replace** — Finder thay cả thư mục nên không còn file cũ.
+3. Eject dmg. Options → **7. Cập nhật → Khởi động lại extension**.
+
+Trong dmg không có lối tắt tới Documents (kiểu symlink `/Applications` của dmg
+cài app): symlink chỉ chứa đường dẫn tuyệt đối, mà Documents nằm dưới thư mục
+nhà của từng người. Nếu bật iCloud "Desktop & Documents" kèm "Optimize Mac
+Storage", macOS có thể đẩy file lên iCloud và Chrome không đọc được — khi đó
+chọn "Keep Downloaded" cho thư mục này.
+
+**Cập nhật trên Windows**
+
+Tải `worklog-ext-<v>-windows.zip` từ banner, rồi một trong hai cách:
+
+- **Kéo thả**: mở zip trong Explorer (double-click), kéo thư mục `Worklog
+  Extension` thả vào **Documents** ở thanh bên trái → **Replace the files in
+  the destination**.
+- **Extract All…**: chuột phải zip → **Extract All…** → sửa ô đích thành thư
+  mục Documents (vd `C:\Users\<bạn>\Documents`) — **xoá phần
+  `\worklog-ext-<v>-windows` Windows tự thêm vào cuối**, không thì nó bung ra
+  một thư mục khác → Extract → **Replace**.
+
+Rồi Options → **7. Cập nhật → Khởi động lại extension**.
+
+Explorer **gộp** thư mục chứ không thay: file trùng tên bị ghi đè, file chỉ có
+ở bản cũ (asset mang hash cũ) vẫn nằm lại. Vô hại — `manifest.json` mới không
+trỏ tới chúng. Muốn sạch thì xoá thư mục `Worklog Extension` trước khi thả.
+
+**Nếu bạn build từ repo**
 
 ```bash
 git pull && npm run build      # ghi đè dist/ tại chỗ
 ```
 
-rồi Options → mục 6 → **Khởi động lại extension**. Đang sửa code thì
+rồi Options → **7. Cập nhật → Khởi động lại extension**. Đang sửa code thì
 `npm run dev` có HMR, không cần bước nào.
 
-Nếu bạn cài từ zip:
-
-1. Tải `worklog-ext-<version>.zip` từ banner (hoặc từ trang Releases).
-2. Giải nén, thay nội dung thư mục bạn đang trỏ "Load unpacked" vào.
-3. Options → mục 6 → **Khởi động lại extension**.
+**Vì sao vẫn phải thả file bằng tay**
 
 `chrome.runtime.reload()` đọc lại file từ đĩa cho extension unpacked và không
 cần permission nào, nên bước "vào `chrome://extensions` bấm Reload" bỏ được.
-Bước giải nén thì **không** bỏ được: extension không có quyền ghi file.
+Bước đặt file thì **không**: extension không có quyền ghi file.
 
-Muốn hết hẳn việc tải và bấm thì phải qua Chrome Web Store (unlisted vẫn được)
-— đó là đường duy nhất Chrome tự cập nhật im lặng. Firefox thì cần XPI đã sign
-+ `gecko.update_url`.
+Muốn cập nhật **hoàn toàn tự động** thì chỉ có Chrome Web Store (để
+**unlisted** vẫn được) — đó là đường duy nhất Chrome tự cập nhật im lặng cho
+máy thường. Host CRX đã ký + `updates.xml` chỉ chạy khi deploy bằng enterprise
+policy (`ExtensionInstallForcelist`); trên macOS/Windows, `update_url` không có
+tác dụng với bản load unpacked. Firefox thì cần XPI đã sign + `gecko.update_url`.
 
 Cấu hình (Jira URL, member, sprint event) nằm trong `chrome.storage.local` nên
-không mất khi reload.
-
-Muốn Chrome tự update thật thì phải cài qua Chrome Web Store, hoặc host CRX đã
-ký + `updates.xml` và deploy bằng enterprise policy (`ExtensionInstallForcelist`)
-— trên macOS/Windows, `update_url` không có tác dụng với bản load unpacked.
+không mất khi reload hay khi thả đè thư mục — miễn ID không đổi.

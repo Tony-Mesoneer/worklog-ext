@@ -24,7 +24,7 @@ export const vi: Messages = {
   },
 
   language: {
-    title: '8. Ngôn ngữ',
+    title: '9. Ngôn ngữ',
     hint: 'Áp dụng cho side panel, dashboard và trang này. Tên extension trong Chrome đi theo ngôn ngữ của browser, không đổi được ở đây.',
     label: 'Ngôn ngữ',
     en: 'English',
@@ -183,8 +183,8 @@ export const vi: Messages = {
       title: '7. Cập nhật',
       hint:
         'Extension cài bằng "Load unpacked" nên Chrome không tự cập nhật. Ở đây chỉ kiểm '
-        + 'tra xem repo đã có release mới hơn chưa; tải zip, giải nén thay thư mục đang '
-        + 'dùng, rồi bấm Reload ở chrome://extensions.',
+        + 'tra xem repo đã có release mới hơn chưa; tải bản mới, thả đè thư mục Worklog '
+        + 'Extension trong Documents, rồi bấm "Khởi động lại extension" bên dưới.',
       repoLabel: 'Repo GitHub',
       repoPlaceholder: 'owner/worklog-ext',
       repoInvalid: 'Phải là dạng owner/tên, không phải URL.',
@@ -204,6 +204,26 @@ export const vi: Messages = {
         + 'chrome://extensions. Trang này sẽ tự tải lại, và việc đang ghi vào Jira (nếu '
         + 'có) sẽ bị cắt ngang.',
     },
+    transfer: {
+      title: '8. Chuyển cấu hình',
+      hint:
+        'Cấu hình nằm theo ID extension. Lần đầu chuyển sang thư mục Documents/Worklog '
+        + 'Extension, extension mở ra với cấu hình trắng: xuất file ở bản cũ, rồi nhập ở '
+        + 'bản mới. Cũng dùng được để sao lưu.',
+      tokenWarning:
+        'File chứa cả API token nếu bạn đã lưu — đừng gửi cho ai, và xoá sau khi nhập xong.',
+      export: 'Xuất ra file',
+      import: 'Nhập từ file…',
+      imported: (version: string, when: string): string => {
+        const meta = [version === '' ? '' : `bản ${version}`, when === '' ? '' : `xuất lúc ${when}`]
+          .filter((x) => x !== '').join(', ')
+        return `Đã nhập cấu hình${meta === '' ? '' : ` (${meta})`}.`
+      },
+      reconnect:
+        'Quyền truy cập Jira không đi theo file: bấm "Kết nối" ở mục 1 để cấp lại.',
+      notJson: 'File không phải JSON.',
+      notExport: 'Đây không phải file cấu hình xuất từ Worklog.',
+    },
   },
 
   errors: {
@@ -221,6 +241,12 @@ export const vi: Messages = {
     available: (version: string, current: string): string =>
       `Có bản ${version} (đang dùng ${current}).`,
     howTo: 'Giải nén thay thư mục đang dùng, rồi bấm Reload ở chrome://extensions.',
+    howToDmg:
+      'Mở file .dmg, kéo thư mục Worklog Extension vào Documents (chọn Thay thế), rồi bấm '
+      + '"Khởi động lại extension" ở Options.',
+    howToWindows:
+      'Mở zip, kéo thư mục Worklog Extension vào Documents (hoặc Extract All… với đích '
+      + 'Documents), rồi bấm "Khởi động lại extension" ở Options.',
     later: 'Để sau',
     download: 'Tải bản mới',
   },

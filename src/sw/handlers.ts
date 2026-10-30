@@ -1,4 +1,4 @@
-import { loadConfig, saveConfig } from '@/store/config'
+import { loadConfig, replaceConfig, saveConfig } from '@/store/config'
 import { checkForUpdate, dismissUpdate, updateStatus } from './update'
 import {
   readSnapshot, writeSnapshot, pruneSnapshots, snapshotMeta,
@@ -151,6 +151,9 @@ export async function handle(msg: Message): Promise<unknown> {
 
     case 'config/save':
       return saveConfig(msg.patch)
+
+    case 'config/import':
+      return replaceConfig(msg.config)
 
     case 'permission/request':
       return ext.permissions.request({ origins: [msg.origin] })

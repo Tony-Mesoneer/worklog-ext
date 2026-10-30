@@ -34,7 +34,7 @@ export const en = {
   },
 
   language: {
-    title: '8. Language',
+    title: '9. Language',
     hint: 'Applies to the side panel, dashboard and this page. The extension name in Chrome follows your browser language and cannot be changed here.',
     label: 'Language',
     // Tên ngôn ngữ KHÔNG dịch: người đang mắc kẹt trong một ngôn ngữ họ không
@@ -196,8 +196,8 @@ export const en = {
       hint:
         'The extension is installed via "Load unpacked", so Chrome cannot update it '
         + 'automatically. This only checks whether the repo has a newer release; download '
-        + 'the zip, unpack it over the folder you are using, then hit Reload on '
-        + 'chrome://extensions.',
+        + 'it, drop the Worklog Extension folder over the one in Documents, then press '
+        + '"Restart extension" below.',
       repoLabel: 'GitHub repo',
       repoPlaceholder: 'owner/worklog-ext',
       repoInvalid: 'Must look like owner/name, not a URL.',
@@ -216,6 +216,28 @@ export const en = {
         + 'extension so it re-reads those files — no download, and no trip to '
         + 'chrome://extensions. This page reloads itself, and anything being written to '
         + 'Jira right now is interrupted.',
+    },
+    transfer: {
+      title: '8. Move settings',
+      hint:
+        'Settings belong to the extension ID. The first time you switch to the '
+        + 'Documents/Worklog Extension folder, the extension opens with empty settings: '
+        + 'export a file from the old copy, then import it into the new one. Also works as '
+        + 'a backup.',
+      tokenWarning:
+        'The file includes your API token if you saved one — do not share it, and delete it '
+        + 'once imported.',
+      export: 'Export to file',
+      import: 'Import from file…',
+      imported: (version: string, when: string): string => {
+        const meta = [version === '' ? '' : `version ${version}`, when === '' ? '' : `exported ${when}`]
+          .filter((x) => x !== '').join(', ')
+        return `Settings imported${meta === '' ? '' : ` (${meta})`}.`
+      },
+      reconnect:
+        'Jira access does not travel with the file: press "Connect" in section 1 to grant it again.',
+      notJson: 'The file is not JSON.',
+      notExport: 'This is not a settings file exported from Worklog.',
     },
   },
 
@@ -238,6 +260,12 @@ export const en = {
     available: (version: string, current: string): string =>
       `Version ${version} is available (you are on ${current}).`,
     howTo: 'Unpack it over the folder you are using, then hit Reload on chrome://extensions.',
+    howToDmg:
+      'Open the .dmg, drag the Worklog Extension folder onto Documents (choose Replace), then '
+      + 'press "Restart extension" in Options.',
+    howToWindows:
+      'Open the zip, drag the Worklog Extension folder onto Documents (or Extract All… to '
+      + 'Documents), then press "Restart extension" in Options.',
     later: 'Later',
     download: 'Download update',
   },

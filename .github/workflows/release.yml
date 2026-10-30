@@ -19,10 +19,14 @@ on:
 permissions:
   contents: write
 
+# Ba job: `build` (zip + XPI) → `dmg` (trên runner macOS) → `publish`. Tách ra
+# vì dmg cần hdiutil, chỉ có trên macOS.
 jobs:
-  release:
-    name: Build và publish zip
+  build:
+    name: Build và đóng gói zip
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.pack.outputs.version }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -67,12 +71,7 @@ jobs:
         run: |
           node scripts/pack.mjs --github-output
           node scripts/pack.mjs --target firefox
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: worklog-ext-${{ inputs.tag || github.ref_name }}
-          path: release/*.zip
-          if-no-files-found: error
+          node scripts/pack.mjs --target windows
 
       # Sign qua AMO để bản Firefox cài được LÂU DÀI: không sign thì chỉ load
       # được dạng "Temporary Add-on", mất khi đóng browser.
@@ -104,13 +103,51 @@ jobs:
         env:
           NO_UPDATE_NOTIFIER: 1
 
+      # Upload SAU bước sign để XPI (nếu có) đi cùng sang job publish.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: worklog-ext-${{ inputs.tag || github.ref_name }}
+          path: |
+            release/*.zip
+            release/*.xpi
+          if-no-files-found: error
+
+  dmg:
+    name: Đóng dmg (macOS)
+    needs: build
+    uses: ./.github/workflows/dmg.yml
+    permissions:
+      contents: read
+    with:
+      artifact: worklog-ext-${{ inputs.tag || github.ref_name }}
+      version: ${{ needs.build.outputs.version }}
+
+  publish:
+    name: Publish GitHub Release
+    needs: [build, dmg]
+    # Dmg là best-effort, cùng lý lẽ với bước sign AMO: một release bị chặn hoàn
+    # toàn vì runner macOS trục trặc là đánh đổi tệ hơn một release thiếu dmg.
+    # Check-update tự rơi về zip store khi release không có dmg (xem core/version
+    # pickDownload).
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.build.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          # Gộp artifact của build (`worklog-ext-<tag>`) và của dmg (`…-macos`)
+          # vào cùng một thư mục.
+          pattern: worklog-ext-${{ inputs.tag || github.ref_name }}*
+          merge-multiple: true
+          path: release
+
       - name: Liệt kê file sẽ đính vào release
-        id: files
         run: |
           ls -la release/
-          # XPI chỉ có mặt khi bước sign chạy và thành công. Dùng glob trong
-          # `files` của action nên không cần điều kiện gì thêm.
-          echo "count=$(ls release/ | wc -l | tr -d ' ')" >> "$GITHUB_OUTPUT"
+          if [ "${{ needs.dmg.result }}" != "success" ]; then
+            echo "### ⚠️ Đóng dmg lỗi — release không có dmg" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: GitHub Release
         uses: softprops/action-gh-release@v3
@@ -118,13 +155,14 @@ jobs:
           tag_name: ${{ inputs.tag || github.ref_name }}
           name: ${{ inputs.tag || github.ref_name }}
           generate_release_notes: true
-          # Thứ tự có ý nghĩa: pickZip trong core/version lấy asset .zip ĐẦU TIÊN
-          # có url, nên zip Chrome phải đứng trước — số đông dùng Chrome.
-          # Thứ tự có ý nghĩa cho ZIP: pickZip trong core/version chọn asset theo
-          # nền tảng, nhưng zip Chrome vẫn đứng trước vì số đông dùng Chrome.
-          # `.xpi` không phải zip nên không ảnh hưởng phép chọn đó; dòng cuối
-          # dùng glob vì XPI chỉ có khi bước sign chạy được.
+          # Thứ tự KHÔNG còn ý nghĩa cho check-update: pickDownload trong
+          # core/version chọn theo hậu tố tên. Tên file thì CÓ: đổi hậu tố
+          # (`.dmg`, `-windows.zip`, `-firefox.zip`) là phải sửa chỗ đó. Dmg/XPI
+          # có thể vắng (xem `if` của job) — action chỉ cảnh báo file không khớp,
+          # không fail.
           files: |
-            ${{ steps.pack.outputs.zip }}
-            release/worklog-ext-${{ steps.pack.outputs.version }}-firefox.zip
+            release/worklog-ext-${{ env.VERSION }}.zip
+            release/worklog-ext-${{ env.VERSION }}-firefox.zip
+            release/worklog-ext-${{ env.VERSION }}-windows.zip
+            release/worklog-ext-${{ env.VERSION }}.dmg
             release/*.xpi

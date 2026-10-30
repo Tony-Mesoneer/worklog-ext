@@ -9,6 +9,9 @@ import { ext } from '@/platform/ext'
 export type Message =
   | { type: 'config/load' }
   | { type: 'config/save'; patch: Partial<Config> }
+  // Import: thay cả config. `config` là unknown vì nó đến từ một file người dùng
+  // chọn — SW chạy lại migrateConfig chứ không tin hình dạng.
+  | { type: 'config/import'; config: unknown }
   | { type: 'auth/probe' }
   | { type: 'permission/request'; origin: string }
   | { type: 'day/load'; date: string }

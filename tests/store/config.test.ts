@@ -64,4 +64,23 @@ describe('store/config', () => {
     expect(fake.api.storage.local.set).toHaveBeenCalled()
     expect('sync' in fake.api.storage).toBe(false)
   })
+
+  it('replaceConfig thay cả object: field không có trong file nhập KHÔNG sót lại', async () => {
+    // Merge (như saveConfig) sẽ giữ token cũ của máy này — kết quả nhập không
+    // còn là đúng cái đã xuất.
+    const { saveConfig, replaceConfig, loadConfig } = await import('@/store/config')
+    await saveConfig({ authMode: 'token', token: { email: 'a@b.c', apiToken: 'cũ' }, projects: ['OLD'] })
+    await replaceConfig({ ...defaultConfig, projects: ['CAG'] })
+    const c = await loadConfig()
+    expect(c.projects).toEqual(['CAG'])
+    expect(c.token).toBeUndefined()
+    expect(c.authMode).toBe('cookie')
+  })
+
+  it('replaceConfig chạy migrate: dữ liệu sai kiểu rơi về default', async () => {
+    const { replaceConfig } = await import('@/store/config')
+    const c = await replaceConfig({ projects: 'sai kiểu', jiraBaseUrl: 'https://x.atlassian.net' })
+    expect(c.projects).toEqual([])
+    expect(c.jiraBaseUrl).toBe('https://x.atlassian.net')
+  })
 })
