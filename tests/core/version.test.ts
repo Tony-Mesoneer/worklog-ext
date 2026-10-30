@@ -151,6 +151,96 @@ describe('parseRelease — chọn zip theo nền tảng', () => {
   })
 })
 
+describe('parseRelease — chọn gói theo hệ điều hành', () => {
+  // Release đầy đủ: zip store cho Chrome/Firefox như cũ, cộng ba gói thả vào
+  // Documents/Worklog Extension. Cố tình xếp zip store LÊN ĐẦU: chọn theo thứ tự
+  // thì mọi hệ điều hành đều nhận nó.
+  const full = {
+    ...payload,
+    assets: [
+      { name: 'worklog-ext-0.13.0.zip', browser_download_url: 'https://x/store.zip' },
+      { name: 'worklog-ext-0.13.0-firefox.zip', browser_download_url: 'https://x/ff.zip' },
+      { name: 'worklog-ext-0.13.0-windows.zip', browser_download_url: 'https://x/win.zip' },
+      { name: 'worklog-ext-0.13.0-windows.exe', browser_download_url: 'https://x/win.exe' },
+      { name: 'worklog-ext-0.13.0.dmg', browser_download_url: 'https://x/mac.dmg' },
+    ],
+  }
+  const pick = (raw: unknown, opts: Parameters<typeof parseRelease>[1]) => {
+    const r = parseRelease(raw, opts)
+    return { downloadUrl: r?.downloadUrl, downloadKind: r?.downloadKind, exeUrl: r?.exeUrl }
+  }
+
+  it('macOS nhận .dmg, không có exe', () => {
+    expect(pick(full, { os: 'mac' })).toEqual({
+      downloadUrl: 'https://x/mac.dmg', downloadKind: 'dmg', exeUrl: null,
+    })
+  })
+
+  it('Windows nhận zip có thư mục bọc, exe là link phụ', () => {
+    expect(pick(full, { os: 'win' })).toEqual({
+      downloadUrl: 'https://x/win.zip', downloadKind: 'windows-zip', exeUrl: 'https://x/win.exe',
+    })
+  })
+
+  it('hệ điều hành khác (Linux, ChromeOS) vẫn nhận zip store', () => {
+    expect(pick(full, { os: 'other' })).toEqual({
+      downloadUrl: 'https://x/store.zip', downloadKind: 'zip', exeUrl: null,
+    })
+  })
+
+  it('zip Windows KHÔNG bị coi là zip store dù đứng trước', () => {
+    // Zip Windows có thư mục bọc ngoài: trỏ Load unpacked vào chỗ giải nén ra
+    // của nó là trỏ vào một thư mục không có manifest.
+    const winFirst = { ...full, assets: [...full.assets].reverse() }
+    expect(pick(winFirst, { os: 'other' }).downloadUrl).toBe('https://x/store.zip')
+  })
+
+  it('Firefox trên macOS/Windows vẫn nhận zip Firefox — dmg/exe là bản Chrome', () => {
+    for (const os of ['mac', 'win', 'other'] as const) {
+      expect(pick(full, { firefox: true, os }), os).toEqual({
+        downloadUrl: 'https://x/ff.zip', downloadKind: 'zip', exeUrl: null,
+      })
+    }
+  })
+
+  it('release cũ chưa có dmg / zip Windows: rơi về zip store', () => {
+    const old = {
+      ...payload,
+      assets: [
+        { name: 'worklog-ext-0.12.0.zip', browser_download_url: 'https://x/store.zip' },
+        { name: 'worklog-ext-0.12.0-firefox.zip', browser_download_url: 'https://x/ff.zip' },
+      ],
+    }
+    expect(pick(old, { os: 'mac' })).toEqual({
+      downloadUrl: 'https://x/store.zip', downloadKind: 'zip', exeUrl: null,
+    })
+    expect(pick(old, { os: 'win' })).toEqual({
+      downloadUrl: 'https://x/store.zip', downloadKind: 'zip', exeUrl: null,
+    })
+  })
+
+  it('Windows: có exe mà thiếu zip Windows → zip store + exe', () => {
+    const noWinZip = { ...full, assets: full.assets.filter((a) => !a.name.endsWith('-windows.zip')) }
+    expect(pick(noWinZip, { os: 'win' })).toEqual({
+      downloadUrl: 'https://x/store.zip', downloadKind: 'zip', exeUrl: 'https://x/win.exe',
+    })
+  })
+
+  it('asset đang upload dở (chưa có url) bị bỏ qua', () => {
+    const uploading = {
+      ...full,
+      assets: full.assets.map((a) => a.name.endsWith('.dmg') ? { name: a.name } : a),
+    }
+    expect(pick(uploading, { os: 'mac' }).downloadUrl).toBe('https://x/store.zip')
+  })
+
+  it('không có gì dùng được → cả ba null', () => {
+    expect(pick({ ...payload, assets: [] }, { os: 'win' })).toEqual({
+      downloadUrl: null, downloadKind: null, exeUrl: null,
+    })
+  })
+})
+
 describe('parseRelease', () => {
   it('đọc version từ tag và chọn asset .zip', () => {
     const r = parseRelease(payload)
@@ -159,6 +249,8 @@ describe('parseRelease', () => {
       tag: 'v0.3.0',
       url: 'https://github.com/o/r/releases/tag/v0.3.0',
       downloadUrl: 'https://x/w.zip',
+      downloadKind: 'zip',
+      exeUrl: null,
       publishedAt: '2026-08-20T10:00:00Z',
       notes: 'ghi chú',
     })

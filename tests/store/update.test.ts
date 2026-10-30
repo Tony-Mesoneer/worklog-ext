@@ -45,6 +45,27 @@ describe('readUpdateStore', () => {
     expect(s.latest?.version).toBe('0.3.0')
   })
 
+  it('cache của bản cũ (chưa có downloadKind/exeUrl) được điền mặc định', async () => {
+    // Bản trước chỉ biết zip store — downloadUrl có nghĩa là zip store.
+    store['update'] = { latest: { version: '0.12.0', url: 'https://x', downloadUrl: 'https://x/w.zip' } }
+    const latest = (await readUpdateStore()).latest
+    expect(latest?.downloadKind).toBe('zip')
+    expect(latest?.exeUrl).toBeNull()
+
+    store['update'] = { latest: { version: '0.12.0', url: 'https://x', downloadUrl: null } }
+    expect((await readUpdateStore()).latest?.downloadKind).toBeNull()
+  })
+
+  it('downloadKind/exeUrl hợp lệ được giữ, rác bị thay', async () => {
+    store['update'] = {
+      latest: { version: '0.13.0', downloadUrl: 'https://x/w.zip', downloadKind: 'windows-zip', exeUrl: 'https://x/w.exe' },
+    }
+    expect((await readUpdateStore()).latest).toMatchObject({ downloadKind: 'windows-zip', exeUrl: 'https://x/w.exe' })
+
+    store['update'] = { latest: { version: '0.13.0', downloadUrl: 'https://x/w.zip', downloadKind: 'rác', exeUrl: 42 } }
+    expect((await readUpdateStore()).latest).toMatchObject({ downloadKind: 'zip', exeUrl: null })
+  })
+
   it('latest thiếu version → null (không tin được thì bỏ)', async () => {
     store['update'] = { latest: { url: 'https://x' } }
     expect((await readUpdateStore()).latest).toBeNull()

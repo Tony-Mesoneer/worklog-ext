@@ -5,7 +5,7 @@
 // điều mà một lỗi ở đây sẽ làm vỡ im lặng: chọn đúng API, KHÔNG chốt giá trị
 // lúc module load, và báo lỗi rõ khi không có API nào.
 import { describe, it, expect, afterEach } from 'vitest'
-import { ext } from '@/platform/ext'
+import { ext, platformOs } from '@/platform/ext'
 
 type G = { browser?: unknown; chrome?: unknown }
 const g = globalThis as G
@@ -55,5 +55,24 @@ describe('ext', () => {
     expect('storage' in ext).toBe(true)
     expect('sidePanel' in ext).toBe(false)
     expect(Object.keys(ext)).toContain('storage')
+  })
+})
+
+describe('platformOs', () => {
+  const withOs = (os: string) => ({ runtime: { getPlatformInfo: async () => ({ os }) } })
+
+  it('mac / win giữ nguyên, mọi thứ khác là other', async () => {
+    for (const [raw, expected] of [['mac', 'mac'], ['win', 'win'], ['linux', 'other'], ['cros', 'other'], ['openbsd', 'other']]) {
+      g.chrome = withOs(raw!)
+      expect(await platformOs(), raw).toBe(expected)
+    }
+  })
+
+  it('API thiếu hoặc lỗi → other, không throw', async () => {
+    // other = zip store, cài được ở mọi nơi: đoán sai theo hướng này chỉ mất tiện.
+    g.chrome = { runtime: {} }
+    expect(await platformOs()).toBe('other')
+    g.chrome = { runtime: { getPlatformInfo: async () => { throw new Error('x') } } }
+    expect(await platformOs()).toBe('other')
   })
 })
